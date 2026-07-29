@@ -1,0 +1,18 @@
+{
+  "app_name": "Sutram Micro-Kernel",
+  "project_type": "ui",
+  "emulator_port": 6666,
+  "hosting_targets": {},
+  "build_map": [
+    {
+      "src": "js",
+      "target": "../insetu/insetu/static/vendor/sutram",
+      "whitelist": [".js"]
+    },
+    {
+      "src": "js",
+      "target": "../axoneme-sdk/src/vendor/sutram",
+      "whitelist": [".js"]
+    }
+  ]
+}
