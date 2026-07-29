@@ -2,6 +2,7 @@
   "app_name": "Sutram Micro-Kernel",
   "project_type": "ui",
   "emulator_port": 6666,
+  "serve_dir": "js",
   "hosting_targets": {},
   "build_map": [
     {
