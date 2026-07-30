@@ -124,10 +124,27 @@ export class SutramAppShell extends SutramElement {
             try {
                 const el = document.createElement(componentTag);
                 if (subId) el.dataset.subId = subId;
+
+                // Component-Level Safety Boundary: Catch unhandled connectedCallback errors
+                const originalConnected = el.connectedCallback;
+                if (originalConnected && typeof originalConnected === 'function') {
+                    el.connectedCallback = function(...args) {
+                        try {
+                            originalConnected.apply(this, args);
+                        } catch (err) {
+                            console.error(`[Sutram Error Boundary] Extension component <${componentTag}> failed during connectedCallback:`, err);
+                            this.innerHTML = `<div style="padding: 15px; background: var(--input-bg); border: 1px solid var(--intent-danger); border-radius: 4px; color: var(--intent-danger); font-family: var(--font-mono); font-size: 0.85rem;">⚠️ Extension Component &lt;${componentTag}&gt; failed to mount. Check console for details.</div>`;
+                        }
+                    };
+                }
+
                 this._componentCache.set(cacheKey, el);
             } catch (e) {
                 console.error(`[SutramAppShell] Failed to create component <${componentTag}>:`, e);
-                return '';
+                const fallback = document.createElement('div');
+                fallback.style.cssText = "padding: 15px; color: var(--intent-danger); font-family: monospace;";
+                fallback.innerText = `⚠️ Failed to initialize <${componentTag}>`;
+                return fallback;
             }
         }
         return this._componentCache.get(cacheKey);

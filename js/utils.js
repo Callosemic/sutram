@@ -82,7 +82,6 @@ export async function copyToClipboard(text) {
         throw new Error("Clipboard access denied");
     }
 }
-
 export async function copyRawText(text, successCallback, errorCallback) {
     try {
         await copyToClipboard(text);
@@ -91,4 +90,25 @@ export async function copyRawText(text, successCallback, errorCallback) {
         if (errorCallback) errorCallback(e);
         throw e;
     }
+}
+
+export function buildFileTree(files) {
+    const tree = {};
+    files.forEach(filepath => {
+        const parts = filepath.split('/');
+        let current = tree;
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            if (i === parts.length - 1) {
+                current[part] = {
+                    _isFile: true,
+                    fullPath: filepath
+                };
+            } else {
+                if (!current[part]) current[part] = {};
+                current = current[part];
+            }
+        }
+    });
+    return tree;
 }

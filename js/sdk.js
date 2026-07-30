@@ -3,7 +3,6 @@
 import { LitElement, html } from 'lit';
 import { createStore } from 'https://esm.sh/zustand/vanilla';
 import { devtools, subscribeWithSelector } from 'https://esm.sh/zustand/middleware';
-
 export function createSutramStore(name, initialState, persistKeys = [], getScopeId = () => 'default', prefix = 'sutram') {
     const store = createStore(
         devtools(
@@ -14,6 +13,16 @@ export function createSutramStore(name, initialState, persistKeys = [], getScope
             { name: `${name}Store` }
         )
     );
+
+    if (typeof window !== 'undefined') {
+        window.inSetu = window.inSetu || {};
+        window.inSetu.stores = window.inSetu.stores || {};
+        window.inSetu.stores[name] = store;
+
+        window.Sutram = window.Sutram || {};
+        window.Sutram.stores = window.Sutram.stores || {};
+        window.Sutram.stores[name] = store;
+    }
 
     if (persistKeys && persistKeys.length > 0) {
         const hydrate = (scope) => {
@@ -80,9 +89,73 @@ export class SutramElement extends LitElement {
         this._storeUnsubs = [];
         this._managedIntervals = [];
         this._managedListeners = [];
-    }
 
-    subscribe(store, selectorOrListener, listener = undefined) {
+        // Class-Level Error Boundary: Safely isolate subclass connectedCallback & render exceptions
+        const proto = Object.getPrototypeOf(this);
+        if (proto && proto.connectedCallback && !proto._isSafeConnected) {
+            const origConnected = proto.connectedCallback;
+            proto.connectedCallback = function(...args) {
+                try {
+                    origConnected.apply(this, args);
+                } catch (e) {
+                    console.error(`⚠️ [Component Error Boundary] <${this.tagName ? this.tagName.toLowerCase() : 'element'}> failed in connectedCallback:`, e);
+                    if (window.inSetu?.stores?.Toast?.getState) {
+                        window.inSetu.stores.Toast.getState().addToast(
+                            `Component <${this.tagName ? this.tagName.toLowerCase() : 'element'}> error: ${e.message}`,
+                            'danger'
+                        );
+                    }
+                }
+            };
+            proto._isSafeConnected = true;
+        }
+
+        if (proto && proto.render && !proto._isSafeRender) {
+            const origRender = proto.render;
+            proto.render = function(...args) {
+                try {
+                    return origRender.apply(this, args);
+                } catch (e) {
+                    console.error(`⚠️ [Component Render Boundary] <${this.tagName ? this.tagName.toLowerCase() : 'element'}> failed in render:`, e);
+                    return html`<div style="padding: 10px; color: var(--intent-danger); background: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; font-family: var(--font-mono); font-size: 0.8rem;">⚠️ Element &lt;${this.tagName ? this.tagName.toLowerCase() : 'element'}&gt; render error: ${e.message}</div>`;
+                }
+            };
+            proto._isSafeRender = true;
+        }
+    }
+    subscribe(storeOrName, selectorOrListener, listener = undefined) {
+        let store = storeOrName;
+        if (typeof storeOrName === 'string') {
+            store = window.inSetu?.stores?.[storeOrName] || 
+                    window.Sutram?.stores?.[storeOrName] || 
+                    window.stores?.[storeOrName];
+
+            // Lazy Subscription: If the named store isn't on window yet, defer binding until it hydrates
+            if (!store) {
+                const pendingKey = storeOrName;
+                let activeUnsub = () => {};
+                const checkInterval = setInterval(() => {
+                    const lateStore = window.inSetu?.stores?.[pendingKey] || window.Sutram?.stores?.[pendingKey];
+                    if (lateStore) {
+                        clearInterval(checkInterval);
+                        activeUnsub = listener ? lateStore.subscribe(selectorOrListener, listener) : lateStore.subscribe(selectorOrListener);
+                    }
+                }, 20);
+
+                this._managedIntervals.push(checkInterval);
+                const teardown = () => {
+                    clearInterval(checkInterval);
+                    activeUnsub();
+                };
+                this._storeUnsubs.push(teardown);
+                return teardown;
+            }
+        }
+
+        if (!store) {
+            console.warn(`[SutramElement] Attempted to subscribe to an uninitialized store in <${this.tagName ? this.tagName.toLowerCase() : 'element'}>.`);
+            return () => {};
+        }
         const unsub = listener ? store.subscribe(selectorOrListener, listener) : store.subscribe(selectorOrListener);
         this._storeUnsubs.push(unsub);
         return unsub;
@@ -130,6 +203,15 @@ export const ExtensionRegistry = {
     shortcuts: {},
     _entityActions: new Map(),
     tabOrder: [],
+    isBooting: true,
+
+    setTabOrder: function(newOrder = []) {
+        if (!Array.isArray(newOrder)) return;
+        this.tabOrder = newOrder;
+        if (!this.isBooting) {
+            this.compileLayout();
+        }
+    },
 
     getLayoutSlots: function() {
         const slots = [];
@@ -141,12 +223,41 @@ export const ExtensionRegistry = {
                 }));
             }
         });
+
+        // Fail-safe sorting: tabOrder takes priority for primary slots, numeric .order handles fallback
+        const order = this.tabOrder || [];
+        slots.sort((a, b) => {
+            if (a.slot === 'slots:primary-navigation' && b.slot === 'slots:primary-navigation') {
+                const idxA = order.indexOf(a.id);
+                const idxB = order.indexOf(b.id);
+                if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                if (idxA !== -1) return -1;
+                if (idxB !== -1) return 1;
+            }
+            return (a.order || 99) - (b.order || 99);
+        });
+
         return slots;
     },
 
     compileLayout: function() {
         window.dispatchEvent(new Event('sutram-layout-recompile'));
         window.dispatchEvent(new Event('sutram-settings-actions-updated'));
+    },
+
+    async loadBatches(batches = []) {
+        this.isBooting = true;
+        for (const batchUrls of batches) {
+            if (!Array.isArray(batchUrls) || batchUrls.length === 0) continue;
+            await Promise.all(
+                batchUrls.map(url => 
+                    import(/* webpackIgnore: true */ `${url}?v=${Date.now()}`)
+                        .catch(e => console.error(`[Sutram] Failed to load module [${url}]:`, e))
+                )
+            );
+        }
+        this.isBooting = false;
+        this.compileLayout();
     },
     registerExtension: function(extName, config) {
         this._manifests.set(extName, config);
@@ -178,7 +289,9 @@ export const ExtensionRegistry = {
         }
 
         console.log(`📦 Registered Declarative Extension: ${extName} v${config.version || '1.0'}`);
-        this.compileLayout();
+        if (!this.isBooting) {
+            this.compileLayout();
+        }
     },
 
     registerShortcut: function(context, keyCombo, callback) {
@@ -237,12 +350,81 @@ export const ExtensionRegistry = {
         if (!this._ticks.has(extName)) this._ticks.set(extName, []);
         this._ticks.get(extName).push({ interval: intervalMs, lastRun: Date.now(), cb: callback });
     },
-
     executeUnload: function(extName) {
         if (this._unloadHooks.has(extName)) {
             try { this._unloadHooks.get(extName)(); } catch (e) { console.error(`Error unloading extension [${extName}]:`, e); }
             this._unloadHooks.delete(extName);
         }
         if (this._ticks.has(extName)) this._ticks.delete(extName);
+    },
+    startMetronome: function(getActiveExtensions = null, coreExtensions = []) {
+        if (this._metronomeId) clearInterval(this._metronomeId);
+
+        this._metronomeId = setInterval(() => {
+            const now = Date.now();
+            this._ticks.forEach((tasks, extName) => {
+                // Guardrail: Statelessly evaluate host application topology
+                const activeExts = getActiveExtensions ? getActiveExtensions() : null;
+                const isCore = coreExtensions.includes(extName);
+
+                if (!isCore && activeExts && !activeExts.includes(extName)) {
+                    return;
+                }
+
+                tasks.forEach(task => {
+                    if (now - task.lastRun >= task.interval) {
+                        task.lastRun = now;
+                        try { 
+                            task.cb(); 
+                        } catch (e) { 
+                            console.error(`Tick error in extension [${extName}]:`, e); 
+                        }
+                    }
+                });
+            });
+        }, 100);
     }
 };
+
+export const StatusStore = createSutramStore('Status', {
+message: '',
+isError: false,
+timeoutId: null,
+setStatus: (msg, timeout = 3000, isError = false) => {
+    const currentTimeout = StatusStore.getState().timeoutId;
+    if (currentTimeout) clearTimeout(currentTimeout); // utils.debounce whitelist
+
+    let newTimeoutId = null;
+    if (timeout) {
+        newTimeoutId = setTimeout(() => {
+            StatusStore.setState({ message: '', isError: false, timeoutId: null });
+        }, timeout);
+    }
+    StatusStore.setState({ message: msg, isError, timeoutId: newTimeoutId });
+}
+});
+
+export const ToastStore = createSutramStore('Toast', {
+toasts: [],
+addToast: (message, intent = 'danger', duration = 6000) => {
+    const id = `toast_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const state = ToastStore.getState();
+    if (state.toasts.some(t => t.message === message)) return;
+    ToastStore.setState({ toasts: [...state.toasts, { id, message, intent }] });
+    setTimeout(() => {
+        ToastStore.setState(s => ({ toasts: s.toasts.filter(t => t.id !== id) }));
+    }, duration);
+},
+removeToast: (id) => ToastStore.setState(state => ({ toasts: state.toasts.filter(t => t.id !== id) }))
+});
+
+export const SelectionStore = createSutramStore('Selection', {
+selectedItems: new Map(),
+toggleSelection: (id, entityType, data) => {
+    const newMap = new Map(SelectionStore.getState().selectedItems);
+    if (newMap.has(id)) newMap.delete(id);
+    else newMap.set(id, { entityType, data });
+    SelectionStore.setState({ selectedItems: newMap });
+},
+clearSelection: () => SelectionStore.setState({ selectedItems: new Map() })
+});
