@@ -2,33 +2,58 @@
 // Pure CSS Intent Tokens & Dumb Presentation Primitives
 
 import { css } from 'lit';
-
 export const sharedStyles = css`
-    /* Global Reset for Components */
-    * { box-sizing: border-box; }
+    /* CodeMirror & Editor Engine Overrides */
+    .cm-editor { height: 100%; }
+    .cm-scroller { overflow: auto; font-family: var(--font-mono); }
 
-    /* Typography & Scrollbars */
-    ::-webkit-scrollbar { width: 10px; height: 10px; }
-    ::-webkit-scrollbar-track { background: var(--input-bg); border-radius: 4px; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; border: 2px solid var(--input-bg); }
-    ::-webkit-scrollbar-thumb:hover { background: #888; }
-    
-    h1, h2, h3, h4, h5, h6 { color: var(--text); }
+    .CodeMirror-dialog {
+        background: var(--input-bg) !important;
+        color: var(--text) !important;
+        border-bottom: 1px solid var(--border) !important;
+        padding: 8px 10px !important;
+    }
+    .CodeMirror-dialog input {
+        background: var(--bg) !important;
+        color: var(--text) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 4px;
+        padding: 4px 8px !important;
+        font-family: var(--font-mono);
+        outline: none;
+    }
+    .CodeMirror-dialog input:focus {
+        border-color: var(--btn) !important;
+    }
+    .CodeMirror-search-match { background: #f59e0b; color: #000; }
+    .CodeMirror-search-hint { color: #888; font-style: italic; }
 
-    /* Inputs */
-    textarea, input[type="text"], select, input[type="number"], input[type="date"] {
-        width: 100%;
+    .EasyMDEContainer { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    .EasyMDEContainer .CodeMirror {
         background: var(--input-bg);
         color: var(--text);
         border: 1px solid var(--border);
         border-radius: 4px;
-        padding: 10px;
-        font-family: var(--font-mono);
+        font-family: var(--font-mono) !important;
+        font-size: 13px;
         line-height: 1.5;
-        letter-spacing: 0.3px;
-        box-sizing: border-box;
-        outline: none;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
     }
+    .EasyMDEContainer .CodeMirror-scroll { flex: 1; min-height: 100%; }
+    .EasyMDEContainer .CodeMirror .cm-header-1 { font-size: 1.25em; line-height: 1.3; }
+    .EasyMDEContainer .CodeMirror .cm-header-2 { font-size: 1.15em; line-height: 1.3; }
+    .EasyMDEContainer .CodeMirror .cm-header-3 { font-size: 1.05em; line-height: 1.3; }
+    .EasyMDEContainer .CodeMirror .cm-header-4,
+    .EasyMDEContainer .CodeMirror .cm-header-5,
+    .EasyMDEContainer .CodeMirror .cm-header-6 { font-size: 1em; line-height: 1.3; }
+    .editor-preview { background: var(--input-bg); color: var(--text); }
+
+    /* Global Reset for Components */
+    * { box-sizing: border-box; }
+
+    /* Component-Specific Input Enhancements (Base resets inherited from yenVUI theme-tokens.css) */
     textarea:focus, input:focus, select:focus {
         border-color: var(--btn);
     }

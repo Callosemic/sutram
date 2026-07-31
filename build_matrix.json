@@ -1,18 +1,38 @@
 {
-  "app_name": "Sutram Micro-Kernel",
+  "app_name": "Sutram Platform",
   "project_type": "ui",
   "emulator_port": 6666,
-  "serve_dir": "js",
+  "serve_dir": ".",
   "hosting_targets": {},
   "build_map": [
     {
-      "src": "js",
-      "target": "../insetu/insetu/static/vendor/sutram",
+      "src": "yenvui/css",
+      "target": "../insetu/insetu/static/vendor/yenvui/css",
+      "whitelist": [".css"]
+    },
+    {
+      "src": "yenvui/js",
+      "target": "../insetu/insetu/static/vendor/yenvui/js",
       "whitelist": [".js"]
     },
     {
-      "src": "js",
-      "target": "../axoneme-sdk/src/vendor/sutram",
+      "src": "sutram/js",
+      "target": "../insetu/insetu/static/vendor/sutram/js",
+      "whitelist": [".js"]
+    },
+    {
+      "src": "yenvui/css",
+      "target": "../axoneme-sdk/src/vendor/yenvui/css",
+      "whitelist": [".css"]
+    },
+    {
+      "src": "yenvui/js",
+      "target": "../axoneme-sdk/src/vendor/yenvui/js",
+      "whitelist": [".js"]
+    },
+    {
+      "src": "sutram/js",
+      "target": "../axoneme-sdk/src/vendor/sutram/js",
       "whitelist": [".js"]
     }
   ]

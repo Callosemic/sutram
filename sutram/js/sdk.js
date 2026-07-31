@@ -196,7 +196,6 @@ export class SutramElement extends LitElement {
         this._managedListeners = [];
     }
 }
-
 export const ExtensionRegistry = {
     _manifests: new Map(),
     uiHooks: {},
@@ -204,6 +203,14 @@ export const ExtensionRegistry = {
     _entityActions: new Map(),
     tabOrder: [],
     isBooting: true,
+
+    getExtension: function(extName) {
+        return this._manifests.get(extName);
+    },
+
+    hasExtension: function(extName) {
+        return this._manifests.has(extName);
+    },
 
     setTabOrder: function(newOrder = []) {
         if (!Array.isArray(newOrder)) return;
@@ -303,7 +310,6 @@ export const ExtensionRegistry = {
         if (!this.uiHooks[zone]) this.uiHooks[zone] = [];
         this.uiHooks[zone].push(callback);
     },
-
     getEntityActions: function(compoundType, data) {
         if (!compoundType) return [];
         const types = compoundType.split(':');
@@ -314,7 +320,20 @@ export const ExtensionRegistry = {
             }
         });
         return combined
-            .filter(act => !act.match || act.match(data))
+            .filter(act => {
+                // 1. Enforce Whitelist (showOnly)
+                if (data?.showOnly && Array.isArray(data.showOnly)) {
+                    if (!data.showOnly.includes(act.id)) return false;
+                }
+
+                // 2. Enforce Blacklist (suppress)
+                if (data?.suppress && Array.isArray(data.suppress)) {
+                    if (data.suppress.includes(act.id)) return false;
+                }
+
+                // 3. Evaluate the component's native domain logic
+                return !act.match || act.match(data);
+            })
             .sort((a, b) => (a.order || 99) - (b.order || 99));
     },
 

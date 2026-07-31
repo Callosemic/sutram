@@ -1,6 +1,7 @@
 // sutram/js/app_shell.js (Compiled Vendor Artifact)
 import { html, css } from 'lit';
 import { SutramElement, ExtensionRegistry } from './sdk.js';
+import '../../yenvui/js/tabs.js';
 
 export class SutramAppShell extends SutramElement {
     static properties = {
