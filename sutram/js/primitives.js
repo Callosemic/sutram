@@ -46,6 +46,17 @@ export class SutramAsyncBtn extends LitElement {
         this.intent = 'primary';
         this._status = 'idle';
     }
+
+    updated(changedProperties) {
+        super.updated(changedProperties);
+        // Self-Healing Wrapper: Reset success/error states if Lit recycles the DOM node for a new action/identity
+        if (changedProperties.has('onClick') || changedProperties.has('label')) {
+            if (this._status !== 'loading' && this._status !== 'idle') {
+                this._status = 'idle';
+            }
+        }
+    }
+
     async _handleClick(e) {
         if (e) e.stopPropagation();
         if (this._status === 'loading' || !this.onClick) return;
@@ -568,11 +579,12 @@ export class SutramCard extends SutramElement {
         entityData: { type: Object },
         selected: { type: Boolean, reflect: true },
         disableSelection: { type: Boolean },
-        compact: { type: Boolean, reflect: true }
+        selectionStoreKey: { type: String },
+        compact: { type: Boolean, reflect: true },
+        flush: { type: Boolean, reflect: true }
     };
 
     static styles = [sharedStyles];
-
     constructor() {
         super();
         this.filename = '';
@@ -585,33 +597,46 @@ export class SutramCard extends SutramElement {
         this.entityData = {};
         this.selected = false;
         this.disableSelection = false;
+        this.selectionStoreKey = 'Selection';
         this.compact = false;
+        this.flush = false;
     }
 
     _getId() {
         return this.entityData?.filepath || this.entityData?.id || this.filename;
     }
 
+    _getStore() {
+        if (this.selectionStoreKey === 'Selection') return SelectionStore;
+        return window.inSetu?.stores?.[this.selectionStoreKey] || window.Sutram?.stores?.[this.selectionStoreKey];
+    }
+
     connectedCallback() {
         super.connectedCallback();
-        this.subscribe(SelectionStore, state => {
+        if (this.selectionStoreKey && this.selectionStoreKey !== 'none') {
+            this.subscribe(this.selectionStoreKey, state => {
+                const id = this._getId();
+                if (id && state.selectedItems) {
+                    this.selected = state.selectedItems.has(id);
+                }
+            });
             const id = this._getId();
-            if (id) {
-                this.selected = state.selectedItems.has(id);
+            const store = this._getStore();
+            if (id && store && store.getState().selectedItems) {
+                this.selected = store.getState().selectedItems.has(id);
             }
-        });
-        const id = this._getId();
-        if (id) {
-            this.selected = SelectionStore.getState().selectedItems.has(id);
         }
     }
 
     updated(changedProperties) {
         super.updated(changedProperties);
         if (changedProperties.has('entityData') || changedProperties.has('filename')) {
-            const id = this._getId();
-            if (id) {
-                this.selected = SelectionStore.getState().selectedItems.has(id);
+            if (this.selectionStoreKey && this.selectionStoreKey !== 'none') {
+                const id = this._getId();
+                const store = this._getStore();
+                if (id && store && store.getState().selectedItems) {
+                    this.selected = store.getState().selectedItems.has(id);
+                }
             }
         }
     }
@@ -626,10 +651,22 @@ export class SutramCard extends SutramElement {
                 ?selected=${this.selected}
                 ?disableSelection=${this.disableSelection}
                 ?compact=${this.compact}
+                ?flush=${this.flush}
                 @yenvui-card-select-toggled=${(e) => {
                     e.stopPropagation();
                     const id = this._getId();
-                    if (id) SelectionStore.getState().toggleSelection(id, this.entityType, this.entityData);
+                    if (id && this.selectionStoreKey && this.selectionStoreKey !== 'none') {
+                        const store = this._getStore();
+                        if (store && store.getState().toggleSelection) {
+                            store.getState().toggleSelection(id, this.entityType, this.entityData);
+                        }
+                    }
+                    // Emitting a custom event so host components can react when bypassing the global store
+                    this.dispatchEvent(new CustomEvent('sutram-card-select-toggled', {
+                        detail: { id, selected: this.selected, entityType: this.entityType, entityData: this.entityData },
+                        bubbles: true,
+                        composed: true
+                    }));
                 }}
                 @click=${(e) => {
                     this.dispatchEvent(new CustomEvent('card-clicked', {
@@ -733,12 +770,35 @@ export class SutramDropdown extends LitElement {
 }
 customElements.define('sutram-dropdown', SutramDropdown);
 
+export class SutramFilterDropdown extends LitElement {
+    static properties = { 
+        filterText: { type: String }, 
+        open: { type: Boolean, reflect: true }, 
+        hasFilters: { type: Boolean } 
+    };
+    static styles = [sharedStyles];
+
+    render() {
+        return html`
+            <yenvui-filter-dropdown .filterText=${this.filterText || 'Filters'} ?open=${this.open} .hasFilters=${this.hasFilters}>
+                <slot></slot>
+            </yenvui-filter-dropdown>
+        `;
+    }
+}
+customElements.define('sutram-filter-dropdown', SutramFilterDropdown);
+
 export class SutramCollapsible extends LitElement {
     static properties = { titleText: { type: String }, open: { type: Boolean, reflect: true }, intent: { type: String }, flush: { type: Boolean, reflect: true } };
     static styles = [sharedStyles];
     render() {
         return html`
-            <yenvui-collapsible .titleText=${this.titleText} ?open=${this.open} intent=${this.intent || 'neutral'} ?flush=${this.flush}>
+            <yenvui-collapsible 
+                .titleText=${this.titleText} 
+                ?open=${this.open} 
+                intent=${this.intent || 'neutral'} 
+                ?flush=${this.flush}
+                @yenvui-collapsible-toggled=${e => this.dispatchEvent(new CustomEvent('sutram-collapsible-toggled', { detail: e.detail, bubbles: true, composed: true }))}>
                 <slot name="actions" slot="actions"></slot>
                 <slot></slot>
             </yenvui-collapsible>
@@ -767,7 +827,14 @@ export class SutramPill extends LitElement {
     static styles = [sharedStyles];
     render() {
         return html`
-            <yenvui-pill .pillId=${this.pillId} .labelText=${this.labelText} ?active=${this.active} ?small=${this.small} .variant=${this.variant || 'standard'}></yenvui-pill>
+            <yenvui-pill 
+                .pillId=${this.pillId} 
+                .labelText=${this.labelText} 
+                ?active=${this.active} 
+                ?small=${this.small} 
+                .variant=${this.variant || 'standard'}
+                @yenvui-pill-toggled=${e => this.dispatchEvent(new CustomEvent('sutram-pill-toggled', { detail: e.detail, bubbles: true, composed: true }))}>
+            </yenvui-pill>
         `;
     }
 }
@@ -778,7 +845,13 @@ export class SutramFilterGroup extends LitElement {
     static styles = [sharedStyles];
     render() {
         return html`
-            <yenvui-filter-group .label=${this.label || ''} .items=${this.items || []} .activeItems=${this.activeItems || []} ?allowAll=${this.allowAll}></yenvui-filter-group>
+            <yenvui-filter-group 
+                .label=${this.label || ''} 
+                .items=${this.items || []} 
+                .activeItems=${this.activeItems || []} 
+                ?allowAll=${this.allowAll}
+                @yenvui-filter-changed=${e => this.dispatchEvent(new CustomEvent('sutram-filter-changed', { detail: e.detail, bubbles: true, composed: true }))}>
+            </yenvui-filter-group>
         `;
     }
 }

@@ -62,11 +62,11 @@ export class YenvuiSearchBar extends LitElement {
             box-shadow: none !important;
         }
     `;
-
     constructor() { 
         super(); 
         this.placeholder = 'Search...'; 
         this.value = ''; 
+        this._debounceTimer = null;
     }
 
     connectedCallback() {
@@ -77,21 +77,26 @@ export class YenvuiSearchBar extends LitElement {
         this._themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
         this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
     }
-
     disconnectedCallback() {
         super.disconnectedCallback();
         if (this._themeObserver) this._themeObserver.disconnect();
+        if (this._debounceTimer) clearTimeout(this._debounceTimer);
     }
-
     _handleInput(e) {
-        this.dispatchEvent(new CustomEvent('yenvui-search-changed', { 
-            detail: { value: e.target.value }, 
-            bubbles: true, 
-            composed: true 
-        }));
+        const val = e.target.value;
+        if (this._debounceTimer) clearTimeout(this._debounceTimer);
+
+        this._debounceTimer = setTimeout(() => {
+            this.dispatchEvent(new CustomEvent('yenvui-search-changed', { 
+                detail: { value: val }, 
+                bubbles: true, 
+                composed: true 
+            }));
+        }, 250);
     }
 
     _handleClear() {
+        if (this._debounceTimer) clearTimeout(this._debounceTimer);
         this.dispatchEvent(new CustomEvent('yenvui-search-changed', { 
             detail: { value: '' }, 
             bubbles: true, 

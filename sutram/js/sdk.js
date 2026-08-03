@@ -294,8 +294,8 @@ export const ExtensionRegistry = {
                 this.uiHooks[zone].push(callback);
             });
         }
-
         console.log(`📦 Registered Declarative Extension: ${extName} v${config.version || '1.0'}`);
+        window.dispatchEvent(new CustomEvent('sutram:extension-registered', { detail: { extName, config } }));
         if (!this.isBooting) {
             this.compileLayout();
         }

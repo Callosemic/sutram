@@ -10,7 +10,8 @@ export class YenvuiCard extends LitElement {
         disableSelection: { type: Boolean },
         _overlayActive: { type: Boolean, reflect: true },
         _hasActions: { type: Boolean, reflect: true, attribute: 'has-actions' },
-        compact: { type: Boolean, reflect: true }
+        compact: { type: Boolean, reflect: true },
+        flush: { type: Boolean, reflect: true }
     };
     static styles = css`
         :host { display: block; margin-bottom: 12px; position: relative; touch-action: pan-y; }
@@ -94,17 +95,20 @@ export class YenvuiCard extends LitElement {
             overflow: hidden;
         }
         .card-body {
-            padding: 0 15px;
+            padding: 0 15px 15px 15px;
             display: flex;
             flex-direction: column;
             overflow: hidden;
+        }
+        :host([flush]) .card-body {
+            padding: 0;
         }
         ::slotted(*) {
             overflow-wrap: anywhere;
             word-break: break-word;
         }
         .card-detail {
-            padding: 8px 15px 12px 15px;
+            padding: 0 15px 12px 15px;
             font-family: var(--font-mono, monospace);
             font-size: 0.75rem;
             color: var(--text-muted, #888);
@@ -343,7 +347,6 @@ export class YenvuiCard extends LitElement {
         document.removeEventListener('yenvui-overlay-opened', this._overlayListener);
         if (this._themeObserver) this._themeObserver.disconnect();
     }
-
     updated(changedProperties) {
         super.updated(changedProperties);
         if (changedProperties.has('_overlayActive') && this._overlayActive) {
@@ -352,6 +355,13 @@ export class YenvuiCard extends LitElement {
                 composed: true,
                 detail: { source: this }
             }));
+        }
+
+        // Self-Healing Wrapper: Reset transient overlay state if Lit recycles the DOM node for a new item
+        if (changedProperties.has('entityData') || changedProperties.has('filename') || changedProperties.has('titleText')) {
+            if (this._overlayActive) {
+                this._overlayActive = false;
+            }
         }
     }
 

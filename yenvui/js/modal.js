@@ -41,8 +41,8 @@ export class YenvuiModal extends LitElement {
         }
         /* Native Backdrop Styling replacing manual DOM overlays */
         dialog::backdrop {
-            background: rgba(0, 0, 0, 0.75);
-            backdrop-filter: blur(3px);
+            background: var(--modal-backdrop, rgba(0, 0, 0, 0.75));
+            backdrop-filter: var(--modal-backdrop-filter, blur(3px));
         }
 
         .header {

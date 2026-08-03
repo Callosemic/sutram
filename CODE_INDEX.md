@@ -18,6 +18,7 @@ sutram/
 │   │       └── 0002_sutram_bootloader_and_resilience_patterns.md # Stage 1 bootloader and error boundary standards
 │   └── js/                         # Pure ES module frontend runtime kernel and utilities
 │       ├── app_shell.js            # Declarative web component app shell and tab layout router
+│       ├── inputs.js               # Standard form input elements (text, select, textarea, toggle)
 │       ├── poller.js               # Background job status polling factory with tier-0 API integration
 │       ├── primitives.js           # Presentation primitives (buttons, modals, toast, selection, status)
 │       ├── sdk.js                  # IoC Micro-Kernel, SutramElement base class, and ExtensionRegistry
@@ -25,6 +26,8 @@ sutram/
 │       ├── shortcuts.js            # Centralized context-aware keydown shortcut router
 │       ├── sutram-boot.js          # Stage 1 bootloader for importmap synthesis, SemVer parsing, and guardrails
 │       └── utils.js                # Pure algorithmic utility helpers (fuzzy filter, debounce, slugify)
+├── tests/                          # Automated presentation chassis compliance tests and fitness functions
+│   └── sutram_consumer_linter.py   # Reusable static analysis script for consumer UDF compliance
 └── yenvui/                         # Edge-Native presentation chassis and Web Component UI library
     ├── css/                        # Universal CSS theme tokens and layout resets
     │   └── theme-tokens.css        # CSS custom property tokens for Dark, Light, and E-Ink brutalist themes

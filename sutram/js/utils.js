@@ -91,6 +91,47 @@ export async function copyRawText(text, successCallback, errorCallback) {
         throw e;
     }
 }
+export function downloadBlob(blob, filename) {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+}
+
+export async function downloadFile(fetchUrl, fallbackFilename, fetchOptions = {}) {
+    const res = await fetch(fetchUrl, fetchOptions);
+    if (!res.ok) throw new Error('Download failed from server.');
+    const blob = await res.blob();
+
+    let dlName = fallbackFilename;
+    const disposition = res.headers.get('Content-Disposition');
+    if (disposition && disposition.indexOf('attachment') !== -1) {
+        const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+        if (matches != null && matches[1]) dlName = matches[1].replace(/['"]/g, '');
+    }
+
+    downloadBlob(blob, dlName);
+}
+
+export function bindGhostDrag(e, label, icon = '📄', payloadData = {}) {
+    const ghost = document.createElement('div');
+    ghost.style.cssText = 'position: absolute; top: -1000px; left: -1000px; background: var(--pane-bg); color: var(--text); border: 1px solid var(--btn); padding: 8px 12px; border-radius: 4px; font-family: monospace; font-weight: bold; z-index: -1; box-shadow: 0 4px 10px rgba(0,0,0,0.3);';
+    ghost.innerText = `${icon} ${label}`;
+    document.body.appendChild(ghost);
+    e.dataTransfer.setDragImage(ghost, 15, 15);
+
+    setTimeout(() => ghost.remove(), 50);
+
+    for (const [key, value] of Object.entries(payloadData)) {
+        e.dataTransfer.setData(key, value);
+    }
+    e.dataTransfer.effectAllowed = 'copyMove';
+}
 
 export function buildFileTree(files) {
     const tree = {};

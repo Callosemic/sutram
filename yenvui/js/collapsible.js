@@ -85,7 +85,7 @@ export class YenvuiCollapsible extends LitElement {
             background: var(--pane-bg);
         }
         :host([data-theme="e-ink"][open]) .header {
-            border-bottom: 2px dashed #000000;
+            border-bottom: 2px dotted #000000;
         }
         :host([data-theme="e-ink"]) .content {
             background: var(--pane-bg);

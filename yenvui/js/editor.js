@@ -161,7 +161,6 @@ export class YenvuiEditor extends LitElement {
             this._initializingEditor = false;
             return;
         }
-
         this._view = new EditorView({
             state: EditorState.create({
                 doc: this.value || '',
@@ -169,6 +168,7 @@ export class YenvuiEditor extends LitElement {
                     basicSetup,
                     baseTheme,
                     EditorView.lineWrapping,
+                    EditorView.contentAttributes.of({ spellcheck: "false", autocorrect: "off", autocapitalize: "off" }),
                     this.languageConf.of(initialLangExt),
                     this.readOnlyConf.of(EditorView.editable.of(!this.readOnly)),
                     this.customConf.of(this.customExtensions || []),
