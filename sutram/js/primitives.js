@@ -565,7 +565,6 @@ export class SutramEntityActions extends SutramElement {
     }
 }
 customElements.define('sutram-entity-actions', SutramEntityActions);
-
 // 9. Polymorphic Card Primitive (IoC Action Broker & Selection Binding)
 export class SutramCard extends SutramElement {
     static properties = {
@@ -584,7 +583,9 @@ export class SutramCard extends SutramElement {
         flush: { type: Boolean, reflect: true }
     };
 
-    static styles = [sharedStyles];
+    static styles = [sharedStyles, css`
+        :host { display: block; }
+    `];
     constructor() {
         super();
         this.filename = '';
@@ -688,21 +689,22 @@ export class SutramCard extends SutramElement {
     }
 }
 customElements.define('sutram-card', SutramCard);
-
 // 10. Card Group Container
 export class SutramCardGroup extends LitElement {
     static properties = {
-        enableEdgeSelection: { type: Boolean }
+        enableEdgeSelection: { type: Boolean },
+        stacked: { type: Boolean, reflect: true }
     };
 
     constructor() {
         super();
         this.enableEdgeSelection = true;
+        this.stacked = false;
     }
 
     render() {
         return html`
-            <yenvui-card-group ?enableEdgeSelection=${this.enableEdgeSelection}>
+            <yenvui-card-group ?enableEdgeSelection=${this.enableEdgeSelection} ?stacked=${this.stacked}>
                 <slot></slot>
             </yenvui-card-group>
         `;

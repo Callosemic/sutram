@@ -25,7 +25,7 @@ sutram/
 │       ├── shared_styles.js        # Lit CSS intent tokens, presentation primitives, and theme styles
 │       ├── shortcuts.js            # Centralized context-aware keydown shortcut router
 │       ├── sutram-boot.js          # Stage 1 bootloader for importmap synthesis, SemVer parsing, and guardrails
-│       └── utils.js                # Pure algorithmic utility helpers (fuzzy filter, debounce, slugify)
+│       └── utils.js                # Pure algorithmic utility helpers (fuzzy filter, debounce, slugify, time formatting)
 ├── tests/                          # Automated presentation chassis compliance tests and fitness functions
 │   └── sutram_consumer_linter.py   # Reusable static analysis script for consumer UDF compliance
 └── yenvui/                         # Edge-Native presentation chassis and Web Component UI library
@@ -44,7 +44,7 @@ sutram/
     │       └── 0004-gesture-swipe-axis-locking-and-hybrid-property-handshakes.md # ADR-0004: Gesture swipe axis locking, Safari back-nav interception, and hybrid handshakes
     ├── js/                         # Pure ES module frontend runtime kernel and utilities
     │   ├── async-btn.js            # Agnostic asynchronous action button with status feedback state machine
-    │   ├── card-group.js           # Gesture-locked card container with edge-selection swipe detection
+    │   ├── card-group.js           # Gesture-locked card container with edge-selection swipe detection and stacked layout rendering
     │   ├── card.js                 # Polymorphic card primitive with drawer overlay and long-press selection
     │   ├── category-section.js     # Categorized list section wrapper with header action slot
     │   ├── collapsible.js          # Expandable accordion container with semantic intent styling

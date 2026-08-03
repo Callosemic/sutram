@@ -14,7 +14,7 @@ export class YenvuiCard extends LitElement {
         flush: { type: Boolean, reflect: true }
     };
     static styles = css`
-        :host { display: block; margin-bottom: 12px; position: relative; touch-action: pan-y; }
+        :host { display: block; margin-bottom: var(--card-margin-bottom, 12px); position: relative; touch-action: pan-y; }
         .selection-gutter {
             position: absolute;
             left: 0;
@@ -29,14 +29,35 @@ export class YenvuiCard extends LitElement {
             touch-action: pan-y;
             background: var(--input-bg, #2d2d2d);
             border: 1px solid var(--border, #444);
+            border-top: var(--card-border-top, 1px solid var(--border, #444));
             border-left: 4px solid var(--card-intent, #64748b);
             padding-left: 10px;
-            border-radius: 6px;
+            border-top-left-radius: var(--card-border-top-left-radius, var(--card-border-radius, 6px));
+            border-top-right-radius: var(--card-border-top-right-radius, var(--card-border-radius, 6px));
+            border-bottom-left-radius: var(--card-border-bottom-left-radius, var(--card-border-radius, 6px));
+            border-bottom-right-radius: var(--card-border-bottom-right-radius, var(--card-border-radius, 6px));
             display: flex;
             flex-direction: row;
             position: relative;
             box-sizing: border-box;
+            overflow: hidden;
             transition: border-color 0.2s, box-shadow 0.2s, border-left-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .top-shadow {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: var(--card-top-shadow, transparent);
+            pointer-events: none;
+            z-index: 20;
+            border-top-left-radius: var(--card-border-top-left-radius, 0);
+            border-top-right-radius: var(--card-border-top-right-radius, 0);
+        }
+
+        :host([selected]) .card-wrapper {
+            box-shadow: var(--card-box-shadow, none), 0 0 0 1px var(--card-intent, #3b82f6);
         }
         @media (hover: hover) {
             .selection-gutter:hover + .card-wrapper {
@@ -59,7 +80,8 @@ export class YenvuiCard extends LitElement {
             border-left-width: 14px;
             padding-left: 0px;
             border-color: var(--card-intent, #3b82f6);
-            box-shadow: 0 0 0 2px var(--card-intent, #3b82f6);
+            outline: 1px solid var(--card-intent, #3b82f6);
+            outline-offset: -1px;
         }
         .content-col {
             flex: 1;
@@ -131,7 +153,8 @@ export class YenvuiCard extends LitElement {
             font-size: 1.2rem;
             line-height: 1;
             user-select: none;
-            border-radius: 0 5px 5px 0;
+            border-top-right-radius: var(--card-border-top-right-radius, var(--card-border-radius, 5px));
+            border-bottom-right-radius: var(--card-border-bottom-right-radius, var(--card-border-radius, 5px));
         }
         :host([has-actions]) .trigger-bar {
             display: flex;
@@ -501,6 +524,7 @@ export class YenvuiCard extends LitElement {
                     </div>
                 </div>
             </div>
+            <div class="top-shadow"></div>
         `;
     }
 }

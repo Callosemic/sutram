@@ -1,10 +1,9 @@
 import { LitElement, html, css } from 'lit';
-
 export class YenvuiCardGroup extends LitElement {
     static properties = {
-        enableEdgeSelection: { type: Boolean }
+        enableEdgeSelection: { type: Boolean },
+        stacked: { type: Boolean, reflect: true }
     };
-
     static styles = css`
         :host {
             display: flex;
@@ -18,6 +17,7 @@ export class YenvuiCardGroup extends LitElement {
     constructor() {
         super();
         this.enableEdgeSelection = true;
+        this.stacked = false;
         this._touchStartX = null;
         this._touchStartY = null;
         this._swipeAxis = null;
@@ -99,11 +99,76 @@ export class YenvuiCardGroup extends LitElement {
         }
         return null;
     }
+    firstUpdated() {
+        if (this.stacked) {
+            this._applyStackedZIndex();
+        }
+    }
+
+    updated(changedProperties) {
+        super.updated(changedProperties);
+        if (changedProperties.has('stacked')) {
+            this._applyStackedZIndex();
+        }
+    }
+
+    _handleSlotChange() {
+        if (this.stacked) {
+            this._applyStackedZIndex();
+        }
+    }
+    _applyStackedZIndex() {
+        const slot = this.shadowRoot.querySelector('slot');
+        if (!slot) return;
+        const children = slot.assignedElements({ flatten: true });
+        const total = children.length;
+        children.forEach((child, index) => {
+            if (!child.style) return;
+            child.style.position = 'relative';
+            child.style.zIndex = total - index;
+
+            if (this.stacked) {
+                child.style.setProperty('--card-margin-bottom', '0px');
+                if (index === 0) {
+                    child.style.setProperty('--card-border-top', '1px solid var(--border, #444)');
+                    child.style.setProperty('--card-border-top-left-radius', '6px');
+                    child.style.setProperty('--card-border-top-right-radius', '6px');
+                    child.style.setProperty('--card-border-bottom-left-radius', '0px');
+                    child.style.setProperty('--card-border-bottom-right-radius', '0px');
+                    child.style.setProperty('--card-top-shadow', 'none');
+                } else {
+                    child.style.setProperty('--card-border-top', 'none');
+                    child.style.setProperty('--card-border-top-left-radius', '0px');
+                    child.style.setProperty('--card-border-top-right-radius', '0px');
+                    child.style.setProperty('--card-top-shadow', 'linear-gradient(to bottom, rgba(0, 0, 0, 0.25), transparent)');
+                    if (index === total - 1) {
+                        child.style.setProperty('--card-border-bottom-left-radius', '6px');
+                        child.style.setProperty('--card-border-bottom-right-radius', '6px');
+                    } else {
+                        child.style.setProperty('--card-border-bottom-left-radius', '0px');
+                        child.style.setProperty('--card-border-bottom-right-radius', '0px');
+                    }
+                }
+                if (total === 1) {
+                    child.style.setProperty('--card-border-bottom-left-radius', '6px');
+                    child.style.setProperty('--card-border-bottom-right-radius', '6px');
+                }
+            } else {
+                child.style.removeProperty('--card-margin-bottom');
+                child.style.removeProperty('--card-border-top');
+                child.style.removeProperty('--card-border-top-left-radius');
+                child.style.removeProperty('--card-border-top-right-radius');
+                child.style.removeProperty('--card-border-bottom-left-radius');
+                child.style.removeProperty('--card-border-bottom-right-radius');
+                child.style.removeProperty('--card-top-shadow');
+            }
+        });
+    }
 
     render() {
         return html`
             <div @touchstart=${this._handleTouchStart} @touchend=${this._handleTouchEnd} style="display: contents;">
-                <slot></slot>
+                <slot @slotchange=${this._handleSlotChange}></slot>
             </div>
         `;
     }
