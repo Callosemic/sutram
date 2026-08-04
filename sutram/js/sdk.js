@@ -251,14 +251,14 @@ export const ExtensionRegistry = {
         window.dispatchEvent(new Event('sutram-layout-recompile'));
         window.dispatchEvent(new Event('sutram-settings-actions-updated'));
     },
-
     async loadBatches(batches = []) {
         this.isBooting = true;
+        const bootTs = window.SUTRAM_BOOT_TS || (window.SUTRAM_BOOT_TS = Date.now());
         for (const batchUrls of batches) {
             if (!Array.isArray(batchUrls) || batchUrls.length === 0) continue;
             await Promise.all(
                 batchUrls.map(url => 
-                    import(/* webpackIgnore: true */ `${url}?v=${Date.now()}`)
+                    import(/* webpackIgnore: true */ `${url}?v=${bootTs}`)
                         .catch(e => console.error(`[Sutram] Failed to load module [${url}]:`, e))
                 )
             );

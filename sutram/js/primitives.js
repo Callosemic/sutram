@@ -16,7 +16,7 @@ import '../../yenvui/js/card-group.js';
 import '../../yenvui/js/editor.js';
 import '../../yenvui/js/toolbar.js';
 import '../../yenvui/js/collapsible.js';
-import '../../yenvui/js/dropdown.js';
+import { YenvuiFilterDropdown } from '../../yenvui/js/dropdown.js';
 import '../../yenvui/js/pill.js';
 import '../../yenvui/js/filter-group.js';
 import '../../yenvui/js/selection-tray.js';
@@ -471,7 +471,23 @@ export class SutramGenericSettingsModal extends SutramElement {
                     ${this.schema.map(field => {
                         const val = this.formData[field.id] !== undefined ? this.formData[field.id] : field.default;
                         let inputHtml = '';
-                        if (field.type === 'boolean') {
+                        if (field.type === 'action') {
+                            inputHtml = html`
+                                <sutram-async-btn
+                                    label=${field.button_label || field.label || 'Execute Action'}
+                                    intent=${field.intent || 'primary'}
+                                    .onClick=${async (e) => {
+                                        return new Promise((resolve, reject) => {
+                                            this.dispatchEvent(new CustomEvent('sutram-settings-action', {
+                                                detail: { extName: this.extName, field, resolve, reject, originalEvent: e },
+                                                bubbles: true,
+                                                composed: true
+                                            }));
+                                        });
+                                    }}>
+                                </sutram-async-btn>
+                            `;
+                        } else if (field.type === 'boolean') {
                             inputHtml = html`<input type="checkbox" style="transform: scale(1.2); cursor: pointer;" .checked=${!!val} @change=${e => { this.formData = {...this.formData, [field.id]: e.target.checked}; this.requestUpdate(); }}>`;
                         } else if (field.type === 'select') {
                             inputHtml = html`
@@ -773,24 +789,10 @@ export class SutramDropdown extends LitElement {
     }
 }
 customElements.define('sutram-dropdown', SutramDropdown);
-
-export class SutramFilterDropdown extends LitElement {
-    static properties = { 
-        filterText: { type: String }, 
-        open: { type: Boolean, reflect: true }, 
-        hasFilters: { type: Boolean } 
-    };
-    static styles = [sharedStyles];
-
-    render() {
-        return html`
-            <yenvui-filter-dropdown .filterText=${this.filterText || 'Filters'} ?open=${this.open} .hasFilters=${this.hasFilters}>
-                <slot></slot>
-            </yenvui-filter-dropdown>
-        `;
-    }
+export class SutramFilterDropdown extends YenvuiFilterDropdown {}
+if (!customElements.get('sutram-filter-dropdown')) {
+    customElements.define('sutram-filter-dropdown', SutramFilterDropdown);
 }
-customElements.define('sutram-filter-dropdown', SutramFilterDropdown);
 
 export class SutramCollapsible extends LitElement {
     static properties = { titleText: { type: String }, open: { type: Boolean, reflect: true }, intent: { type: String }, flush: { type: Boolean, reflect: true } };

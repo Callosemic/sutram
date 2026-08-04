@@ -9,9 +9,11 @@ To maintain system resilience, components must wrap `connectedCallback` and `ren
 
 ### 2. Automated Resource Teardown
 Components extending `SutramElement` must utilize managed arrays for store subscriptions (`subscribe`), intervals (`registerInterval`), and DOM listeners (`registerGlobalListener`). Manual teardown logic is an anti-pattern; rely on the base class `disconnectedCallback()` to guarantee memory safety.
-
 ### 3. Lazy Store Hydration
 Components must anticipate mounting before state hydration completes. Use string store keys in `SutramElement.subscribe` to dynamically poll for global store instantiation, preventing race conditions during Stage 1 boot.
+
+### 4. Session-Pinned Dynamic Module Imports
+Dynamic imports in batch loaders (e.g., `ExtensionRegistry.loadBatches`) must pin version query parameters to a stable session boot timestamp (`window.SUTRAM_BOOT_TS`) rather than using per-call timestamps like `Date.now()`. This ensures consistent module caching throughout an active session while maintaining cache-busting upon session restarts.
 
 ## II. Presentation Chassis Guardrails (yenVUI)
 

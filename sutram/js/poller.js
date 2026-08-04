@@ -10,23 +10,22 @@ export function createJobPoller(apiClient) {
             try {
                 // Tier 0 Agnostic API call
                 const res = await apiClient.get(`jobs/${jobId}`);
-                
                 if (!res.ok) {
                     if (res.status === 404) {
+                        let msg = "Job not found.";
                         try {
                             const errData = await res.clone().json();
-                            if (errData.error === "Job not found") {
-                                onError(new Error("Job not found."));
-                                return;
-                            }
+                            msg = errData.message || errData.error || msg;
                         } catch(e) {}
+                        onError(new Error(msg));
+                        return;
                     }
-                    
+
                     // Allow downstream SDKs to intercept 401s for token rotation
                     if (res.status === 401 && typeof apiClient.handleUnauthorized === 'function') {
                         await apiClient.handleUnauthorized();
                     }
-                    
+
                     throw new Error(`HTTP ${res.status}`);
                 }
                 

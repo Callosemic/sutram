@@ -181,7 +181,7 @@ export class YenvuiCardGroup extends LitElement {
             if (el._overlayActive) return true;
             const tag = el.tagName.toLowerCase();
             if (tag === 'button' || tag === 'sutram-async-btn' || tag === 'yenvui-async-btn' || tag === 'sutram-entity-actions') return true;
-            if (el.classList && (el.classList.contains('actions-tray') || el.classList.contains('trigger-bar') || el.classList.contains('actions-wrapper'))) return true;
+            if (el.classList && (el.classList.contains('actions-tray') || el.classList.contains('trigger-bar') || el.classList.contains('actions-wrapper') || el.classList.contains('selection-gutter'))) return true;
             return false;
         });
 

@@ -105,7 +105,7 @@ export class YenvuiFilterDropdown extends LitElement {
         .container { display: flex; align-items: center; }
         .panel {
             display: none; position: absolute; top: 100%; left: 0; right: 0;
-            z-index: 100; padding: 15px 20px; background: var(--pane-bg, #1e1e1e); border-bottom: 1px solid var(--border, #444);
+            z-index: 2000; padding: 15px 20px; background: var(--pane-bg, #1e1e1e); border-bottom: 1px solid var(--border, #444);
             box-shadow: 0 10px 30px rgba(0,0,0,0.4);
             max-height: 50vh; overflow-y: auto;
         }

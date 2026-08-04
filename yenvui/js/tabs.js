@@ -79,6 +79,7 @@ export class YenvuiTabs extends LitElement {
             border-bottom: 2px solid var(--intent-primary);
         }
         .tabs-header-wrap {
+            position: relative;
             border-bottom: 1px solid var(--border);
         }
         :host([data-theme="e-ink"]:not([variant="sub"])) .tabs-header-wrap {
