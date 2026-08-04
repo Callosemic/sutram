@@ -41,6 +41,7 @@ export class YenvuiCard extends LitElement {
             position: relative;
             box-sizing: border-box;
             overflow: hidden;
+            box-shadow: var(--card-box-shadow, 0 4px 12px rgba(0,0,0,0.1));
             transition: border-color 0.2s, box-shadow 0.2s, border-left-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .top-shadow {
@@ -55,10 +56,6 @@ export class YenvuiCard extends LitElement {
             border-top-left-radius: var(--card-border-top-left-radius, 0);
             border-top-right-radius: var(--card-border-top-right-radius, 0);
         }
-
-        :host([selected]) .card-wrapper {
-            box-shadow: var(--card-box-shadow, none), 0 0 0 1px var(--card-intent, #3b82f6);
-        }
         @media (hover: hover) {
             .selection-gutter:hover + .card-wrapper {
                 border-left-width: 14px;
@@ -67,7 +64,6 @@ export class YenvuiCard extends LitElement {
             }
             .card-wrapper:hover {
                 border-color: var(--card-intent, #3b82f6);
-                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
             }
         }
         :host([_overlayactive]) {
@@ -117,7 +113,7 @@ export class YenvuiCard extends LitElement {
             overflow: hidden;
         }
         .card-body {
-            padding: 0 15px 15px 15px;
+            padding: 0 15px 6px 15px;
             display: flex;
             flex-direction: column;
             overflow: hidden;

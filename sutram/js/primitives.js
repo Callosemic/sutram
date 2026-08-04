@@ -693,18 +693,20 @@ customElements.define('sutram-card', SutramCard);
 export class SutramCardGroup extends LitElement {
     static properties = {
         enableEdgeSelection: { type: Boolean },
-        stacked: { type: Boolean, reflect: true }
+        stacked: { type: Boolean, reflect: true },
+        accordion: { type: Boolean, reflect: true }
     };
 
     constructor() {
         super();
         this.enableEdgeSelection = true;
         this.stacked = false;
+        this.accordion = false;
     }
 
     render() {
         return html`
-            <yenvui-card-group ?enableEdgeSelection=${this.enableEdgeSelection} ?stacked=${this.stacked}>
+            <yenvui-card-group ?enableEdgeSelection=${this.enableEdgeSelection} ?stacked=${this.stacked} ?accordion=${this.accordion}>
                 <slot></slot>
             </yenvui-card-group>
         `;

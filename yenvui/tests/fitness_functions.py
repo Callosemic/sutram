@@ -128,5 +128,19 @@ def test_flex_grid_min_width_compliance():
         if flex_grid_pattern.search(content) and ('class="body"' in content or 'class="card-body"' in content):
             if not min_width_pattern.search(content):
                 violations.append(f"{filepath} -> Contains flex/grid body layout but lacks 'min-width: 0' blowout protection")
-
     assert not violations, f"Flex/grid containers must specify 'min-width: 0':\n" + "\n".join(violations)
+
+
+def test_resize_observer_teardown_compliance():
+    """Ensure components using ResizeObserver disconnect it in disconnectedCallback()."""
+    observer_pattern = re.compile(r'new\s+ResizeObserver')
+    disconnect_pattern = re.compile(r'disconnectedCallback\s*\(\s*\)[\s\S]*?\.disconnect\(\)')
+    violations = []
+
+    for filepath in glob.glob('js/**/*.js', recursive=True):
+        with open(filepath, 'r') as f:
+            content = f.read()
+        if observer_pattern.search(content) and not disconnect_pattern.search(content):
+            violations.append(f"{filepath} -> Instantiates ResizeObserver but lacks disconnect() in disconnectedCallback()")
+
+    assert not violations, f"ResizeObserver components must implement disconnectedCallback cleanup:\n" + "\n".join(violations)

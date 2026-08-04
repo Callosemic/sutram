@@ -44,7 +44,7 @@ sutram/
     │       └── 0004-gesture-swipe-axis-locking-and-hybrid-property-handshakes.md # ADR-0004: Gesture swipe axis locking, Safari back-nav interception, and hybrid handshakes
     ├── js/                         # Pure ES module frontend runtime kernel and utilities
     │   ├── async-btn.js            # Agnostic asynchronous action button with status feedback state machine
-    │   ├── card-group.js           # Gesture-locked card container with edge-selection swipe detection and stacked layout rendering
+    │   ├── card-group.js           # Gesture-locked card container with edge-selection swipe detection, stacked layout rendering, and accordion deck physics
     │   ├── card.js                 # Polymorphic card primitive with drawer overlay and long-press selection
     │   ├── category-section.js     # Categorized list section wrapper with header action slot
     │   ├── collapsible.js          # Expandable accordion container with semantic intent styling
