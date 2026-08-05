@@ -201,8 +201,13 @@ export const ExtensionRegistry = {
     uiHooks: {},
     shortcuts: {},
     _entityActions: new Map(),
+    _filterPredicate: null,
     tabOrder: [],
     isBooting: true,
+
+    setFilterPredicate: function(fn) {
+        this._filterPredicate = fn;
+    },
 
     getExtension: function(extName) {
         return this._manifests.get(extName);
@@ -336,10 +341,12 @@ export const ExtensionRegistry = {
             })
             .sort((a, b) => (a.order || 99) - (b.order || 99));
     },
-
     executeUIHook: function(zone, data) {
         if (this.uiHooks[zone]) {
             for (let cb of this.uiHooks[zone]) {
+                if (this._filterPredicate && cb._extName && !this._filterPredicate(cb._extName)) {
+                    continue; // Auto-suppress hook execution if disabled by host predicate
+                }
                 try {
                     const res = cb(data);
                     if (res) return res;

@@ -175,11 +175,10 @@ export class SutramAppShell extends SutramElement {
                     @yenvui-tab-selected=${(e) => { e.stopPropagation(); this._handleTabClick(e.detail.tabId); }}>
                     
                     <slot name="header-actions" slot="header-actions"></slot>
-
                     ${primarySlots.map(slot => {
                         // Extract sub-navigation specific to the active primary tab using case-insensitive bounds
                         const subSlots = this._layoutConfig.filter(s => s.slot === 'slots:sub-navigation' && (s.targetParent || '').toLowerCase() === (slot.id || '').toLowerCase());
-                        const activeSub = this.activeSubTabs[slot.id] || (subSlots.length > 0 ? subSlots[0].id : null);
+                        const activeSub = (subSlots.some(s => s.id === this.activeSubTabs[slot.id]) ? this.activeSubTabs[slot.id] : null) || (subSlots.length > 0 ? subSlots[0].id : null);
                         
                         return html`
                             <div slot="${slot.id}" style="display: flex; flex-direction: column; flex: 1; height: 100%; min-height: 0;">
