@@ -13,7 +13,7 @@ export class YenvuiCardGroup extends LitElement {
             flex-direction: column;
             width: 100%;
             position: relative;
-            touch-action: pan-y;
+            touch-action: pan-x pan-y;
         }
         :host([stacked]) {
             gap: 0;
@@ -102,11 +102,28 @@ export class YenvuiCardGroup extends LitElement {
                 this._swipeAxis = dx > dy ? 'horizontal' : 'vertical';
             }
         }
-
         // If swiping horizontally, forcefully halt parent containers from rubber-banding
         // and defeat Safari's "swipe-to-go-back" exclusively within this card group
         if (this._swipeAxis === 'horizontal') {
-            e.preventDefault();
+            let shouldPrevent = true;
+            const path = e.composedPath();
+            const wrapper = path.find(el => el.classList && el.classList.contains('actions-wrapper'));
+
+            if (wrapper) {
+                const isRightSwipe = currentX > this._touchStartX;
+                const isLeftSwipe = currentX < this._touchStartX;
+                const maxScroll = Math.max(0, wrapper.scrollWidth - wrapper.clientWidth);
+
+                if (isRightSwipe && wrapper.scrollLeft > 0) {
+                    shouldPrevent = false;
+                } else if (isLeftSwipe && wrapper.scrollLeft < maxScroll) {
+                    shouldPrevent = false;
+                }
+            }
+
+            if (shouldPrevent) {
+                e.preventDefault();
+            }
         }
     }
 

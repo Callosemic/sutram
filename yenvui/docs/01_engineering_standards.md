@@ -48,7 +48,7 @@ To avoid catastrophic layout collapses in live applications during migration, al
 3. **The Vacuum:** *Only after* the host DOM has been fully transitioned to the new tags, permanently delete the legacy classes from the host application's stylesheet.
 ## 8. Safari Touch-Action Gesture Interception Law
 
-Mobile webview engines (specifically iOS Safari) bypass CSS `overscroll-behavior: contain|none` for extreme edge-swipe gestures (swipe-to-back/forward). Web Components handling custom horizontal gestures must combine `touch-action: pan-y` CSS directives on container hosts with explicit, non-passive `touchmove` listeners (`{ passive: false }`) executing `e.preventDefault()` once horizontal swipe dominance is mathematically established.
+Mobile webview engines (specifically iOS Safari) bypass CSS `overscroll-behavior: contain|none` for extreme edge-swipe gestures (swipe-to-back/forward). Web Components handling custom horizontal gestures must pair CSS directives (`touch-action: pan-y` or `pan-x pan-y`) with explicit, non-passive `touchmove` listeners (`{ passive: false }`). Once horizontal swipe dominance is mathematically established, the listener must execute `e.preventDefault()`. If the component contains internally scrollable horizontal elements, the logic must conditionally bypass interception if the scrollable element has not yet reached its maximum scroll boundary.
 
 ## 9. Flexbox & Grid Min-Width Blowout Defense
 

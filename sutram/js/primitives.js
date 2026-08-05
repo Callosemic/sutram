@@ -696,8 +696,8 @@ export class SutramCard extends SutramElement {
                 <slot name="header-tags" slot="header-tags"></slot>
                 <slot name="inline-actions" slot="inline-actions"></slot>
                 <slot></slot>
-                <div slot="actions" style="display: contents;" @click=${e => e.stopPropagation()}>
-                    <sutram-entity-actions .entityType=${this.entityType} .entityData=${this.entityData}></sutram-entity-actions>
+                <div slot="actions" style="display: flex; flex-wrap: nowrap; gap: 8px; align-items: center; width: max-content;" @click=${e => e.stopPropagation()}>
+                    <sutram-entity-actions .entityType=${this.entityType} .entityData=${this.entityData} style="flex-wrap: nowrap;"></sutram-entity-actions>
                     <slot name="actions"></slot>
                 </div>
             </yenvui-card>

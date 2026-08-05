@@ -14,7 +14,7 @@ export class YenvuiCard extends LitElement {
         flush: { type: Boolean, reflect: true }
     };
     static styles = css`
-        :host { display: block; margin-bottom: var(--card-margin-bottom, 12px); position: relative; touch-action: pan-y; }
+        :host { display: block; margin-bottom: var(--card-margin-bottom, 12px); position: relative; touch-action: pan-x pan-y; }
         .selection-gutter {
             position: absolute;
             left: 0;
@@ -26,7 +26,7 @@ export class YenvuiCard extends LitElement {
             touch-action: pan-y;
         }
         .card-wrapper {
-            touch-action: pan-y;
+            touch-action: pan-x pan-y;
             background: var(--input-bg, #2d2d2d);
             border: 1px solid var(--border, #444);
             border-top: var(--card-border-top, 1px solid var(--border, #444));
@@ -179,7 +179,7 @@ export class YenvuiCard extends LitElement {
             flex-direction: column;
             justify-content: center;
             /* Pass CSS variables to penetrate slotted async buttons */
-            --btn-padding: 6px 12px;
+            --btn-padding: 8px 16px;
             --btn-font-size: 0.85rem;
             padding: 6px 10px;
             opacity: 0;
@@ -192,11 +192,24 @@ export class YenvuiCard extends LitElement {
         }
         .actions-wrapper {
             display: flex;
-            justify-content: center;
+            justify-content: flex-start;
             align-items: center;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             gap: 8px;
-            margin-top: 14px; /* Ensure buttons don't clip the absolute caption */
+            margin-top: 0;
+            overflow-x: auto;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 2px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .actions-wrapper::before {
+            content: '';
+            margin-left: auto;
+        }
+        .actions-wrapper::-webkit-scrollbar {
+            display: none;
         }
         :host([_overlayactive]) .actions-tray {
             opacity: 1;
@@ -342,11 +355,28 @@ export class YenvuiCard extends LitElement {
                     this._isSwipingHorizontal = diffX > diffY;
                 }
             }
-
             // If the gesture is horizontal, forcefully intercept the touch event
             // to prevent the mobile browser from triggering "Swipe to Go Back"
             if (this._isSwipingHorizontal) {
-                e.preventDefault();
+                let shouldPrevent = true;
+                const path = e.composedPath();
+                const wrapper = path.find(el => el.classList && el.classList.contains('actions-wrapper'));
+
+                if (wrapper) {
+                    const isRightSwipe = currentX > this._touchStartX;
+                    const isLeftSwipe = currentX < this._touchStartX;
+                    const maxScroll = Math.max(0, wrapper.scrollWidth - wrapper.clientWidth);
+
+                    if (isRightSwipe && wrapper.scrollLeft > 0) {
+                        shouldPrevent = false;
+                    } else if (isLeftSwipe && wrapper.scrollLeft < maxScroll) {
+                        shouldPrevent = false;
+                    }
+                }
+
+                if (shouldPrevent) {
+                    e.preventDefault();
+                }
             }
         };
         this.addEventListener('touchmove', this._touchMoveListener, { passive: false });
@@ -397,6 +427,9 @@ export class YenvuiCard extends LitElement {
         this._cardWidth = rect.width;
         this._localStartX = this._touchStartX - rect.left;
         this._isSwipingHorizontal = null;
+
+        const wrapper = e.composedPath().find(el => el.classList && el.classList.contains('actions-wrapper'));
+        this._actionsScrollLeft = wrapper ? wrapper.scrollLeft : null;
     }
 
     _toggleSelection() {
@@ -431,7 +464,11 @@ export class YenvuiCard extends LitElement {
                     if (isLeftSwipe) {
                         this._overlayActive = true;
                     } else if (isRightSwipe) {
-                        this._overlayActive = false;
+                        if (this._actionsScrollLeft !== null && this._actionsScrollLeft > 0) {
+                            // User is scrolling the buttons back to the start; don't close the drawer yet
+                        } else {
+                            this._overlayActive = false;
+                        }
                     }
                 }
             }
