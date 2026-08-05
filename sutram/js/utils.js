@@ -68,10 +68,9 @@ export function debounce(callback, delay = 300) {
         timer = setTimeout(() => callback.apply(this, args), delay);
     };
 }
-
 export function slugify(str) {
     if (!str) return '';
-    return normalizeAccentText(str).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    return normalizeAccentText(str).replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
 }
 
 export async function copyToClipboard(text) {

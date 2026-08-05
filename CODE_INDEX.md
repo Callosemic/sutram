@@ -10,7 +10,9 @@ sutram/
 ├── docs/                           # Architectural documentation and decision records
 │   ├── 00_index.md                 # yenVUI presentation chassis master index
 │   ├── 01_engineering_standards.md # yenVUI Web Component presentation standards and UI guardrails
-│   └── ADR_INDEX.md                # yenVUI presentation chassis decision record index
+│   ├── ADR_INDEX.md                # yenVUI presentation chassis decision record index
+│   └── adrs/                       # Architectural Decision Records (ADRs) ledger
+│       └── 0037-gather-inversion-of-control-topology.md # [comment required]
 ├── sutram/                         # Core Sutram IoC Micro-Kernel runtime and decision records
 │   ├── docs/                       # Architectural documentation and decision records
 │   │   └── adrs/                   # Architectural Decision Records (ADRs) ledger

@@ -71,20 +71,33 @@ export class YenvuiModal extends LitElement {
         }
         .close-btn {
             background: var(--intent-neutral, #64748b);
-            color: var(--text, #ffffff);
+            color: #ffffff;
             border: none;
             padding: 6px 14px;
             border-radius: 4px;
             cursor: pointer;
             font-weight: bold;
             font-size: 0.85rem;
-            transition: filter 0.2s;
+            transition: filter 0.2s, background 0.2s;
             flex-shrink: 0;
         }
 
         .close-btn:hover {
             filter: brightness(1.2);
         }
+
+        :host([data-theme="e-ink"]) .close-btn {
+            background: #ffffff;
+            color: #000000;
+            border: 2px solid #000000;
+            box-shadow: 2px 2px 0 #000000;
+        }
+
+        :host([data-theme="e-ink"]) .close-btn:hover {
+            background: var(--bg-hover, #f1f5f9);
+            filter: none;
+        }
+
         .body {
             padding: 20px;
             overflow-y: auto;
