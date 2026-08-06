@@ -21,6 +21,8 @@ import '../../yenvui/js/pill.js';
 import '../../yenvui/js/filter-group.js';
 import '../../yenvui/js/selection-tray.js';
 import '../../yenvui/js/search-bar.js';
+import '../../yenvui/js/spinner.js';
+import '../../yenvui/js/empty-state.js';
 
 // 1. Async Action Button
 export class SutramAsyncBtn extends LitElement {
@@ -745,6 +747,17 @@ export class SutramSearchBar extends LitElement {
     }
 }
 customElements.define('sutram-search-bar', SutramSearchBar);
+export class SutramSpinner extends LitElement {
+    static properties = { text: { type: String } };
+    render() { return html`<yenvui-spinner .text=${this.text}><slot></slot></yenvui-spinner>`; }
+}
+customElements.define('sutram-spinner', SutramSpinner);
+
+export class SutramEmptyState extends LitElement {
+    static properties = { icon: { type: String }, text: { type: String } };
+    render() { return html`<yenvui-empty-state .icon=${this.icon} .text=${this.text}><slot></slot></yenvui-empty-state>`; }
+}
+customElements.define('sutram-empty-state', SutramEmptyState);
 
 export class SutramToolbar extends LitElement {
     static properties = {

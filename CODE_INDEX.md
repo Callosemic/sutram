@@ -10,9 +10,7 @@ sutram/
 ├── docs/                           # Architectural documentation and decision records
 │   ├── 00_index.md                 # yenVUI presentation chassis master index
 │   ├── 01_engineering_standards.md # yenVUI Web Component presentation standards and UI guardrails
-│   ├── ADR_INDEX.md                # yenVUI presentation chassis decision record index
-│   └── adrs/                       # Architectural Decision Records (ADRs) ledger
-│       └── 0037-gather-inversion-of-control-topology.md # [comment required]
+│   └── ADR_INDEX.md                # yenVUI presentation chassis decision record index
 ├── sutram/                         # Core Sutram IoC Micro-Kernel runtime and decision records
 │   ├── docs/                       # Architectural documentation and decision records
 │   │   └── adrs/                   # Architectural Decision Records (ADRs) ledger
@@ -52,11 +50,13 @@ sutram/
     │   ├── collapsible.js          # Expandable accordion container with semantic intent styling
     │   ├── dropdown.js             # Context popover trigger menus and filter dropdown panels
     │   ├── editor.js               # CodeMirror 6 code editor wrapper with dynamic ESM language loading
+    │   ├── empty-state.js          # Centered empty state feedback container with icon and text slot
     │   ├── filter-group.js         # Interactive pill array for multi-attribute filtering
     │   ├── modal.js                # Native HTML5 top-layer dialog modal overlay with backdrop handling
     │   ├── pill.js                 # Toggleable tag/badge primitive supporting standard and text variants
     │   ├── search-bar.js           # Standardized text search input with instant clear action
     │   ├── selection-tray.js       # Floating action tray for batch selection operations
+    │   ├── spinner.js              # Asynchronous CSS loading indicator component with custom text label
     │   ├── status-bar.js           # System status and background synchronization indicator bar
     │   ├── tabs.js                 # Horizontal swipe carousel tab navigation and cached view router
     │   ├── toast.js                # Non-blocking toast notification alert container

@@ -55,11 +55,10 @@ export function createSutramStore(name, initialState, persistKeys = [], getScope
 
     return store;
 }
-
 export function bindStoreInput(store, statePath, currentValue, options = {}) {
-    const { type = 'text', placeholder = '', style = '', id = '', selectOptions = [], min, max, onUpdate } = options;
+    const { type = 'text', label = '', placeholder = '', style = '', id = '', selectOptions = [], min, max, onUpdate, inline = false } = options;
     const handleInput = (e) => {
-        let val = type === 'checkbox' ? e.target.checked : e.target.value;
+        let val = e.detail !== undefined ? e.detail.value : (type === 'checkbox' ? e.target.checked : e.target.value);
         if (type === 'number') val = parseFloat(val);
         const parts = statePath.split('.');
         if (parts.length === 1) {
@@ -72,15 +71,14 @@ export function bindStoreInput(store, statePath, currentValue, options = {}) {
     };
 
     if (type === 'textarea') {
-        return html`<textarea id=${id} style=${style} placeholder=${placeholder} .value=${currentValue || ''} @input=${handleInput}></textarea>`;
+        return html`<sutram-textarea id=${id} style=${style} .label=${label} placeholder=${placeholder} .value=${currentValue || ''} ?inline=${inline} @sutram-input-changed=${handleInput}></sutram-textarea>`;
     } else if (type === 'select') {
-        return html`<select id=${id} style=${style} .value=${currentValue || ''} @change=${handleInput}>
-            ${selectOptions.map(o => html`<option value=${o.value !== undefined ? o.value : o}>${o.label || o}</option>`)}
-        </select>`;
+        const mappedOptions = selectOptions.map(o => typeof o === 'object' ? { value: o.value !== undefined ? o.value : o.label, label: o.label || o.value } : { value: o, label: o });
+        return html`<sutram-select id=${id} style=${style} .label=${label} .value=${currentValue || ''} .options=${mappedOptions} ?inline=${inline} @sutram-input-changed=${handleInput}></sutram-select>`;
     } else if (type === 'checkbox') {
-        return html`<input id=${id} type="checkbox" style=${style} .checked=${!!currentValue} @change=${handleInput}>`;
+        return html`<sutram-toggle id=${id} style=${style} .label=${label} .checked=${!!currentValue} @sutram-input-changed=${handleInput}></sutram-toggle>`;
     }
-    return html`<input id=${id} type=${type} style=${style} placeholder=${placeholder} min=${min||''} max=${max||''} .value=${currentValue || ''} @input=${handleInput}>`;
+    return html`<sutram-input id=${id} type=${type} style=${style} .label=${label} placeholder=${placeholder} min=${min||''} max=${max||''} .value=${currentValue || ''} ?inline=${inline} @sutram-input-changed=${handleInput}></sutram-input>`;
 }
 
 export class SutramElement extends LitElement {

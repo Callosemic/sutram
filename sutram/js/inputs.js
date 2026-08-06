@@ -206,15 +206,15 @@ export class SutramToggle extends LitElement {
         .track.checked .thumb { transform: translateX(16px); }
         input[type="checkbox"] { display: none; }
     `];
-
     constructor() {
         super();
         this.checked = false;
         this.disabled = false;
     }
 
-    _onToggle() {
+    _onToggle(e) {
         if (this.disabled) return;
+        if (e) e.preventDefault(); // Stop the native label double-fire
         this.checked = !this.checked;
         this.dispatchEvent(new CustomEvent('sutram-input-changed', { 
             detail: { value: this.checked }, bubbles: true, composed: true 
