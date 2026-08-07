@@ -36,8 +36,6 @@ sutram/
 └── yenvui/                         # Edge-Native presentation chassis and Web Component UI library
     ├── css/                        # Universal CSS theme tokens and layout resets
     │   └── theme-tokens.css        # CSS custom property tokens for Dark, Light, and E-Ink brutalist themes
-    ├── docs/                       # Central Single Source of Truth for documentation
-    │   └── .gitkeep                # Folder preservation tracking marker
     ├── js/                         # Pure ES module frontend runtime kernel and utilities
     │   ├── async-btn.js            # Agnostic asynchronous action button with status feedback state machine
     │   ├── card-group.js           # Gesture-locked card container with edge-selection swipe detection, stacked layout rendering, and accordion deck physics
