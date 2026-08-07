@@ -6,6 +6,6 @@ description = "Auto-generated project configuration"
 version_toml = [
     "pyproject.toml:project.version"
 ]
-commit_parser = "angular"
+commit_parser = "conventional"
 build_command = "false"
 allow_zero_version = true

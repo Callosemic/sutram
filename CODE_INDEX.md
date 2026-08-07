@@ -4,7 +4,6 @@ This index serves as the architectural map. It outlines the core directories and
 
 ```text
 sutram/
-├── .gitignore                      # Git ignore rules for OS, IDE, and build artifacts
 ├── .gitkeep                        # Folder preservation tracking marker
 ├── CODE_INDEX.md                   # Architectural directory map and operational index
 ├── build_matrix.json               # Vendor artifact distribution build matrix schema
@@ -20,6 +19,7 @@ sutram/
 │       ├── 0004_yenvui_codemirror6_tab_view_caching.md # ADR-0004: Encapsulated CodeMirror 6 and tab caching
 │       ├── 0005_yenvui_popover_toasts_gesture_selection.md # ADR-0005: Native popover API and selection physics
 │       └── 0006_yenvui_gesture_swipe_axis_locking.md # ADR-0006: Gesture swipe axis locking and event handshakes
+├── pyproject.toml                  # [comment required]
 ├── sutram/                         # Core Sutram IoC Micro-Kernel runtime
 │   └── js/                         # Pure ES module frontend runtime kernel and utilities
 │       ├── app_shell.js            # Declarative web component app shell and tab layout router
