@@ -3,6 +3,8 @@ export class YenvuiCard extends LitElement {
     static properties = {
         titleText: { type: String },
         detailText: { type: String },
+        detailPrefix: { type: String },
+        detailSuffix: { type: String },
         descriptionText: { type: String },
         icon: { type: String },
         intentColor: { type: String },
@@ -134,6 +136,9 @@ export class YenvuiCard extends LitElement {
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+        @container (max-width: 480px) {
+            .card-detail-main { display: none; }
         }
         .trigger-bar {
             width: 22px;
@@ -541,7 +546,14 @@ export class YenvuiCard extends LitElement {
                     <div class="card-body">
                         <slot></slot>
                     </div>
-                    ${this.detailText ? html`<div class="card-detail">${this.detailText}</div>` : ''}
+                    ${(this.detailText || this.detailPrefix || this.detailSuffix) ? html`
+                        <div class="card-detail">
+                            ${this.detailPrefix ? html`<span class="card-detail-prefix">${this.detailPrefix}</span>` : ''}
+                            ${this.detailText ? html`<span class="card-detail-main">${this.detailText}</span>` : ''}
+                            ${this.detailSuffix ? html`<span class="card-detail-suffix">${this.detailSuffix}</span>` : ''}
+                        </div>
+                    ` : ''}
+                    <slot name="detail"></slot>
                     <slot name="inline-actions"></slot>
                 </div>
 

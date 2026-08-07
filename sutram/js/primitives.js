@@ -33,6 +33,7 @@ export class SutramAsyncBtn extends LitElement {
         errorLabel: { type: String },
         intent: { type: String },
         onClick: { type: Object },
+        disabled: { type: Boolean },
         _status: { type: String }
     };
     static styles = [sharedStyles, css`
@@ -46,6 +47,7 @@ export class SutramAsyncBtn extends LitElement {
         this.successLabel = '✅';
         this.errorLabel = '❌';
         this.intent = 'primary';
+        this.disabled = false;
         this._status = 'idle';
     }
 
@@ -58,10 +60,9 @@ export class SutramAsyncBtn extends LitElement {
             }
         }
     }
-
     async _handleClick(e) {
         if (e) e.stopPropagation();
-        if (this._status === 'loading' || !this.onClick) return;
+        if (this.disabled || this._status === 'loading' || !this.onClick) return;
         this._status = 'loading';
         try {
             await this.onClick(e?.detail?.originalEvent || e);
@@ -82,6 +83,7 @@ export class SutramAsyncBtn extends LitElement {
                 .errorLabel=${this.errorLabel}
                 .intent=${this.intent}
                 .status=${this._status}
+                ?disabled=${this.disabled}
                 @yv-click=${this._handleClick}>
             </yenvui-async-btn>
         `;
@@ -590,6 +592,8 @@ export class SutramCard extends SutramElement {
         titleText: { type: String },
         descriptionText: { type: String },
         detailText: { type: String },
+        detailPrefix: { type: String },
+        detailSuffix: { type: String },
         icon: { type: String },
         intentColor: { type: String },
         entityType: { type: String },
@@ -665,6 +669,8 @@ export class SutramCard extends SutramElement {
                 .titleText=${this.titleText}
                 .descriptionText=${this.descriptionText}
                 .detailText=${this.detailText}
+                .detailPrefix=${this.detailPrefix}
+                .detailSuffix=${this.detailSuffix}
                 .icon=${this.icon}
                 .intentColor=${this.intentColor}
                 ?selected=${this.selected}
@@ -694,8 +700,8 @@ export class SutramCard extends SutramElement {
                         composed: true
                     }));
                 }}>
-
                 <slot name="header-tags" slot="header-tags"></slot>
+                <slot name="detail" slot="detail"></slot>
                 <slot name="inline-actions" slot="inline-actions"></slot>
                 <slot></slot>
                 <div slot="actions" style="display: flex; flex-wrap: nowrap; gap: 8px; align-items: center; width: max-content;" @click=${e => e.stopPropagation()}>

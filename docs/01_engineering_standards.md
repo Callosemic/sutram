@@ -11,9 +11,11 @@ To maintain system resilience, components must wrap `connectedCallback` and `ren
 Components extending `SutramElement` must utilize managed arrays for store subscriptions (`subscribe`), intervals (`registerInterval`), and DOM listeners (`registerGlobalListener`). Manual teardown logic is an anti-pattern; rely on the base class `disconnectedCallback()` to guarantee memory safety.
 ### 3. Lazy Store Hydration
 Components must anticipate mounting before state hydration completes. Use string store keys in `SutramElement.subscribe` to dynamically poll for global store instantiation, preventing race conditions during Stage 1 boot.
-
 ### 4. Session-Pinned Dynamic Module Imports
 Dynamic imports in batch loaders (e.g., `ExtensionRegistry.loadBatches`) must pin version query parameters to a stable session boot timestamp (`window.SUTRAM_BOOT_TS`) rather than using per-call timestamps like `Date.now()`. This ensures consistent module caching throughout an active session while maintaining cache-busting upon session restarts.
+
+### 5. Decoupled Measurement & Height Resizing
+Any Web Component performing dynamic DOM measurements or height recalculations based on content changes must schedule measurements asynchronously via `requestAnimationFrame` or `IntersectionObserver`. Direct synchronous DOM measurement during `updated()` or render cycles is prohibited to prevent `ResizeObserver` loop limit warnings and layout thrashing.
 
 ## II. Presentation Chassis Guardrails (yenVUI)
 
@@ -37,9 +39,11 @@ Web Components handling custom horizontal gestures must combine `touch-action: p
 
 ### 7. Flexbox & Grid Min-Width Blowout Defense
 Shadow DOM containers using flexbox or CSS grid layouts with text content, code blocks, or scrollable body regions must explicitly declare `min-width: 0` and `box-sizing: border-box` on child items to prevent content blowouts.
-
 ### 8. The DOM-First Vacuum Rule
 CSS deprecation must strictly follow: 1) Construct the presentational component (The Paint). 2) Wrap legacy logic into the new primitive (The State). 3) Delete legacy classes from the host application only after the transition is complete (The Vacuum).
+
+### 9. Decoupled Measurement & Height Resizing Standard
+Any Web Component performing dynamic DOM measurements or height recalculations based on content changes must schedule measurements asynchronously via `requestAnimationFrame` or `IntersectionObserver`. Direct synchronous DOM measurement during `updated()` or render cycles is prohibited to prevent `ResizeObserver` loop limit warnings and layout thrashing.
 
 ## III. Ecosystem Compliance
 

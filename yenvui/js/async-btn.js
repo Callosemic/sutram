@@ -9,7 +9,8 @@ export class YenvuiAsyncBtn extends LitElement {
         intent: { type: String },
         status: { type: String },
         btntype: { type: String },
-        onClick: { type: Object }
+        onClick: { type: Object },
+        disabled: { type: Boolean }
     };
     static styles = css`
         :host { 
@@ -78,6 +79,7 @@ export class YenvuiAsyncBtn extends LitElement {
         this.intent = 'primary';
         this.status = 'idle';
         this.btntype = 'button';
+        this.disabled = false;
     }
 
     connectedCallback() {
@@ -94,7 +96,7 @@ export class YenvuiAsyncBtn extends LitElement {
         if (this._themeObserver) this._themeObserver.disconnect();
     }
     async _handleClick(e) {
-        if (this.status === 'loading') {
+        if (this.disabled || this.status === 'loading') {
             if (e) {
                 e.stopPropagation();
                 e.preventDefault();
@@ -102,7 +104,7 @@ export class YenvuiAsyncBtn extends LitElement {
             return;
         }
 
-        this.dispatchEvent(new CustomEvent('yv-click', { 
+        this.dispatchEvent(new CustomEvent('yv-click', {  
             bubbles: true, 
             composed: true, 
             detail: { originalEvent: e } 
@@ -137,7 +139,7 @@ export class YenvuiAsyncBtn extends LitElement {
             <button 
                 type="${this.btntype}"
                 class="intent-${activeIntent}" 
-                ?disabled=${this.status === 'loading'}
+                ?disabled=${this.disabled || this.status === 'loading'}
                 @click=${this._handleClick}>
                 ${text}
             </button>

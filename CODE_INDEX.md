@@ -4,18 +4,23 @@ This index serves as the architectural map. It outlines the core directories and
 
 ```text
 sutram/
+├── .gitignore                      # [comment required]
 ├── .gitkeep                        # Folder preservation tracking marker
 ├── CODE_INDEX.md                   # Architectural directory map and operational index
 ├── build_matrix.json               # Vendor artifact distribution build matrix schema
-├── docs/                           # Architectural documentation and decision records
-│   ├── 00_index.md                 # yenVUI presentation chassis master index
-│   ├── 01_engineering_standards.md # yenVUI Web Component presentation standards and UI guardrails
-│   └── ADR_INDEX.md                # yenVUI presentation chassis decision record index
-├── sutram/                         # Core Sutram IoC Micro-Kernel runtime and decision records
-│   ├── docs/                       # Architectural documentation and decision records
-│   │   └── adrs/                   # Architectural Decision Records (ADRs) ledger
-│   │       ├── 0001_sutram_ioc_microkernel_architecture.md # IoC microkernel and slot layout architecture
-│   │       └── 0002_sutram_bootloader_and_resilience_patterns.md # Stage 1 bootloader and error boundary standards
+├── docs/                           # Central Single Source of Truth for documentation
+│   ├── 00_index.md                 # Master ecosystem documentation index
+│   ├── 01_engineering_standards.md # Unified Sutram and yenVUI engineering standards & guardrails
+│   ├── 02_yenvui_blueprint.md      # [comment required]
+│   ├── ADR_INDEX.md                # Global Architectural Decision Record (ADR) ledger index
+│   └── adrs/                       # Centralized ADR chronological decision ledger
+│       ├── 0001_sutram_ioc_microkernel_architecture.md # ADR-0001: IoC microkernel and slot layout architecture
+│       ├── 0002_sutram_bootloader_and_resilience_patterns.md # ADR-0002: Stage 1 bootloader and error boundary standards
+│       ├── 0003_yenvui_theme_mutation_observers.md # [comment required]
+│       ├── 0004_yenvui_codemirror6_tab_view_caching.md # [comment required]
+│       ├── 0005_yenvui_popover_toasts_gesture_selection.md # [comment required]
+│       └── 0006_yenvui_gesture_swipe_axis_locking.md # [comment required]
+├── sutram/                         # Core Sutram IoC Micro-Kernel runtime
 │   └── js/                         # Pure ES module frontend runtime kernel and utilities
 │       ├── app_shell.js            # Declarative web component app shell and tab layout router
 │       ├── inputs.js               # Standard form input elements (text, select, textarea, toggle)
@@ -31,17 +36,8 @@ sutram/
 └── yenvui/                         # Edge-Native presentation chassis and Web Component UI library
     ├── css/                        # Universal CSS theme tokens and layout resets
     │   └── theme-tokens.css        # CSS custom property tokens for Dark, Light, and E-Ink brutalist themes
-    ├── docs/                       # Architectural documentation and decision records
-    │   ├── .gitkeep                # Folder preservation tracking marker
-    │   ├── 00_index.md             # yenVUI presentation chassis master index
-    │   ├── 01_engineering_standards.md # yenVUI Web Component presentation standards and UI guardrails
-    │   ├── 2026-07-18-yenvui-blueprint.md # yenVUI architectural standup blueprint and execution plan
-    │   ├── ADR_INDEX.md            # yenVUI presentation chassis decision record index
-    │   └── adrs/                   # Architectural Decision Records (ADRs) ledger
-    │       ├── 0001-theme-mutation-observers-and-top-layer-dialog-visibility.md # ADR-0001: Dynamic theme MutationObservers and top-layer dialog host visibility
-    │       ├── 0002-codemirror6-shadow-dom-and-tab-view-caching.md # ADR-0002: Encapsulated CodeMirror 6 compartments and tab view caching
-    │       ├── 0003-native-popover-toasts-and-gesture-selection-trays.md # ADR-0003: Popover toast container elevation and multi-modal selection tray physics
-    │       └── 0004-gesture-swipe-axis-locking-and-hybrid-property-handshakes.md # ADR-0004: Gesture swipe axis locking, Safari back-nav interception, and hybrid handshakes
+    ├── docs/                       # Central Single Source of Truth for documentation
+    │   └── .gitkeep                # Folder preservation tracking marker
     ├── js/                         # Pure ES module frontend runtime kernel and utilities
     │   ├── async-btn.js            # Agnostic asynchronous action button with status feedback state machine
     │   ├── card-group.js           # Gesture-locked card container with edge-selection swipe detection, stacked layout rendering, and accordion deck physics

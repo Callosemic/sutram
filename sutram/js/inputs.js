@@ -1,6 +1,14 @@
 import { LitElement, html, css } from 'lit';
+
+// Suppress benign Chromium ResizeObserver rendering warnings
+window.addEventListener('error', e => {
+    if (e.message && (e.message.includes('ResizeObserver loop limit exceeded') || e.message.includes('ResizeObserver loop completed with undelivered notifications'))) {
+        e.stopImmediatePropagation();
+    }
+});
 const inputStyles = css`
     :host { display: block; margin-bottom: 15px; font-family: var(--font-family, inherit); }
+    :host([flush]) { margin-bottom: 0 !important; }
     .wrapper { display: flex; flex-direction: column; gap: 6px; }
     label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
 
@@ -120,7 +128,6 @@ export class SutramSelect extends LitElement {
     }
 }
 customElements.define('sutram-select', SutramSelect);
-
 // 3. Textarea
 export class SutramTextarea extends LitElement {
     static properties = {
@@ -130,7 +137,11 @@ export class SutramTextarea extends LitElement {
         rows: { type: Number },
         monospace: { type: Boolean },
         disabled: { type: Boolean },
-        inline: { type: Boolean, reflect: true }
+        inline: { type: Boolean, reflect: true },
+        autoSize: { type: Boolean },
+        maxHeight: { type: Number },
+        minRows: { type: Number },
+        borderless: { type: Boolean, reflect: true }
     };
     static styles = [inputStyles, css`
         textarea { resize: vertical; min-height: 80px; }
@@ -139,20 +150,88 @@ export class SutramTextarea extends LitElement {
         /* Align textarea labels to the top if inline */
         :host([inline]) .wrapper { align-items: flex-start; }
         :host([inline]) label { padding-top: 8px; }
+        :host([borderless]) {
+            margin-bottom: 0 !important;
+        }
+        :host([borderless]) textarea, textarea.borderless {
+            border: none !important;
+            outline: none !important;
+            box-shadow: none !important;
+            background: transparent !important;
+            resize: none !important;
+            overflow: hidden !important;
+            padding: 0 !important;
+            min-height: 0 !important;
+        }
     `];
-
     constructor() {
         super();
         this.value = '';
         this.placeholder = '';
-        this.rows = 4;
+        this.rows = 1;
         this.monospace = false;
         this.disabled = false;
         this.inline = false;
+        this.autoSize = true;
+        this.maxHeight = 500;
+        this.minRows = 1;
+        this.borderless = false;
+    }
+
+    connectedCallback() {
+        super.connectedCallback();
+        this._boundAdjustHeight = this._adjustHeight.bind(this);
+        window.addEventListener('resize', this._boundAdjustHeight);
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        window.removeEventListener('resize', this._boundAdjustHeight);
+        if (this._visibilityObserver) this._visibilityObserver.disconnect();
+    }
+
+    firstUpdated() {
+        this._visibilityObserver = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting) {
+                this._adjustHeight();
+            }
+        });
+        this._visibilityObserver.observe(this);
+        this._adjustHeight();
+    }
+
+    updated(changedProperties) {
+        super.updated(changedProperties);
+        if (changedProperties.has('value') || changedProperties.has('autoSize') || changedProperties.has('borderless')) {
+            this._adjustHeight();
+        }
+    }
+    _adjustHeight() {
+        if (this.autoSize === false) return;
+
+        // Decouple from the synchronous render cycle
+        window.requestAnimationFrame(() => {
+            const textarea = this.shadowRoot.querySelector('textarea');
+            if (!textarea) return;
+
+            // Guardrail: if scrollHeight is 0, the element is likely hidden (e.g., inert dialog)
+            if (textarea.scrollHeight === 0) return;
+
+            const currentHeight = textarea.style.height;
+            textarea.style.height = 'auto';
+            const newHeight = `${Math.min(textarea.scrollHeight + 2, this.maxHeight || 500)}px`;
+
+            if (currentHeight !== newHeight) {
+                textarea.style.height = newHeight;
+            } else {
+                textarea.style.height = currentHeight;
+            }
+        });
     }
 
     _onInput(e) {
         this.value = e.target.value;
+        this._adjustHeight();
         this.dispatchEvent(new CustomEvent('sutram-input-changed', { 
             detail: { value: this.value }, bubbles: true, composed: true 
         }));
