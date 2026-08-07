@@ -4,22 +4,23 @@ This index serves as the architectural map. It outlines the core directories and
 
 ```text
 sutram/
-├── .gitignore                      # [comment required]
+├── .gitignore                      # Git ignore rules for OS, IDE, and build artifacts
 ├── .gitkeep                        # Folder preservation tracking marker
 ├── CODE_INDEX.md                   # Architectural directory map and operational index
 ├── build_matrix.json               # Vendor artifact distribution build matrix schema
 ├── docs/                           # Central Single Source of Truth for documentation
 │   ├── 00_index.md                 # Master ecosystem documentation index
 │   ├── 01_engineering_standards.md # Unified Sutram and yenVUI engineering standards & guardrails
-│   ├── 02_yenvui_blueprint.md      # [comment required]
+│   ├── 02_yenvui_blueprint.md      # Presentation chassis philosophy and atomic component arsenal
 │   ├── ADR_INDEX.md                # Global Architectural Decision Record (ADR) ledger index
 │   └── adrs/                       # Centralized ADR chronological decision ledger
 │       ├── 0001_sutram_ioc_microkernel_architecture.md # ADR-0001: IoC microkernel and slot layout architecture
 │       ├── 0002_sutram_bootloader_and_resilience_patterns.md # ADR-0002: Stage 1 bootloader and error boundary standards
-│       ├── 0003_yenvui_theme_mutation_observers.md # [comment required]
-│       ├── 0004_yenvui_codemirror6_tab_view_caching.md # [comment required]
-│       ├── 0005_yenvui_popover_toasts_gesture_selection.md # [comment required]
-│       └── 0006_yenvui_gesture_swipe_axis_locking.md # [comment required]
+│       ├── 0003_yenvui_theme_mutation_observers.md # ADR-0003: Dynamic theme mutation observer pattern
+│       ├── 0004_yenvui_codemirror6_tab_view_caching.md # ADR-0004: Encapsulated CodeMirror 6 and tab caching
+│       ├── 0005_yenvui_popover_toasts_gesture_selection.md # ADR-0005: Native popover API and selection physics
+│       └── 0006_yenvui_gesture_swipe_axis_locking.md # ADR-0006: Gesture swipe axis locking and event handshakes
+├── pyproject.toml                  # Python build and semantic release configuration
 ├── sutram/                         # Core Sutram IoC Micro-Kernel runtime
 │   └── js/                         # Pure ES module frontend runtime kernel and utilities
 │       ├── app_shell.js            # Declarative web component app shell and tab layout router
