@@ -2,10 +2,10 @@
 name = "sutram"
 version = "0.1.0"
 description = "Auto-generated project configuration"
-
 [tool.semantic_release]
 version_toml = [
     "pyproject.toml:project.version"
 ]
 commit_parser = "angular"
 build_command = "false"
+allow_zero_version = true
