@@ -19,7 +19,8 @@ sutram/
 │       ├── 0004_yenvui_codemirror6_tab_view_caching.md # ADR-0004: Encapsulated CodeMirror 6 and tab caching
 │       ├── 0005_yenvui_popover_toasts_gesture_selection.md # ADR-0005: Native popover API and selection physics
 │       └── 0006_yenvui_gesture_swipe_axis_locking.md # ADR-0006: Gesture swipe axis locking and event handshakes
-├── pyproject.toml                  # [comment required]
+├── pyproject.toml                  # Python project metadata and semantic release configuration
+├── readme.md                       # Master repository architecture map and component reference
 ├── sutram/                         # Core Sutram IoC Micro-Kernel runtime
 │   └── js/                         # Pure ES module frontend runtime kernel and utilities
 │       ├── app_shell.js            # Declarative web component app shell and tab layout router

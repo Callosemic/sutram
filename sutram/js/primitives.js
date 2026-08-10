@@ -497,7 +497,7 @@ export class SutramGenericSettingsModal extends SutramElement {
                             inputHtml = html`
                                 <select style="width: 100%; padding: 10px; border-radius: 4px; background: var(--input-bg); color: var(--text); border: 1px solid var(--border);"
                                     .value=${val} @change=${e => { this.formData = {...this.formData, [field.id]: e.target.value}; this.requestUpdate(); }}>
-                                    ${(field.options || []).map(opt => html`<option value="${opt.value !== undefined ? opt.value : opt}">${opt.label || opt.title || opt.value || opt}</option>`)}
+                                    ${(field.options || []).map(opt => html`<option value="${opt.value !== undefined ? opt.value : opt}" ?selected=${val === (opt.value !== undefined ? opt.value : opt)}>${opt.label || opt.title || opt.value || opt}</option>`)}
                                 </select>
                             `;
                         } else if (field.type === 'number') {
