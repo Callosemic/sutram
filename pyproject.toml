@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Auto-generated project configuration"
 license = { text = "Apache-2.0" }
 [tool.semantic_release]
-vcs_release = true
+vcs_release = false
 version_toml = [
     "pyproject.toml:project.version"
 ]
