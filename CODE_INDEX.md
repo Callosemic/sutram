@@ -5,6 +5,7 @@ This index serves as the architectural map. It outlines the core directories and
 ```text
 sutram/
 ├── .gitkeep                        # Folder preservation tracking marker
+├── CHANGELOG.md                    # [comment required]
 ├── CODE_INDEX.md                   # Architectural directory map and operational index
 ├── build_matrix.json               # Vendor artifact distribution build matrix schema
 ├── docs/                           # Central Single Source of Truth for documentation
