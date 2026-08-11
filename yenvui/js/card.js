@@ -178,6 +178,9 @@ export class YenvuiCard extends LitElement {
             min-height: calc(100% + 2px);
             box-sizing: border-box;
             background: var(--input-bg, #2d2d2d);
+            background: color-mix(in srgb, var(--input-bg, #2d2d2d) 75%, transparent);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
             border: 1px solid var(--border, #444);
             border-right: none;
             display: flex;
@@ -186,7 +189,7 @@ export class YenvuiCard extends LitElement {
             /* Pass CSS variables to penetrate slotted async buttons */
             --btn-padding: 8px 16px;
             --btn-font-size: 0.85rem;
-            padding: 6px 10px;
+            padding: 6px 10px 0px 10px;
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -205,7 +208,7 @@ export class YenvuiCard extends LitElement {
             overflow-x: auto;
             scrollbar-width: none;
             -webkit-overflow-scrolling: touch;
-            padding-bottom: 2px;
+            padding-bottom: 8px;
             width: 100%;
             box-sizing: border-box;
         }
@@ -216,6 +219,24 @@ export class YenvuiCard extends LitElement {
         .actions-wrapper::-webkit-scrollbar {
             display: none;
         }
+
+        /* Show slim scrollbars for users with a mouse */
+        @media (pointer: fine) {
+            .actions-wrapper {
+                scrollbar-width: thin;
+                scrollbar-color: var(--border, #444) transparent;
+                padding-bottom: 8px;
+            }
+            .actions-wrapper::-webkit-scrollbar {
+                display: block;
+                height: 6px;
+            }
+            .actions-wrapper::-webkit-scrollbar-thumb {
+                background-color: var(--border, #444);
+                border-radius: 10px;
+            }
+        }
+
         :host([_overlayactive]) .actions-tray {
             opacity: 1;
             pointer-events: auto;
@@ -239,10 +260,13 @@ export class YenvuiCard extends LitElement {
         }
         :host([data-theme="light"]) .actions-tray {
             background: #ffffff;
+            background: color-mix(in srgb, #ffffff 75%, transparent);
             box-shadow: 0 10px 30px rgba(0,0,0,0.15);
         }
         :host([data-theme="e-ink"]) .actions-tray {
             background: #ffffff;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
             border: 2px solid #000000;
             border-right: none;
             box-shadow: 4px 4px 0 #14b8a6;
@@ -483,22 +507,6 @@ export class YenvuiCard extends LitElement {
         this._touchStartY = null;
         this._isSwipingHorizontal = null;
     }
-
-    _handlePointerDown(e) {
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
-        this._longPressTimer = setTimeout(() => {
-            this._justLongPressed = true;
-            this._toggleSelection();
-            this._longPressTimer = null;
-        }, 500);
-    }
-
-    _handlePointerCancel() {
-        if (this._longPressTimer) {
-            clearTimeout(this._longPressTimer);
-            this._longPressTimer = null;
-        }
-    }
     firstUpdated() {
         this._checkActions();
     }
@@ -522,18 +530,7 @@ export class YenvuiCard extends LitElement {
             <div class="card-wrapper" style="--card-intent: ${this.intentColor || 'var(--intent-neutral)'}"
                 @mouseleave=${() => { if (window.matchMedia('(hover: hover)').matches) this._overlayActive = false; }}
                 @touchstart=${this._handleTouchStart}
-                @touchend=${this._handleTouchEnd}
-                @pointerdown=${this._handlePointerDown}
-                @pointerup=${this._handlePointerCancel}
-                @pointermove=${this._handlePointerCancel}
-                @pointercancel=${this._handlePointerCancel}
-                @click=${(e) => { 
-                    if (this._justLongPressed) {
-                        this._justLongPressed = false;
-                        e.stopPropagation();
-                        e.preventDefault();
-                    }
-                }}>
+                @touchend=${this._handleTouchEnd}>
 
                 <div class="content-col">
                     <div class="card-header">
