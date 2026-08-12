@@ -1,12 +1,12 @@
 import { LitElement, html, css } from 'lit';
-
 export class YenvuiModal extends LitElement {
     static properties = {
         titleText: { type: String },
         open: { type: Boolean, reflect: true },
         maxWidth: { type: String },
         fullscreen: { type: Boolean, reflect: true },
-        flush: { type: Boolean, reflect: true }
+        flush: { type: Boolean, reflect: true },
+        transparent: { type: Boolean, reflect: true }
     };
     static styles = css`
         :host { display: contents; } /* Native dialog handles its own visibility. Host must remain permeable. */
@@ -43,6 +43,10 @@ export class YenvuiModal extends LitElement {
         dialog::backdrop {
             background: var(--modal-backdrop, rgba(0, 0, 0, 0.75));
             backdrop-filter: var(--modal-backdrop-filter, blur(3px));
+        }
+        :host([transparent]) dialog::backdrop {
+            background: transparent !important;
+            backdrop-filter: none !important;
         }
 
         .header {

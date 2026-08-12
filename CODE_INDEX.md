@@ -4,9 +4,12 @@ This index serves as the architectural map. It outlines the core directories and
 
 ```text
 sutram/
+├── .gitignore                      # [comment required]
 ├── .gitkeep                        # Folder preservation tracking marker
 ├── CHANGELOG.md                    # [comment required]
 ├── CODE_INDEX.md                   # Architectural directory map and operational index
+├── LICENSE                         # [comment required]
+├── NOTICE                          # [comment required]
 ├── build_matrix.json               # Vendor artifact distribution build matrix schema
 ├── docs/                           # Central Single Source of Truth for documentation
 │   ├── 00_index.md                 # Master ecosystem documentation index

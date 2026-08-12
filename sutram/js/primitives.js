@@ -463,12 +463,13 @@ export class SutramGenericSettingsModal extends SutramElement {
     render() {
         const registry = window.ExtensionRegistry;
         const title = (registry?._manifests?.get(this.extName)?.name || this.extName) + ' Settings';
-
         return html`
             <yenvui-modal  
                 ?open=${this.open} 
                 titleText=${title} 
                 ?fullscreen=${true} 
+                ?transparent=${true}
+                style="--modal-backdrop: transparent; --modal-backdrop-filter: none;"
                 @yenvui-modal-closed=${() => this.open = false}>
 
                 <div slot="body" style="display: flex; flex-direction: column; gap: 15px; flex: 1; min-height: 0; overflow-y: auto;">

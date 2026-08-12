@@ -41,7 +41,7 @@ Atomic, zero-state presentation controls delivered via `yenVUI`:
 | :--- | :--- | :--- |
 | **`<yenvui-card>`** | Polymorphic catalog card with edge-triggered touch drawer | Emits `yenvui-card-select-toggled`; supports compact and flush modes. |
 | **`<yenvui-card-group>`** | Container with horizontal gesture locking and accordion physics | Supports stacked layouts and iOS Safari edge-swipe navigation protection. |
-| **`<yenvui-modal>`** | Accessible top-layer workspace overlay | Native HTML5 `<dialog>` operating in `#top-layer` with `:host { display: contents; }`. |
+| **`<yenvui-modal>`** | Accessible top-layer workspace overlay | Native HTML5 `<dialog>` operating in `#top-layer` with `:host { display: contents; }`; supports `transparent` backdrop mode. |
 | **`<yenvui-async-btn>`** | Action button with integrated state machine physics | Renders `idle` \| `loading` \| `success` \| `error` states; emits `yv-click`. |
 | **`<yenvui-tabs>`** | Carousel tab navigation header with sub-tab variants | View-caching router; emits `yenvui-tab-selected`. |
 | **`<yenvui-toolbar>`** | Sticky action toolbar with search and filter dropdown | Container-query responsive layout (`@container`). |
