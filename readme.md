@@ -67,7 +67,7 @@ State-aware wrappers, IoC brokers, and form controls delivered via `sutram`:
 | Primitive Tag | Description | Operational Purpose |
 | :--- | :--- | :--- |
 | **`<sutram-app-shell>`** | Top-level declarative tab layout shell | Queries `ExtensionRegistry` layout slots to construct primary and sub-tab hierarchies. |
-| **`<sutram-entity-actions>`** | Standalone IoC action broker | Resolves and renders dynamic entity actions registered by extensions via `ExtensionRegistry`. |
+| **`<sutram-entity-actions>`** | Standalone IoC action broker | Resolves and renders dynamic entity actions registered by extensions via `ExtensionRegistry`; supports `scrollable` mode. |
 | **`<sutram-card>`** | IoC-bound card container | Binds `yenVUI` card selection state to `SelectionStore` and injects `<sutram-entity-actions>`. |
 | **`<sutram-card-group>`** | IoC card group wrapper | Wraps `<yenvui-card-group>` for extension slot projection. |
 | **`<sutram-modal>`** | IoC modal dialog wrapper | Binds `<yenvui-modal>` closing events to `SutramElement` dispatch. |

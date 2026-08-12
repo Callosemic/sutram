@@ -44,7 +44,8 @@ export class YenvuiModal extends LitElement {
             background: var(--modal-backdrop, rgba(0, 0, 0, 0.75));
             backdrop-filter: var(--modal-backdrop-filter, blur(3px));
         }
-        :host([transparent]) dialog::backdrop {
+        :host([transparent]) dialog::backdrop,
+        :host([fullscreen]) dialog::backdrop {
             background: transparent !important;
             backdrop-filter: none !important;
         }

@@ -493,39 +493,32 @@ export class SutramGenericSettingsModal extends SutramElement {
                                 </sutram-async-btn>
                             `;
                         } else if (field.type === 'boolean') {
-                            inputHtml = html`<input type="checkbox" style="transform: scale(1.2); cursor: pointer;" .checked=${!!val} @change=${e => { this.formData = {...this.formData, [field.id]: e.target.checked}; this.requestUpdate(); }}>`;
+                            inputHtml = html`<sutram-toggle .checked=${!!val} @sutram-input-changed=${e => { this.formData = {...this.formData, [field.id]: e.detail.value}; this.requestUpdate(); }} ?flush=${true} style="margin-top: 4px;"></sutram-toggle>`;
                         } else if (field.type === 'select') {
-                            inputHtml = html`
-                                <select style="width: 100%; padding: 10px; border-radius: 4px; background: var(--input-bg); color: var(--text); border: 1px solid var(--border);"
-                                    .value=${val} @change=${e => { this.formData = {...this.formData, [field.id]: e.target.value}; this.requestUpdate(); }}>
-                                    ${(field.options || []).map(opt => html`<option value="${opt.value !== undefined ? opt.value : opt}" ?selected=${val === (opt.value !== undefined ? opt.value : opt)}>${opt.label || opt.title || opt.value || opt}</option>`)}
-                                </select>
-                            `;
+                            const options = (field.options || []).map(opt => ({ value: opt.value !== undefined ? opt.value : opt, label: opt.label || opt.title || opt.value || opt }));
+                            inputHtml = html`<sutram-select .value=${val} .options=${options} @sutram-input-changed=${e => { this.formData = {...this.formData, [field.id]: e.detail.value}; this.requestUpdate(); }} ?flush=${true}></sutram-select>`;
                         } else if (field.type === 'number') {
-                            inputHtml = html`<input type="number" .value=${val} style="width: 100%; padding: 10px; border-radius: 4px; background: var(--input-bg); color: var(--text); border: 1px solid var(--border); box-sizing: border-box;" @input=${e => { this.formData = {...this.formData, [field.id]: parseFloat(e.target.value)}; this.requestUpdate(); }}>`;
+                            inputHtml = html`<sutram-input type="number" .value=${val} @sutram-input-changed=${e => { this.formData = {...this.formData, [field.id]: parseFloat(e.detail.value)}; this.requestUpdate(); }} ?flush=${true}></sutram-input>`;
                         } else if (field.type === 'object' || field.type === 'json' || (typeof val === 'object' && val !== null)) {
                             const strVal = typeof val === 'object' && val !== null ? JSON.stringify(val, null, 2) : val;
-                            inputHtml = html`<textarea style="width: 100%; height: 120px; padding: 10px; border-radius: 4px; background: var(--input-bg); color: var(--text); border: 1px solid var(--border); box-sizing: border-box; font-family: monospace;" @input=${e => {
+                            inputHtml = html`<sutram-textarea .value=${strVal} .monospace=${true} .minRows=${4} @sutram-input-changed=${e => {
                                 try {
-                                    this.formData = {...this.formData, [field.id]: JSON.parse(e.target.value)};
-                                    e.target.style.borderColor = 'var(--border)';
-                                } catch(err) {
-                                    e.target.style.borderColor = 'var(--intent-danger)';
-                                }
+                                    this.formData = {...this.formData, [field.id]: JSON.parse(e.detail.value)};
+                                } catch(err) {}
                                 this.requestUpdate();
-                            }}>${strVal}</textarea>`;
+                            }} ?flush=${true}></sutram-textarea>`;
                         } else {
                             const inputType = field.type === 'password' ? 'password' : 'text';
-                            inputHtml = html`<input type="${inputType}" .value=${val} style="width: 100%; padding: 10px; border-radius: 4px; background: var(--input-bg); color: var(--text); border: 1px solid var(--border); box-sizing: border-box;" @input=${e => { this.formData = {...this.formData, [field.id]: e.target.value}; this.requestUpdate(); }}>`;
+                            inputHtml = html`<sutram-input type="${inputType}" .value=${val} @sutram-input-changed=${e => { this.formData = {...this.formData, [field.id]: e.detail.value}; this.requestUpdate(); }} ?flush=${true}></sutram-input>`;
                         }
 
                         const displayLabel = field.title || field.label || field.id;
                         return html`
                             <div style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px;">
                                 ${field.type === 'boolean' 
-                                    ? html`<label style="font-size: 0.95rem; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 10px; font-weight: bold;">${inputHtml} ${displayLabel}</label>` 
+                                    ? html`<div style="display: flex; align-items: center; gap: 10px;"><label style="font-size: 0.95rem; color: var(--text); font-weight: bold; margin: 0; cursor: pointer;">${displayLabel}</label>${inputHtml}</div>` 
                                     : html`<label style="font-size: 0.85rem; color: var(--text-muted); font-weight: bold;">${displayLabel}</label>${inputHtml}`}
-                                ${field.description || field.desc ? html`<div style="font-size: 0.75rem; color: var(--text-muted);">${field.description || field.desc}</div>` : ''}
+                                ${field.description || field.desc ? html`<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: -2px;">${field.description || field.desc}</div>` : ''}
                             </div>
                         `;
                     })}
@@ -542,9 +535,21 @@ customElements.define('sutram-generic-settings', SutramGenericSettingsModal);
 export class SutramEntityActions extends SutramElement {
     static properties = {
         entityType: { type: String },
-        entityData: { type: Object }
+        entityData: { type: Object },
+        scrollable: { type: Boolean, reflect: true }
     };
-    static styles = css`:host { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }`;
+    static styles = css`
+        :host { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        :host([scrollable]) {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            scrollbar-width: none;
+            width: 100%;
+        }
+        :host([scrollable])::-webkit-scrollbar {
+            display: none;
+        }
+    `;
 
     render() {
         if (!this.entityType || !window.ExtensionRegistry?.getEntityActions) return '';
