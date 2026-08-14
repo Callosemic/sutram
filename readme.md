@@ -109,15 +109,19 @@ UDF-compliant form controls providing standard state bindings:
 
 `sutram` requires zero bundlers, zero transpilation steps, and zero build toolchains. It is delivered directly to the browser via native HTML import maps:
 
-### 1. Configure the Import Map
+### 1. Configure the Upstream Import Map
+
+Sutram and yenVUI operate entirely via **Inversion of Control for Dependency Resolution**. Components rely on bare specifiers and never hardcode CDN URLs. The host application MUST provide an HTML5 import map to resolve all third-party libraries (e.g., Lit, CodeMirror) and the chassis itself.
 
 ```html
 <script type="importmap">
 {
   "imports": {
-    "lit": "./vendor/lit/index.js",
-    "sutram/": "./vendor/sutram/js/",
-    "yenvui/": "./vendor/yenvui/js/"
+    "lit": "/static/vendor/lit/lit-core.min.js",
+    "codemirror-core": "/static/vendor/codemirror/codemirror-core.js",
+    "@codemirror/lang-python": "/static/vendor/codemirror/lang-python.js",
+    "sutram/": "/static/vendor/sutram/js/",
+    "yenvui/": "/static/vendor/yenvui/js/"
   }
 }
 </script>

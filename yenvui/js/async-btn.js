@@ -10,7 +10,8 @@ export class YenvuiAsyncBtn extends LitElement {
         status: { type: String },
         btntype: { type: String },
         onClick: { type: Object },
-        disabled: { type: Boolean }
+        disabled: { type: Boolean },
+        active: { type: Boolean }
     };
     static styles = css`
         :host { 
@@ -50,6 +51,10 @@ export class YenvuiAsyncBtn extends LitElement {
             opacity: 0.7;
             cursor: not-allowed;
         }
+        button.active {
+            box-shadow: inset 0 0 0 2px var(--text, #ffffff);
+            filter: brightness(1.15);
+        }
         /* E-Ink High Contrast Overrides */
         :host([data-theme="e-ink"]) button {
             background: #ffffff !important;
@@ -60,6 +65,10 @@ export class YenvuiAsyncBtn extends LitElement {
         }
         :host([data-theme="e-ink"]) button:hover:not(:disabled) {
             background: #f1f5f9 !important;
+        }
+        :host([data-theme="e-ink"]) button.active {
+            background: #000000 !important;
+            color: #ffffff !important;
         }
 
         /* Semantic Intent Mapping */
@@ -80,6 +89,7 @@ export class YenvuiAsyncBtn extends LitElement {
         this.status = 'idle';
         this.btntype = 'button';
         this.disabled = false;
+        this.active = false;
     }
 
     connectedCallback() {
@@ -138,7 +148,7 @@ export class YenvuiAsyncBtn extends LitElement {
         return html`
             <button 
                 type="${this.btntype}"
-                class="intent-${activeIntent}" 
+                class="intent-${activeIntent} ${this.active ? 'active' : ''}" 
                 ?disabled=${this.disabled || this.status === 'loading'}
                 @click=${this._handleClick}>
                 ${text}

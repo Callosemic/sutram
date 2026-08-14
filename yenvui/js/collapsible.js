@@ -112,10 +112,10 @@ export class YenvuiCollapsible extends LitElement {
         super.disconnectedCallback();
         if (this._themeObserver) this._themeObserver.disconnect();
     }
-
     render() {
         return html`
-            <div class="header" @click=${() => {
+            <div class="header" @click=${(e) => {
+                e.stopPropagation();
                 this.open = !this.open;
                 this.dispatchEvent(new CustomEvent('yenvui-collapsible-toggled', {
                     detail: { open: this.open },

@@ -288,12 +288,18 @@ export const ExtensionRegistry = {
                 this._entityActions.get(target).push(act);
             });
         }
-
         if (config.uiHooks) {
             Object.entries(config.uiHooks).forEach(([zone, callback]) => {
                 if (!this.uiHooks[zone]) this.uiHooks[zone] = [];
                 callback._extName = extName;
                 this.uiHooks[zone].push(callback);
+            });
+        }
+
+        if (config.shortcuts) {
+            config.shortcuts.forEach(s => {
+                const id = s.id || `${extName}:${(s.label || s.key || 'shortcut').toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+                this.registerShortcut(s.context, s.key, s.action, { id, extName, label: s.label });
             });
         }
         console.log(`📦 Registered Declarative Extension: ${extName} v${config.version || '1.0'}`);
@@ -302,10 +308,14 @@ export const ExtensionRegistry = {
             this.compileLayout();
         }
     },
-
-    registerShortcut: function(context, keyCombo, callback) {
+    registerShortcut: function(context, keyCombo, callback, meta = {}) {
         if (!this.shortcuts[context]) this.shortcuts[context] = {};
-        this.shortcuts[context][keyCombo.toLowerCase()] = callback;
+        const key = keyCombo.toLowerCase();
+        this.shortcuts[context][key] = callback;
+        if (meta.id) {
+            this._shortcutMeta = this._shortcutMeta || new Map();
+            this._shortcutMeta.set(meta.id, { context, key, extName: meta.extName, label: meta.label });
+        }
     },
 
     registerUIHook: function(zone, callback) {

@@ -6,7 +6,7 @@ As yenVUI expanded to support rich code and configuration editing across client 
 2. Preventing component re-initialization and DOM reflow thrashing when switching back and forth between active tabs in `<yenvui-tabs>`.
 
 ## Decision
-1. **Dynamic Language Extension Compartments**: `<yenvui-editor>` dynamically imports CodeMirror 6 language modules on-demand from trusted ESM CDNs (`https://esm.sh`). Reconfiguration of read-only states, language extensions, and custom extensions is isolated using CodeMirror `Compartment` instances dispatched directly into the `EditorView`.
+1. **Dynamic Language Extension Compartments**: `<yenvui-editor>` dynamically imports CodeMirror 6 language modules on-demand using bare specifiers (`codemirror-core`, `@codemirror/lang-*`) resolved via host application HTML import maps. Reconfiguration of read-only states, writing mode layouts, syntax themes, and custom extensions is isolated using CodeMirror `Compartment` instances dispatched directly into the `EditorView`.
 2. **Tab View Caching Pattern**: `<yenvui-tabs>` defaults `cacheViews` to `true`. Slotted views are projected into `.yenvui-tab-view` wrappers and toggled declaratively using `display: flex | none` matching `activeTab === tab.id`. This retains active state, scroll position, and DOM focus natively without requiring imperative `Map` tracking or `document.createElement` element generation.
 
 ## Consequences

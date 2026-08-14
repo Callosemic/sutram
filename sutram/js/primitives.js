@@ -34,6 +34,7 @@ export class SutramAsyncBtn extends LitElement {
         intent: { type: String },
         onClick: { type: Object },
         disabled: { type: Boolean },
+        active: { type: Boolean },
         _status: { type: String }
     };
     static styles = [sharedStyles, css`
@@ -48,6 +49,7 @@ export class SutramAsyncBtn extends LitElement {
         this.errorLabel = '❌';
         this.intent = 'primary';
         this.disabled = false;
+        this.active = false;
         this._status = 'idle';
     }
 
@@ -84,6 +86,7 @@ export class SutramAsyncBtn extends LitElement {
                 .intent=${this.intent}
                 .status=${this._status}
                 ?disabled=${this.disabled}
+                ?active=${this.active}
                 @yv-click=${this._handleClick}>
             </yenvui-async-btn>
         `;
@@ -559,10 +562,10 @@ export class SutramEntityActions extends SutramElement {
             if (act.component) {
                 return html`<div style="display: contents; order: ${act.order || 99};">${act.component(this.entityData)}</div>`;
             }
-
             const label = typeof act.label === 'function' ? act.label(this.entityData) : act.label;
             const icon = typeof act.icon === 'function' ? act.icon(this.entityData) : (act.icon || '');
             const intent = typeof act.intent === 'function' ? act.intent(this.entityData) : (act.intent || 'primary');
+            const isActive = typeof act.isActive === 'function' ? act.isActive(this.entityData) : !!act.isActive;
 
             let clickHandler;
             if (act.asyncAction) {
@@ -578,12 +581,12 @@ export class SutramEntityActions extends SutramElement {
                     }
                 };
             }
-
             return html`
                 <sutram-async-btn 
                     style="margin: 0; order: ${act.order || 99};" 
                     label="${icon} ${label}" 
                     intent="${intent}" 
+                    ?active=${isActive}
                     .onClick=${clickHandler}>
                 </sutram-async-btn>
             `;
@@ -818,7 +821,6 @@ export class SutramFilterDropdown extends YenvuiFilterDropdown {}
 if (!customElements.get('sutram-filter-dropdown')) {
     customElements.define('sutram-filter-dropdown', SutramFilterDropdown);
 }
-
 export class SutramCollapsible extends LitElement {
     static properties = { titleText: { type: String }, open: { type: Boolean, reflect: true }, intent: { type: String }, flush: { type: Boolean, reflect: true } };
     static styles = [sharedStyles];
@@ -829,7 +831,10 @@ export class SutramCollapsible extends LitElement {
                 ?open=${this.open} 
                 intent=${this.intent || 'neutral'} 
                 ?flush=${this.flush}
-                @yenvui-collapsible-toggled=${e => this.dispatchEvent(new CustomEvent('sutram-collapsible-toggled', { detail: e.detail, bubbles: true, composed: true }))}>
+                @yenvui-collapsible-toggled=${e => {
+                    if (e.target !== e.currentTarget) return;
+                    this.dispatchEvent(new CustomEvent('sutram-collapsible-toggled', { detail: e.detail, bubbles: true, composed: true }));
+                }}>
                 <slot name="actions" slot="actions"></slot>
                 <slot></slot>
             </yenvui-collapsible>
@@ -889,7 +894,7 @@ export class SutramFilterGroup extends LitElement {
 customElements.define('sutram-filter-group', SutramFilterGroup);
 // 14. Code & Text Editor Primitive
 export class SutramEditor extends SutramElement {
-    static properties = { value: { type: String }, readOnly: { type: Boolean }, language: { type: String }, customExtensions: { type: Array } };
+    static properties = { value: { type: String }, readOnly: { type: Boolean }, language: { type: String }, writingMode: { type: Boolean }, customExtensions: { type: Array } };
     static styles = [sharedStyles, css`
         :host { display: flex; flex-direction: column; flex: 1; min-height: 0; height: 100%; }
         yenvui-editor { flex: 1; min-height: 0; height: 100%; }
@@ -906,6 +911,7 @@ export class SutramEditor extends SutramElement {
                 .value=${this.value || ''}
                 .language=${this.language || 'markdown'}
                 ?readOnly=${this.readOnly}
+                ?writingMode=${this.writingMode}
                 .customExtensions=${this.customExtensions || []}
                 @yenvui-editor-changed=${e => this.dispatchEvent(new CustomEvent('editor-changed', { detail: e.detail, bubbles: true, composed: true }))}>
             </yenvui-editor>

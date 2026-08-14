@@ -32,17 +32,20 @@ Components within yenVUI must never know *why* they are rendering data, nor shou
 *   **Forbidden:** Complex, domain-specific layouts like `<yenvui-kanban-board>` or `<yenvui-git-diff>`. Extensions remain the architects of their own domain layouts.
 *   **Mandated:** A polymorphic `<yenvui-card>` that exposes a `<slot name="actions">`. The consuming application iterates over its own registries and declaratively projects standard `<button slot="actions">` elements into the yenVUI layout, which yenVUI styles uniformly. Extensions assemble their views using these atomic "Lego blocks" rather than writing raw HTML and custom CSS.
 *   **Primitive Form & Interactive Controls:** Custom Web Component primitives that encapsulate native HTML controls (such as `<button>` or `<input>`) must explicitly pass through structural attributes (e.g., `type="button|submit"`) and emit normalized custom events (`yenvui-` or `yv-`) rather than intercepting business execution flow.
+### Bundleless Import Maps & Upstream Delegation
+yenVUI components are built to be completely environment-agnostic. To maintain a zero-bundler architecture, components must rely entirely on **bare specifiers** (e.g., `import('lit')` or `import('codemirror-core')`) and must never hardcode external CDN URLs inside their logic.
 
-### Bundleless Import Maps as the SSOT
-yenVUI acts as the Single Source of Truth (SSOT). Consuming applications (like Axoneme Console) will map to yenVUI via the `index.html` import map.
+It is the strict responsibility of the **Host Application** (e.g., inSetu OS, Axoneme Console) to synthesize and inject an HTML5 `<script type="importmap">` during the Stage 1 boot phase. This Inversion of Control allows the host OS to securely manage vendorization, deduplication, and offline air-gapping without `yenVUI` needing a build step.
 
-**Local Dev Map:**
+**Host Application Import Map Example:**
 ```html
 <script type="importmap">
 {
     "imports": {
-        "lit": "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js",
-        "yenvui/": "http://localhost:4444/js/"
+        "lit": "/static/vendor/lit/lit-core.min.js",
+        "codemirror-core": "/static/vendor/codemirror/codemirror-core.js",
+        "@codemirror/lang-python": "/static/vendor/codemirror/lang-python.js",
+        "yenvui/": "/static/vendor/yenvui/js/"
     }
 }
 </script>
