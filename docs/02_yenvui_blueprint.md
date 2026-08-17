@@ -83,6 +83,8 @@ To replace the imperative layout structures of the legacy Axoneme Console, yenVU
     *   Section grouping primitive with sticky headers, action slot projection, and high-contrast E-Ink styling.
 11. **`<yenvui-selection-tray>` (Batch Selection Overlay)**
     *   Fixed bottom tray for multi-item batch operations, featuring badge counters, action slot projection, and UDF reset triggers.
+12. **`<yenvui-board>` & `<yenvui-column>` (Multi-Column Layout Grid)**
+    *   Responsive flex-grid layout utilizing `@container` queries for graceful degradation on mobile/split-screen viewports.
 
 ## 4. The Execution Order of Operations
 

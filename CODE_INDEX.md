@@ -4,12 +4,12 @@ This index serves as the architectural map. It outlines the core directories and
 
 ```text
 sutram/
-├── .gitignore                      # [comment required]
+├── .gitignore                      # Git exclusion rules and workspace tracking ignores
 ├── .gitkeep                        # Folder preservation tracking marker
-├── CHANGELOG.md                    # [comment required]
+├── CHANGELOG.md                    # Automated semantic release change log ledger
 ├── CODE_INDEX.md                   # Architectural directory map and operational index
-├── LICENSE                         # [comment required]
-├── NOTICE                          # [comment required]
+├── LICENSE                         # Apache-2.0 open-source software license
+├── NOTICE                          # Copyright notice and attribution ledger
 ├── build_matrix.json               # Vendor artifact distribution build matrix schema
 ├── docs/                           # Central Single Source of Truth for documentation
 │   ├── 00_index.md                 # Master ecosystem documentation index
@@ -43,6 +43,7 @@ sutram/
     │   └── theme-tokens.css        # CSS custom property tokens for Dark, Light, and E-Ink brutalist themes
     ├── js/                         # Pure ES module frontend runtime kernel and utilities
     │   ├── async-btn.js            # Agnostic asynchronous action button with status feedback state machine
+    │   ├── board.js                # Multi-column container-query responsive layout grid and column container
     │   ├── card-group.js           # Gesture-locked card container with edge-selection swipe detection, stacked layout rendering, and accordion deck physics
     │   ├── card.js                 # Polymorphic card primitive with drawer overlay and long-press selection
     │   ├── category-section.js     # Categorized list section wrapper with header action slot
@@ -51,6 +52,7 @@ sutram/
     │   ├── editor.js               # CodeMirror 6 code editor wrapper with dynamic ESM language loading
     │   ├── empty-state.js          # Centered empty state feedback container with icon and text slot
     │   ├── filter-group.js         # Interactive pill array for multi-attribute filtering
+    │   ├── label.js                # Standardized form label primitive with theme observation support
     │   ├── modal.js                # Native HTML5 top-layer dialog modal overlay with backdrop handling
     │   ├── pill.js                 # Toggleable tag/badge primitive supporting standard and text variants
     │   ├── search-bar.js           # Standardized text search input with instant clear action
@@ -58,6 +60,7 @@ sutram/
     │   ├── spinner.js              # Asynchronous CSS loading indicator component with custom text label
     │   ├── status-bar.js           # System status and background synchronization indicator bar
     │   ├── tabs.js                 # Horizontal swipe carousel tab navigation and cached view router
+    │   ├── tag.js                  # Semantic intent tag primitive with high-contrast theme overrides
     │   ├── toast.js                # Non-blocking toast notification alert container
     │   └── toolbar.js              # Sticky header toolbar integrating search, filters, and action slots
     └── tests/                      # Automated presentation chassis compliance tests and fitness functions

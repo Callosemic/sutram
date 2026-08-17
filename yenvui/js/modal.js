@@ -174,10 +174,23 @@ export class YenvuiModal extends LitElement {
                 setTimeout(() => {
                     if (dialog.open) dialog.close();
                 }, 0);
+            } else if (this.open && dialog.open && changedProperties.has('open')) {
+                // Self-healing top-layer stack bounce: if the host re-evaluates the open property to true
+                // while the modal is already open, it guarantees this modal jumps to the front.
+                dialog.close();
+                dialog.showModal();
             }
         }
         if (changedProperties.has('maxWidth') && this.maxWidth) {
             this.style.setProperty('--modal-max-width', this.maxWidth);
+        }
+    }
+
+    bringToFront() {
+        const dialog = this.shadowRoot.querySelector('dialog');
+        if (dialog && dialog.open) {
+            dialog.close();
+            dialog.showModal();
         }
     }
     disconnectedCallback() {

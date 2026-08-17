@@ -222,11 +222,9 @@ export class YenvuiEditor extends LitElement {
             ".cm-selectionMatch": { backgroundColor: "rgba(255, 255, 255, 0.1)" }
         });
 
-        // Optimistically boot with the markdown fallback, then lazily swap it
-        let initialLangExt = [];
-        loadLanguageExtension(this.language).then(ext => {
-            if (this._view) this._view.dispatch({ effects: this.languageConf.reconfigure(ext) });
-        });
+        // Await the language pack to prevent Lezer tree reconfiguration race conditions 
+        // with the autocomplete worker during the initial EditorView boot.
+        let initialLangExt = await loadLanguageExtension(this.language);
 
         if (!this.isConnected) {
             this._initializingEditor = false;

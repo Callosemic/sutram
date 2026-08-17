@@ -23,6 +23,9 @@ import '../../yenvui/js/selection-tray.js';
 import '../../yenvui/js/search-bar.js';
 import '../../yenvui/js/spinner.js';
 import '../../yenvui/js/empty-state.js';
+import '../../yenvui/js/board.js';
+import '../../yenvui/js/tag.js';
+import '../../yenvui/js/label.js';
 
 // 1. Async Action Button
 export class SutramAsyncBtn extends LitElement {
@@ -465,7 +468,10 @@ export class SutramGenericSettingsModal extends SutramElement {
     }
     render() {
         const registry = window.ExtensionRegistry;
-        const title = (registry?._manifests?.get(this.extName)?.name || this.extName) + ' Settings';
+        const manifest = registry?._manifests?.get(this.extName);
+        const title = (manifest?.name || this.extName) + ' Settings';
+        const settingsActions = manifest?.settingsActions || [];
+
         return html`
             <yenvui-modal  
                 ?open=${this.open} 
@@ -474,9 +480,21 @@ export class SutramGenericSettingsModal extends SutramElement {
                 ?transparent=${true}
                 style="--modal-backdrop: transparent; --modal-backdrop-filter: none;"
                 @yenvui-modal-closed=${() => this.open = false}>
-
                 <div slot="body" style="display: flex; flex-direction: column; gap: 15px; flex: 1; min-height: 0; overflow-y: auto;">
+                    ${settingsActions.filter(act => !act.id.endsWith('_generic_settings')).map(act => html`
+                        <div style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; padding: 15px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px;">
+                            <label style="font-size: 0.95rem; color: var(--text); font-weight: bold;">${act.icon || ''} ${act.label}</label>
+                            <span style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px;">Click to open the dedicated configuration panel.</span>
+                            <sutram-async-btn label="Open Editor" intent="primary" .onClick=${async (e) => {
+                                this.open = false;
+                                if (act.onClick) await act.onClick(e);
+                            }}></sutram-async-btn>
+                        </div>
+                    `)}
+
                     ${this.schema.map(field => {
+                        if (field.type === 'hidden') return '';
+
                         const val = this.formData[field.id] !== undefined ? this.formData[field.id] : field.default;
                         let inputHtml = '';
                         if (field.type === 'action') {
@@ -767,12 +785,37 @@ export class SutramSpinner extends LitElement {
     render() { return html`<yenvui-spinner .text=${this.text}><slot></slot></yenvui-spinner>`; }
 }
 customElements.define('sutram-spinner', SutramSpinner);
-
 export class SutramEmptyState extends LitElement {
     static properties = { icon: { type: String }, text: { type: String } };
     render() { return html`<yenvui-empty-state .icon=${this.icon} .text=${this.text}><slot></slot></yenvui-empty-state>`; }
 }
 customElements.define('sutram-empty-state', SutramEmptyState);
+
+export class SutramBoard extends LitElement {
+    static styles = [css`:host { display: contents; }`];
+    render() { return html`<yenvui-board><slot></slot></yenvui-board>`; }
+}
+customElements.define('sutram-board', SutramBoard);
+export class SutramColumn extends LitElement {
+    static properties = { titleText: { type: String }, intentColor: { type: String } };
+    static styles = [css`:host { display: contents; }`];
+    render() { return html`<yenvui-column .titleText=${this.titleText} .intentColor=${this.intentColor}><slot></slot></yenvui-column>`; }
+}
+customElements.define('sutram-column', SutramColumn);
+
+export class SutramTag extends LitElement {
+    static properties = { text: { type: String }, intent: { type: String } };
+    static styles = [css`:host { display: contents; }`];
+    render() { return html`<yenvui-tag .text=${this.text} .intent=${this.intent}><slot></slot></yenvui-tag>`; }
+}
+customElements.define('sutram-tag', SutramTag);
+
+export class SutramLabel extends LitElement {
+    static properties = { text: { type: String } };
+    static styles = [css`:host { display: contents; }`];
+    render() { return html`<yenvui-label .text=${this.text}><slot></slot></yenvui-label>`; }
+}
+customElements.define('sutram-label', SutramLabel);
 
 export class SutramToolbar extends LitElement {
     static properties = {

@@ -144,3 +144,17 @@ def test_resize_observer_teardown_compliance():
             violations.append(f"{filepath} -> Instantiates ResizeObserver but lacks disconnect() in disconnectedCallback()")
 
     assert not violations, f"ResizeObserver components must implement disconnectedCallback cleanup:\n" + "\n".join(violations)
+
+
+def test_form_label_primitive_compliance():
+    """Ensure form controls utilize <sutram-label> or <yenvui-label> primitives instead of raw <label> tags."""
+    raw_label_pattern = re.compile(r'<label\b(?!.*toggle-wrapper)')
+    violations = []
+
+    for filepath in glob.glob('../sutram/js/inputs.js', recursive=True):
+        with open(filepath, 'r') as f:
+            for idx, line in enumerate(f, start=1):
+                if raw_label_pattern.search(line):
+                    violations.append(f"{filepath}:{idx} -> Raw <label> detected; wrap using <sutram-label>")
+
+    assert not violations, f"Form controls must use standardized label primitives:\n" + "\n".join(violations)

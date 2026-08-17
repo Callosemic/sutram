@@ -58,6 +58,7 @@ Atomic, zero-state presentation controls delivered via `yenVUI`:
 | **`<yenvui-toast-container>`** | Alert notification stack | Non-blocking fixed overlay emitting `yenvui-toast-dismissed`. |
 | **`<yenvui-spinner>`** | CSS loading spinner indicator | Text slot fallback. |
 | **`<yenvui-empty-state>`** | Empty list feedback container | Centered layout with icon and message slots. |
+| **`<yenvui-board>` & `<yenvui-column>`** | Multi-column flexible layout grid | Responsive container queries for layout collapse. |
 
 ---
 
@@ -90,6 +91,7 @@ State-aware wrappers, IoC brokers, and form controls delivered via `sutram`:
 | **`<sutram-filter-group>`** | Filter group wrapper | Wraps `<yenvui-filter-group>`. |
 | **`<sutram-spinner>`** | Loading indicator wrapper | Wraps `<yenvui-spinner>`. |
 | **`<sutram-empty-state>`** | Empty state wrapper | Wraps `<yenvui-empty-state>`. |
+| **`<sutram-board>` & `<sutram-column>`** | Board layout wrappers | Wraps `<yenvui-board>` and `<yenvui-column>`. |
 
 ---
 

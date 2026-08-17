@@ -32,7 +32,6 @@
                 };
                 constructor.prototype._isSafeConnected = true;
             }
-
             // Intercept render before customElements.define captures the prototype
             if (constructor.prototype.render && !constructor.prototype._isSafeRender) {
                 const origRender = constructor.prototype.render;
@@ -41,7 +40,7 @@
                         return origRender.apply(this, args);
                     } catch (e) {
                         console.error(`⚠️ [Isolated Component Error] <${name}> failed in render:`, e);
-                        return `<div style="padding: 10px; color: var(--intent-danger); background: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; font-family: var(--font-mono); font-size: 0.8rem;">⚠️ Element &lt;${name}&gt; render error: ${e.message}</div>`;
+                        return `⚠️ Element <${name}> render error: ${e.message}`;
                     }
                 };
                 constructor.prototype._isSafeRender = true;

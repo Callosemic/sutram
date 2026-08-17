@@ -10,10 +10,9 @@ const inputStyles = css`
     :host { display: block; margin-bottom: 15px; font-family: var(--font-family, inherit); }
     :host([flush]) { margin-bottom: 0 !important; }
     .wrapper { display: flex; flex-direction: column; gap: 6px; }
-    label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
 
     :host([inline]) .wrapper { flex-direction: row; align-items: center; gap: 15px; }
-    :host([inline]) label { flex-shrink: 0; margin: 0; white-space: nowrap; }
+    :host([inline]) sutram-label { flex-shrink: 0; margin: 0; white-space: nowrap; }
     :host([inline]) .input-base { flex: 1; min-width: 0; }
     
     .input-base {
@@ -69,11 +68,10 @@ export class SutramInput extends LitElement {
             detail: { value: this.value }, bubbles: true, composed: true 
         }));
     }
-
     render() {
         return html`
             <div class="wrapper">
-                ${this.label ? html`<label>${this.label}</label>` : ''}
+                ${this.label ? html`<sutram-label .text=${this.label}></sutram-label>` : ''}
                 <input 
                     class="input-base"
                     type=${this.type}
@@ -115,13 +113,12 @@ export class SutramSelect extends LitElement {
             detail: { value: this.value }, bubbles: true, composed: true 
         }));
     }
-
     render() {
         return html`
             <div class="wrapper">
-                ${this.label ? html`<label>${this.label}</label>` : ''}
+                ${this.label ? html`<sutram-label .text=${this.label}></sutram-label>` : ''}
                 <select class="input-base" .value=${this.value} ?disabled=${this.disabled} @change=${this._onChange}>
-                    ${this.options.map(opt => html`<option value=${opt.value}>${opt.label || opt.value}</option>`)}
+                    ${this.options.map(opt => html`<option value=${opt.value} ?selected=${this.value === opt.value}>${opt.label || opt.value}</option>`)}
                 </select>
             </div>
         `;
@@ -137,6 +134,7 @@ export class SutramTextarea extends LitElement {
         rows: { type: Number },
         monospace: { type: Boolean },
         disabled: { type: Boolean },
+        readOnly: { type: Boolean },
         inline: { type: Boolean, reflect: true },
         autoSize: { type: Boolean },
         maxHeight: { type: Number },
@@ -171,6 +169,7 @@ export class SutramTextarea extends LitElement {
         this.rows = 1;
         this.monospace = false;
         this.disabled = false;
+        this.readOnly = false;
         this.inline = false;
         this.autoSize = true;
         this.maxHeight = 500;
@@ -236,17 +235,17 @@ export class SutramTextarea extends LitElement {
             detail: { value: this.value }, bubbles: true, composed: true 
         }));
     }
-
     render() {
         return html`
             <div class="wrapper">
-                ${this.label ? html`<label>${this.label}</label>` : ''}
+                ${this.label ? html`<sutram-label .text=${this.label}></sutram-label>` : ''}
                 <textarea 
                     class="input-base ${this.monospace ? 'monospace' : ''}"
                     rows=${this.rows}
                     .value=${this.value}
                     placeholder=${this.placeholder}
                     ?disabled=${this.disabled}
+                    ?readonly=${this.readOnly}
                     @input=${this._onInput}
                 ></textarea>
             </div>
