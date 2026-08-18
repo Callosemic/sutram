@@ -190,8 +190,7 @@ export class YenvuiCardGroup extends LitElement {
         }
     }
     _handleStackClick(e) {
-        if (!this.stacked || !this.accordion) return;
-
+        if (!this.stacked || !this.accordion || this._childCount <= 1) return;
         const path = e.composedPath();
         const isActionClick = path.some(el => {
             if (!el || !el.tagName) return false;
