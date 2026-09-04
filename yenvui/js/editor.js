@@ -188,6 +188,9 @@ export class YenvuiEditor extends LitElement {
         }
         if (this._view) this.requestUpdate();
     }
+    render() {
+        return html`<div id="cm-container" style="flex: 1; display: flex; flex-direction: column; min-height: 0; height: 100%;"></div>`;
+    }
 
     async _initEditor() {
         if (this._view || this._initializingEditor) return;
@@ -230,6 +233,12 @@ export class YenvuiEditor extends LitElement {
             this._initializingEditor = false;
             return;
         }
+        const container = this.shadowRoot.getElementById('cm-container');
+        if (!container) {
+            this._initializingEditor = false;
+            return;
+        }
+
         this._view = new EditorView({
             state: EditorState.create({
                 doc: this.value || '',
@@ -256,8 +265,8 @@ export class YenvuiEditor extends LitElement {
                     })
                 ]
             }),
-            parent: this.renderRoot,
-            root: this.renderRoot
+            parent: container,
+            root: this.shadowRoot
         });
         this._initializingEditor = false;
         if (this.writingMode) {

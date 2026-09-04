@@ -391,9 +391,9 @@ export const ExtensionRegistry = {
         if (this._ticks.has(extName)) this._ticks.delete(extName);
     },
     startMetronome: function(getActiveExtensions = null, coreExtensions = []) {
-        if (this._metronomeId) clearInterval(this._metronomeId);
+        if (this._metronomeId) clearTimeout(this._metronomeId);
 
-        this._metronomeId = setInterval(() => {
+        const tick = () => {
             const now = Date.now();
             this._ticks.forEach((tasks, extName) => {
                 // Guardrail: Statelessly evaluate host application topology
@@ -415,7 +415,24 @@ export const ExtensionRegistry = {
                     }
                 });
             });
-        }, 100);
+
+            // Phase 4: Metronome Backoff (Visibility API)
+            // Hibernate to 60s when backgrounded to preserve mobile battery
+            const nextTick = document.hidden ? 60000 : 100;
+            this._metronomeId = setTimeout(tick, nextTick);
+        };
+
+        if (!this._visibilityListenerAdded) {
+            document.addEventListener("visibilitychange", () => {
+                if (!document.hidden) {
+                    clearTimeout(this._metronomeId);
+                    tick(); // Instantly wake and force tick upon refocus
+                }
+            });
+            this._visibilityListenerAdded = true;
+        }
+
+        this._metronomeId = setTimeout(tick, 100);
     }
 };
 
@@ -450,7 +467,6 @@ addToast: (message, intent = 'danger', duration = 6000) => {
 },
 removeToast: (id) => ToastStore.setState(state => ({ toasts: state.toasts.filter(t => t.id !== id) }))
 });
-
 export const SelectionStore = createSutramStore('Selection', {
 selectedItems: new Map(),
 toggleSelection: (id, entityType, data) => {
@@ -460,4 +476,8 @@ toggleSelection: (id, entityType, data) => {
     SelectionStore.setState({ selectedItems: newMap });
 },
 clearSelection: () => SelectionStore.setState({ selectedItems: new Map() })
+});
+
+export const EnvironmentStore = createSutramStore('Environment', {
+    isOffline: false
 });

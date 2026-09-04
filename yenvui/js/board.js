@@ -1,15 +1,21 @@
 import { LitElement, html, css } from 'lit';
-
 export class YenvuiBoard extends LitElement {
     static styles = css`
         :host { 
-            display: flex; 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr);
+            align-items: start;
             gap: 15px; 
             width: 100%; 
         }
-        @container (max-width: 800px) {
+        @container (max-width: 1100px) {
             :host { 
-                flex-direction: column; 
+                grid-template-columns: repeat(2, 1fr); 
+            }
+        }
+        @container (max-width: 700px) {
+            :host { 
+                grid-template-columns: 1fr; 
                 gap: 25px; 
             }
         }
@@ -20,7 +26,6 @@ export class YenvuiBoard extends LitElement {
     }
 }
 customElements.define('yenvui-board', YenvuiBoard);
-
 export class YenvuiColumn extends LitElement {
     static properties = {
         titleText: { type: String },
@@ -29,8 +34,7 @@ export class YenvuiColumn extends LitElement {
 
     static styles = css`
         :host { 
-            flex: 1; 
-            min-width: 250px; 
+            min-width: 0; 
             background: var(--input-bg, #2d2d2d); 
             padding: 10px; 
             border-radius: 6px; 
@@ -45,7 +49,7 @@ export class YenvuiColumn extends LitElement {
             margin-bottom: 10px; 
             color: var(--text, #e0e0e0); 
         }
-        @container (max-width: 800px) {
+        @container (max-width: 700px) {
             :host { 
                 background: transparent; 
                 padding: 0; 

@@ -1,5 +1,6 @@
 import re
 import glob
+
 def test_theme_token_compliance():
     """Ensure no hardcoded hex/rgb color strings exist in Web Component styles."""
     hex_color_pattern = re.compile(
@@ -15,6 +16,7 @@ def test_theme_token_compliance():
                     violations.append(f"{filepath}:{idx} -> {line.strip()}")
 
     assert not violations, f"Hardcoded visual style tokens detected:\n" + "\n".join(violations)
+
 def test_custom_event_namespace_compliance():
     """Ensure custom events dispatched by components use the yenvui- or yv- namespace prefix."""
     event_pattern = re.compile(r"new\s+CustomEvent\(\s*['\"]([^'\"]+)['\"]")
@@ -31,7 +33,6 @@ def test_custom_event_namespace_compliance():
 
     assert not violations, f"Un-namespaced custom events detected:\n" + "\n".join(violations)
 
-
 def test_dialog_host_visibility_compliance():
     """Ensure components utilizing native <dialog> elements do not trap themselves using :host { display: none; }."""
     dialog_pattern = re.compile(r'<dialog\b|\bdialog\s*\{|::backdrop')
@@ -46,6 +47,7 @@ def test_dialog_host_visibility_compliance():
                 if host_none_pattern.search(line):
                     violations.append(f"{filepath}:{idx} -> :host mapped to display: none in a dialog component")
     assert not violations, f"Native dialog components must use 'display: contents' to prevent top-layer #backdrop UI freezes:\n" + "\n".join(violations)
+
 def test_dialog_teardown_compliance():
     """Ensure components utilizing native <dialog> elements implement disconnectedCallback teardown checks with DOM re-attachment."""
     dialog_pattern = re.compile(r'<dialog\b')
@@ -59,7 +61,6 @@ def test_dialog_teardown_compliance():
             violations.append(f"{filepath} -> Wraps native <dialog> but lacks disconnectedCallback unmount close teardown")
 
     assert not violations, f"Native dialog components must implement disconnectedCallback unmount teardown:\n" + "\n".join(violations)
-
 
 def test_theme_observer_compliance():
     """Ensure components with custom data-theme CSS rules implement MutationObserver theme tracking."""
@@ -75,7 +76,6 @@ def test_theme_observer_compliance():
             violations.append(f"{filepath} -> Has host data-theme CSS rules but lacks MutationObserver implementation")
     assert not violations, f"Components using :host([data-theme=...]) must implement MutationObserver for document.body data-theme:\n" + "\n".join(violations)
 
-
 def test_container_query_compliance():
     """Ensure components use @container queries instead of viewport @media queries for component layouts."""
     media_query_pattern = re.compile(r'@media\s*\([^)]*max-width')
@@ -87,7 +87,6 @@ def test_container_query_compliance():
                 if media_query_pattern.search(line):
                     violations.append(f"{filepath}:{idx} -> Viewport @media query detected; use CSS @container query instead")
     assert not violations, f"Viewport-bound @media queries detected in component definitions:\n" + "\n".join(violations)
-
 
 def test_touchmove_passive_compliance():
     """Ensure components calling e.preventDefault() in touchmove bind listeners with { passive: false }."""
@@ -103,6 +102,7 @@ def test_touchmove_passive_compliance():
                 violations.append(f"{filepath} -> Contains touchmove e.preventDefault() but lacks {{ passive: false }} listener binding")
 
     assert not violations, f"Touchmove cancellation requires {{ passive: false }} event options:\n" + "\n".join(violations)
+
 def test_code_index_no_placeholders():
     """Ensure CODE_INDEX.md has no unpopulated placeholder comments."""
     placeholder_pattern = re.compile(r'#\s*\[comment required\]')
@@ -114,7 +114,6 @@ def test_code_index_no_placeholders():
                 violations.append(f"CODE_INDEX.md:{idx} -> Unpopulated comment placeholder")
 
     assert not violations, f"Unpopulated placeholders found in CODE_INDEX.md:\n" + "\n".join(violations)
-
 
 def test_flex_grid_min_width_compliance():
     """Ensure flex/grid body containers in Web Components specify min-width: 0 to prevent layout blowouts."""
@@ -130,7 +129,6 @@ def test_flex_grid_min_width_compliance():
                 violations.append(f"{filepath} -> Contains flex/grid body layout but lacks 'min-width: 0' blowout protection")
     assert not violations, f"Flex/grid containers must specify 'min-width: 0':\n" + "\n".join(violations)
 
-
 def test_resize_observer_teardown_compliance():
     """Ensure components using ResizeObserver disconnect it in disconnectedCallback()."""
     observer_pattern = re.compile(r'new\s+ResizeObserver')
@@ -145,7 +143,6 @@ def test_resize_observer_teardown_compliance():
 
     assert not violations, f"ResizeObserver components must implement disconnectedCallback cleanup:\n" + "\n".join(violations)
 
-
 def test_form_label_primitive_compliance():
     """Ensure form controls utilize <sutram-label> or <yenvui-label> primitives instead of raw <label> tags."""
     raw_label_pattern = re.compile(r'<label\b(?!.*toggle-wrapper)')
@@ -158,3 +155,18 @@ def test_form_label_primitive_compliance():
                     violations.append(f"{filepath}:{idx} -> Raw <label> detected; wrap using <sutram-label>")
 
     assert not violations, f"Form controls must use standardized label primitives:\n" + "\n".join(violations)
+
+def test_set_interval_ban_compliance():
+    """Ensure yenVUI primitives do not use raw setInterval, enforcing registerTick or registerInterval for metronome backoff."""
+    interval_pattern = re.compile(r'\bsetInterval\s*\(')
+    violations = []
+
+    for filepath in glob.glob('js/**/*.js', recursive=True):
+        with open(filepath, 'r') as f:
+            for idx, line in enumerate(f, start=1):
+                if line.strip().startswith('//'):
+                    continue
+                if interval_pattern.search(line):
+                    violations.append(f"{filepath}:{idx} -> Raw setInterval detected; use registerTick() or registerInterval()")
+
+    assert not violations, f"Raw setInterval usage detected in yenVUI components:\n" + "\n".join(violations)

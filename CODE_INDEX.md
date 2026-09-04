@@ -16,26 +16,32 @@ sutram/
 │   ├── 01_engineering_standards.md # Unified Sutram and yenVUI engineering standards & guardrails
 │   ├── 02_yenvui_blueprint.md      # Presentation chassis philosophy and atomic component arsenal
 │   ├── ADR_INDEX.md                # Global Architectural Decision Record (ADR) ledger index
-│   └── adrs/                       # Centralized ADR chronological decision ledger
-│       ├── 0001_sutram_ioc_microkernel_architecture.md # ADR-0001: IoC microkernel and slot layout architecture
-│       ├── 0002_sutram_bootloader_and_resilience_patterns.md # ADR-0002: Stage 1 bootloader and error boundary standards
-│       ├── 0003_yenvui_theme_mutation_observers.md # ADR-0003: Dynamic theme mutation observer pattern
-│       ├── 0004_yenvui_codemirror6_tab_view_caching.md # ADR-0004: Encapsulated CodeMirror 6 and tab caching
-│       ├── 0005_yenvui_popover_toasts_gesture_selection.md # ADR-0005: Native popover API and selection physics
-│       └── 0006_yenvui_gesture_swipe_axis_locking.md # ADR-0006: Gesture swipe axis locking and event handshakes
+│   ├── adrs/                       # Centralized ADR chronological decision ledger
+│   │   ├── 0001_sutram_ioc_microkernel_architecture.md # ADR-0001: IoC microkernel and slot layout architecture
+│   │   ├── 0002_sutram_bootloader_and_resilience_patterns.md # ADR-0002: Stage 1 bootloader and error boundary standards
+│   │   ├── 0003_yenvui_theme_mutation_observers.md # ADR-0003: Dynamic theme mutation observer pattern
+│   │   ├── 0004_yenvui_codemirror6_tab_view_caching.md # ADR-0004: Encapsulated CodeMirror 6 and tab caching
+│   │   ├── 0005_yenvui_popover_toasts_gesture_selection.md # ADR-0005: Native popover API and selection physics
+│   │   ├── 0006_yenvui_gesture_swipe_axis_locking.md # ADR-0006: Gesture swipe axis locking and event handshakes
+│   │   └── 0007_sutram_offline_microkernel_and_metronome_backoff.md # ADR-0007: Offline micro-kernel architecture and metronome visibility backoff
+│   └── yenvui_contracts.md         # Interface contract specification and CSS intent tokens for yenVUI presentation chassis
 ├── pyproject.toml                  # Python project metadata and semantic release configuration
 ├── readme.md                       # Master repository architecture map and component reference
 ├── sutram/                         # Core Sutram IoC Micro-Kernel runtime
 │   └── js/                         # Pure ES module frontend runtime kernel and utilities
 │       ├── app_shell.js            # Declarative web component app shell and tab layout router
+│       ├── client.js               # Agnostic data provider client and HTTP transport provider interface
 │       ├── inputs.js               # Standard form input elements (text, select, textarea, toggle)
+│       ├── offline.js              # Offline IndexedDB persistence manager, outbox reconciler, and network hysteresis manager
 │       ├── poller.js               # Background job status polling factory with tier-0 API integration
 │       ├── primitives.js           # Presentation primitives (buttons, modals, toast, selection, status)
 │       ├── sdk.js                  # IoC Micro-Kernel, SutramElement base class, and ExtensionRegistry
 │       ├── shared_styles.js        # Lit CSS intent tokens, presentation primitives, and theme styles
 │       ├── shortcuts.js            # Centralized context-aware keydown shortcut router
 │       ├── sutram-boot.js          # Stage 1 bootloader for importmap synthesis, SemVer parsing, and guardrails
-│       └── utils.js                # Pure algorithmic utility helpers (fuzzy filter, debounce, slugify, time formatting)
+│       ├── sw-core.js              # Abstracted Service Worker core runtime for offline caching and navigation fallbacks
+│       ├── utils.js                # Pure algorithmic utility helpers (fuzzy filter, debounce, slugify, time formatting)
+│       └── wordcount.js            # Ephemeral word count widget decoration plugin for CodeMirror 6
 ├── tests/                          # Automated presentation chassis compliance tests and fitness functions
 │   └── sutram_consumer_linter.py   # Reusable static analysis script for consumer UDF compliance
 └── yenvui/                         # Edge-Native presentation chassis and Web Component UI library

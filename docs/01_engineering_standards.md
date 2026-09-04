@@ -13,9 +13,14 @@ Components extending `SutramElement` must utilize managed arrays for store subsc
 Components must anticipate mounting before state hydration completes. Use string store keys in `SutramElement.subscribe` to dynamically poll for global store instantiation, preventing race conditions during Stage 1 boot.
 ### 4. Session-Pinned Dynamic Module Imports
 Dynamic imports in batch loaders (e.g., `ExtensionRegistry.loadBatches`) must pin version query parameters to a stable session boot timestamp (`window.SUTRAM_BOOT_TS`) rather than using per-call timestamps like `Date.now()`. This ensures consistent module caching throughout an active session while maintaining cache-busting upon session restarts.
-
 ### 5. Decoupled Measurement & Height Resizing
 Any Web Component performing dynamic DOM measurements or height recalculations based on content changes must schedule measurements asynchronously via `requestAnimationFrame` or `IntersectionObserver`. Direct synchronous DOM measurement during `updated()` or render cycles is prohibited to prevent `ResizeObserver` loop limit warnings and layout thrashing.
+
+### 6. Metronome Battery Preservation & Visibility Backoff
+Periodic background tasks registered via `ExtensionRegistry.registerTick` must rely on the central metronome loop. The metronome dynamically backs off to 60-second intervals when `document.hidden` is true and wakes instantly upon `visibilitychange` refocus to preserve battery life on mobile devices.
+
+### 7. Automatic IoC Action Tray Resolution
+Card containers must automatically resolve action tray visibility by querying `ExtensionRegistry.getEntityActions` and inspecting assigned `slot[name="actions"]` elements. Explicit boolean attributes (e.g. `has-actions`) are deprecated.
 
 ## II. Presentation Chassis Guardrails (yenVUI)
 

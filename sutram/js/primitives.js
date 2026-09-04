@@ -1,8 +1,7 @@
 // sutram/js/primitives.js
 // Pure Agnostic Presentation Primitives
-
 import { LitElement, html, css } from 'lit';
-import { SutramElement, SelectionStore, ToastStore } from './sdk.js';
+import { SutramElement, SelectionStore, ToastStore, EnvironmentStore } from './sdk.js';
 import { sharedStyles } from './shared_styles.js';
 import { buildFileTree } from './utils.js';
 
@@ -28,7 +27,7 @@ import '../../yenvui/js/tag.js';
 import '../../yenvui/js/label.js';
 
 // 1. Async Action Button
-export class SutramAsyncBtn extends LitElement {
+export class SutramAsyncBtn extends SutramElement {
     static properties = {
         label: { type: String },
         loadingLabel: { type: String },
@@ -38,7 +37,8 @@ export class SutramAsyncBtn extends LitElement {
         onClick: { type: Object },
         disabled: { type: Boolean },
         active: { type: Boolean },
-        _status: { type: String }
+        _status: { type: String },
+        _isOfflineReadOnly: { type: Boolean }
     };
     static styles = [sharedStyles, css`
         :host { display: inline-flex; flex-shrink: 0; vertical-align: middle; min-width: max-content; }
@@ -54,6 +54,28 @@ export class SutramAsyncBtn extends LitElement {
         this.disabled = false;
         this.active = false;
         this._status = 'idle';
+        this._isOfflineReadOnly = false;
+    }
+    connectedCallback() {
+        super.connectedCallback();
+        this.subscribe(EnvironmentStore, state => {
+            if (state.isOffline) {
+                // Pierce Shadow DOM boundaries to securely resolve the host extension
+                let current = this;
+                let extName = null;
+                while (current) {
+                    if (current.dataset && current.dataset.ext) {
+                        extName = current.dataset.ext;
+                        break;
+                    }
+                    current = current.getRootNode().host || current.parentElement;
+                }
+                const mode = extName && window.ExtensionRegistry?.getExtension(extName)?.offline_mode;
+                this._isOfflineReadOnly = (mode === 'read_only' || mode === 'none' || !mode);
+            } else {
+                this._isOfflineReadOnly = false;
+            }
+        });
     }
 
     updated(changedProperties) {
@@ -80,15 +102,18 @@ export class SutramAsyncBtn extends LitElement {
         }
     }
     render() {
+        const isDisabled = this.disabled || this._isOfflineReadOnly;
+        const displayLabel = this._isOfflineReadOnly ? '🚫 Offline' : this.label;
+
         return html`
             <yenvui-async-btn
-                .label=${this.label}
+                .label=${displayLabel}
                 .loadingLabel=${this.loadingLabel}
                 .successLabel=${this.successLabel}
                 .errorLabel=${this.errorLabel}
                 .intent=${this.intent}
                 .status=${this._status}
-                ?disabled=${this.disabled}
+                ?disabled=${isDisabled}
                 ?active=${this.active}
                 @yv-click=${this._handleClick}>
             </yenvui-async-btn>
@@ -570,7 +595,53 @@ export class SutramEntityActions extends SutramElement {
         :host([scrollable])::-webkit-scrollbar {
             display: none;
         }
+        .sync-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: var(--btn-padding, 8px 14px);
+            font-size: var(--btn-font-size, 0.85rem);
+            font-family: inherit;
+            font-weight: var(--btn-font-weight, normal);
+            border-radius: var(--btn-border-radius, 4px);
+            border: none;
+            cursor: pointer;
+            white-space: nowrap;
+            box-sizing: border-box;
+            transition: filter 0.2s ease, transform 0.1s ease;
+            color: #ffffff;
+        }
+        .sync-btn:hover { filter: brightness(1.1); }
+        .sync-btn:active { transform: scale(0.98); }
+        .sync-btn.active {
+            box-shadow: inset 0 0 0 2px var(--text, #ffffff);
+            filter: brightness(1.15);
+        }
+        :host([data-theme="e-ink"]) .sync-btn {
+            background: #ffffff !important;
+            color: #000000 !important;
+            font-weight: 900 !important;
+            border: 2px solid #ec4899 !important;
+            box-shadow: 3px 3px 0 #eab308 !important;
+        }
+        :host([data-theme="e-ink"]) .sync-btn:hover { background: #f1f5f9 !important; }
+        :host([data-theme="e-ink"]) .sync-btn.active { background: #000000 !important; color: #ffffff !important; }
     `;
+
+    connectedCallback() {
+        super.connectedCallback();
+        this._themeObserver = new MutationObserver(() => {
+            this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
+        });
+        this._themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
+        this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        if (this._themeObserver) this._themeObserver.disconnect();
+    }
 
     render() {
         if (!this.entityType || !window.ExtensionRegistry?.getEntityActions) return '';
@@ -584,29 +655,35 @@ export class SutramEntityActions extends SutramElement {
             const icon = typeof act.icon === 'function' ? act.icon(this.entityData) : (act.icon || '');
             const intent = typeof act.intent === 'function' ? act.intent(this.entityData) : (act.intent || 'primary');
             const isActive = typeof act.isActive === 'function' ? act.isActive(this.entityData) : !!act.isActive;
-
-            let clickHandler;
             if (act.asyncAction) {
-                clickHandler = (e) => act.asyncAction(this.entityData, e);
-            } else {
-                clickHandler = async (e) => {
-                    if (e) e.stopPropagation();
-                    if (act.emitEvent) {
-                        const payload = act.emitEvent(this.entityData);
-                        window.dispatchEvent(new CustomEvent(payload.name, { detail: payload.detail, bubbles: true, composed: true }));
-                    } else if (act.onClick) {
-                        act.onClick(this.entityData, e);
-                    }
-                };
+                return html`
+                    <sutram-async-btn 
+                        style="margin: 0; order: ${act.order || 99};" 
+                        label="${icon} ${label}" 
+                        intent="${intent}" 
+                        ?active=${isActive}
+                        .onClick=${(e) => act.asyncAction(this.entityData, e)}>
+                    </sutram-async-btn>
+                `;
             }
+
+            const clickHandler = (e) => {
+                if (e) e.stopPropagation();
+                if (act.emitEvent) {
+                    const payload = act.emitEvent(this.entityData);
+                    window.dispatchEvent(new CustomEvent(payload.name, { detail: payload.detail, bubbles: true, composed: true }));
+                } else if (act.onClick) {
+                    act.onClick(this.entityData, e);
+                }
+            };
+
             return html`
-                <sutram-async-btn 
-                    style="margin: 0; order: ${act.order || 99};" 
-                    label="${icon} ${label}" 
-                    intent="${intent}" 
-                    ?active=${isActive}
-                    .onClick=${clickHandler}>
-                </sutram-async-btn>
+                <button 
+                    class="sync-btn ${isActive ? 'active' : ''}" 
+                    style="order: ${act.order || 99}; background: var(--intent-${intent}); color: ${intent === 'warning' ? '#000' : '#fff'}; gap: 4px;" 
+                    @click=${clickHandler}>
+                    ${icon} ${label}
+                </button>
             `;
         });
     }
@@ -629,7 +706,8 @@ export class SutramCard extends SutramElement {
         disableSelection: { type: Boolean },
         selectionStoreKey: { type: String },
         compact: { type: Boolean, reflect: true },
-        flush: { type: Boolean, reflect: true }
+        flush: { type: Boolean, reflect: true },
+        hasActions: { type: Boolean, attribute: 'has-actions' }
     };
 
     static styles = [sharedStyles, css`
@@ -650,6 +728,19 @@ export class SutramCard extends SutramElement {
         this.selectionStoreKey = 'Selection';
         this.compact = false;
         this.flush = false;
+        this.hasActions = false;
+    }
+
+    _hasResolvedActions() {
+        if (this.hasActions) return true;
+        if (this.entityType && window.ExtensionRegistry?.getEntityActions) {
+            const actions = window.ExtensionRegistry.getEntityActions(this.entityType, this.entityData || {});
+            if (actions && actions.length > 0) return true;
+        }
+        const slot = this.shadowRoot?.querySelector('slot[name="actions"]');
+        if (slot && slot.assignedElements({ flatten: true }).length > 0) return true;
+        if (this.querySelector('[slot="actions"]')) return true;
+        return false;
     }
 
     _getId() {
@@ -731,10 +822,14 @@ export class SutramCard extends SutramElement {
                 <slot name="detail" slot="detail"></slot>
                 <slot name="inline-actions" slot="inline-actions"></slot>
                 <slot></slot>
-                <div slot="actions" style="display: flex; flex-wrap: nowrap; gap: 8px; align-items: center; width: max-content;" @click=${e => e.stopPropagation()}>
-                    <sutram-entity-actions .entityType=${this.entityType} .entityData=${this.entityData} style="flex-wrap: nowrap;"></sutram-entity-actions>
-                    <slot name="actions"></slot>
-                </div>
+                ${this._hasResolvedActions() ? html`
+                    <div slot="actions" style="display: flex; flex-wrap: nowrap; gap: 8px; align-items: center; width: max-content;" @click=${e => e.stopPropagation()}>
+                        <sutram-entity-actions .entityType=${this.entityType} .entityData=${this.entityData} style="flex-wrap: nowrap;"></sutram-entity-actions>
+                        <slot name="actions" @slotchange=${() => this.requestUpdate()}></slot>
+                    </div>
+                ` : html`
+                    <slot name="actions" slot="actions" @slotchange=${() => this.requestUpdate()}></slot>
+                `}
             </yenvui-card>
         `;
     }
@@ -936,26 +1031,45 @@ export class SutramFilterGroup extends LitElement {
 }
 customElements.define('sutram-filter-group', SutramFilterGroup);
 // 14. Code & Text Editor Primitive
+import { wordCountPlugin } from './wordcount.js';
+
+const _EMPTY_EXTENSIONS = [];
 export class SutramEditor extends SutramElement {
-    static properties = { value: { type: String }, readOnly: { type: Boolean }, language: { type: String }, writingMode: { type: Boolean }, customExtensions: { type: Array } };
+    static properties = { 
+        value: { type: String }, 
+        readOnly: { type: Boolean }, 
+        language: { type: String }, 
+        writingMode: { type: Boolean }, 
+        customExtensions: { type: Array },
+        enableWordcount: { type: Boolean }
+    };
     static styles = [sharedStyles, css`
         :host { display: flex; flex-direction: column; flex: 1; min-height: 0; height: 100%; }
         yenvui-editor { flex: 1; min-height: 0; height: 100%; }
     `];
 
+    constructor() {
+        super();
+        this.enableWordcount = true;
+    }
+
     insertAtCursor(text) {
         const editor = this.shadowRoot.querySelector('yenvui-editor');
         if (editor && editor.insertAtCursor) editor.insertAtCursor(text);
     }
-
     render() {
+        const extensions = [...(this.customExtensions || _EMPTY_EXTENSIONS)];
+        if (this.enableWordcount) {
+            extensions.push(wordCountPlugin);
+        }
+
         return html`
             <yenvui-editor
                 .value=${this.value || ''}
                 .language=${this.language || 'markdown'}
                 ?readOnly=${this.readOnly}
                 ?writingMode=${this.writingMode}
-                .customExtensions=${this.customExtensions || []}
+                .customExtensions=${extensions}
                 @yenvui-editor-changed=${e => this.dispatchEvent(new CustomEvent('editor-changed', { detail: e.detail, bubbles: true, composed: true }))}>
             </yenvui-editor>
         `;

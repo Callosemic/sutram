@@ -23,11 +23,12 @@ def run_consumer_lint(target_dir):
     imperative_dom_create_pattern = re.compile(r'document\.createElement\(')
     global_listener_pattern = re.compile(r'window\.addEventListener\s*\(')
     global_dispatch_pattern = re.compile(r'window\.dispatchEvent\s*\(\s*new\s+CustomEvent')
-    
     # Layout and Environmental Constraints
     media_layout_pattern = re.compile(r'@media\s*\([^)]*(?:width|height)[^)]*\)')
     banned_cdn_import_pattern = re.compile(r'from\s+[\'"]https?://(esm\.sh|cdn\.jsdelivr\.net|unpkg\.com)')
     banned_yenvui_tag_pattern = re.compile(r'\byenvui-')
+    banned_has_actions_pattern = re.compile(r'\bhas-actions\b')
+    subscribe_without_sutram_pattern = re.compile(r'this\.subscribe\s*\(')
 
     for root, _, files in os.walk(target_dir):
         for file in files:
@@ -40,6 +41,7 @@ def run_consumer_lint(target_dir):
                 lines = f.readlines()
                 
             is_lit_component = any(re.search(r'from\s+[\'"]lit[\'"]', l) for l in lines)
+            extends_sutram_element = any(re.search(r'extends\s+SutramElement', l) for l in lines)
             
             for i, line in enumerate(lines):
                 line_num = i + 1
@@ -83,9 +85,14 @@ def run_consumer_lint(target_dir):
 
                 if media_layout_pattern.search(line):
                     report("CONTAINER_QUERY_MANDATE", "Responsive layout via @media viewport boundaries detected. Utilize @container queries for component-level elasticity.")
-
                 if banned_cdn_import_pattern.search(line):
                     report("BANNED_CDN_IMPORT", "Hardcoded external CDN import detected. All packages must be mapped through local vendor topologies.")
+
+                if banned_has_actions_pattern.search(line):
+                    report("BANNED_HAS_ACTIONS_ATTRIBUTE", "The 'has-actions' attribute is deprecated. Card components automatically mount the action tray via the ExtensionRegistry.")
+
+                if subscribe_without_sutram_pattern.search(line) and not extends_sutram_element:
+                    report("SUTRAM_ELEMENT_SUBSCRIPTION_MANDATE", "Components using 'this.subscribe()' must extend 'SutramElement' to guarantee automated teardown in disconnectedCallback().")
 
     return violations_found
 

@@ -3,10 +3,10 @@
 **Mission**: To preserve the institutional memory and rationale behind major architectural decisions within the unified Sutram micro-kernel and yenVUI presentation chassis.
 
 ## Active ADRs
-
 ### Sutram Micro-Kernel
 * [ADR-0001: Sutram IoC Micro-Kernel Architecture](./adrs/0001_sutram_ioc_microkernel_architecture.md)
 * [ADR-0002: Sutram Bootloader and Resilience Patterns](./adrs/0002_sutram_bootloader_and_resilience_patterns.md)
+* [ADR-0007: Sutram Offline Micro-Kernel & Metronome Visibility Backoff](./adrs/0007_sutram_offline_microkernel_and_metronome_backoff.md)
 
 ### yenVUI Presentation Chassis
 * [ADR-0003: Dynamic Theme Mutation Observer Pattern](./adrs/0003_yenvui_theme_mutation_observers.md)

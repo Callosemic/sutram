@@ -160,12 +160,28 @@ export class SutramAppShell extends SutramElement {
         const isAlreadyActive = this.activeSubTabs[tabId] === subId;
         this.dispatchEvent(new CustomEvent('shell-subtab-changed', { detail: { tabId, subId, isAlreadyActive }, bubbles: true, composed: true }));
     }
-
     render() {
         // Compile navigation and views strictly from the Extension Registry
-        const primarySlots = this._layoutConfig.filter(s => s.slot === 'slots:primary-navigation');
+        const registry = window.ExtensionRegistry || ExtensionRegistry;
+        const isOffline = window.inSetu?.stores?.App?.getState()?.isOffline;
+        let primarySlots = this._layoutConfig.filter(s => s.slot === 'slots:primary-navigation');
         const globalSlots = this._layoutConfig.filter(s => s.slot === 'slots:global');
-        
+        // Phase 5: Visual Degradation for Offline Mode
+        if (isOffline) {
+            primarySlots = primarySlots.filter(slot => {
+                // Check if the primary slot itself is explicitly tied to an offline-capable extension
+                const primaryManifest = slot.extName ? registry.getExtension(slot.extName) : null;
+                if (primaryManifest && primaryManifest.offline_mode && primaryManifest.offline_mode !== 'none') return true;
+
+                // Fallback: Check if ANY sub-tab within this primary tab is offline-capable
+                const subSlots = this._layoutConfig.filter(s => s.slot === 'slots:sub-navigation' && (s.targetParent || '').toLowerCase() === (slot.id || '').toLowerCase());
+                return subSlots.some(sub => {
+                    const subManifest = registry.getExtension(sub.extName);
+                    return (subManifest?.offline_mode || 'none') !== 'none';
+                });
+            });
+        }
+
         return html`
             <div class="shell-container">
                 <yenvui-tabs 
@@ -177,9 +193,18 @@ export class SutramAppShell extends SutramElement {
                     <slot name="header-actions" slot="header-actions"></slot>
                     ${primarySlots.map(slot => {
                         // Extract sub-navigation specific to the active primary tab using case-insensitive bounds
-                        const subSlots = this._layoutConfig.filter(s => s.slot === 'slots:sub-navigation' && (s.targetParent || '').toLowerCase() === (slot.id || '').toLowerCase());
+                        let subSlots = this._layoutConfig.filter(s => s.slot === 'slots:sub-navigation' && (s.targetParent || '').toLowerCase() === (slot.id || '').toLowerCase());
+
+                        // Phase 5: Strip sub-tabs that are explicitly disabled offline
+                        if (isOffline) {
+                            subSlots = subSlots.filter(sub => {
+                                const subManifest = registry.getExtension(sub.extName);
+                                return (subManifest?.offline_mode || 'none') !== 'none';
+                            });
+                        }
+
                         const activeSub = (subSlots.some(s => s.id === this.activeSubTabs[slot.id]) ? this.activeSubTabs[slot.id] : null) || (subSlots.length > 0 ? subSlots[0].id : null);
-                        
+
                         return html`
                             <div slot="${slot.id}" style="display: flex; flex-direction: column; flex: 1; height: 100%; min-height: 0;">
                                 ${subSlots.length > 0 ? html`
@@ -192,12 +217,14 @@ export class SutramAppShell extends SutramElement {
                                         <div slot="header-actions" style="display: flex; gap: 8px; align-items: center;">
                                             ${this._layoutConfig.filter(s => s.slot === 'slots:sub-navigation-actions' && (s.targetParent || '').toLowerCase() === (slot.id || '').toLowerCase() && s.targetSub === activeSub).map(act => html`<div style="display: contents;" data-ext="${act.extName}">${this._getCachedComponent(act.component, activeSub)}</div>`)}
                                         </div>
-
-                                        ${subSlots.map(subSlot => html`
-                                            <div slot="${subSlot.id}" style="display: contents;" data-ext="${subSlot.extName}">
-                                                ${this._getCachedComponent(subSlot.component, subSlot.id)}
-                                            </div>
-                                        `)}
+                                        ${subSlots.map(subSlot => {
+                                            const extMode = registry.getExtension(subSlot.extName)?.offline_mode || 'none';
+                                            return html`
+                                                <div slot="${subSlot.id}" style="display: contents;" data-ext="${subSlot.extName}" data-offline-mode="${extMode}">
+                                                    ${this._getCachedComponent(subSlot.component, subSlot.id)}
+                                                </div>
+                                            `;
+                                        })}
                                     </yenvui-tabs>
                                 ` : html`
                                     <div class="nested-tab-container" style="padding: 20px; color: var(--text-muted); font-style: italic;">

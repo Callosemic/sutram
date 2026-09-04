@@ -34,17 +34,29 @@ export class YenvuiCardGroup extends LitElement {
             color: var(--text-muted);
             font-size: 0.9rem;
             font-weight: bold;
-            transition: background 0.2s, color 0.2s, transform 0.3s, margin-top 0.3s;
-            z-index: 1;
+            transition: background 0.2s, color 0.2s, margin-top 0.3s;
+            z-index: 0;
+            box-sizing: border-box;
         }
         .more-handle {
             position: relative;
-            transform-origin: top left;
-            transform: scale(0.98);
+            width: 96%;
             margin-top: -12px;
             margin-bottom: 12px;
-            z-index: 1;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .collapse-handle.top {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 0;
+            z-index: 1;
+            border-top: none;
+            border-bottom: 1px solid var(--border);
+            border-radius: 0;
+            margin-top: 0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transition: background 0.2s, color 0.2s, top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .more-handle:hover,
         .collapse-handle:hover {
@@ -75,7 +87,6 @@ export class YenvuiCardGroup extends LitElement {
             }
         });
     }
-
     disconnectedCallback() {
         super.disconnectedCallback();
         this.removeEventListener('touchmove', this._touchMoveHandler);
@@ -189,6 +200,7 @@ export class YenvuiCardGroup extends LitElement {
             requestAnimationFrame(() => this._applyStackedZIndex());
         }
     }
+
     _handleStackClick(e) {
         if (!this.stacked || !this.accordion || this._childCount <= 1) return;
         const path = e.composedPath();
@@ -203,41 +215,43 @@ export class YenvuiCardGroup extends LitElement {
 
         if (isActionClick) return;
 
-        if (!this.expanded) {
-            this.expanded = true;
-            e.stopPropagation();
-            return;
-        }
+        const slot = this.shadowRoot.querySelector('slot');
+        if (!slot) return;
+        const nodes = slot.assignedElements({ flatten: true });
+        if (nodes.length === 0) return;
 
-        if (this.expanded) {
-            const slot = this.shadowRoot.querySelector('slot');
-            if (slot) {
-                const nodes = slot.assignedElements({ flatten: true });
-                if (nodes.length > 0) {
-                    const topCard = nodes[0];
-                    if (path.includes(topCard)) {
-                        this.expanded = false;
-                    }
-                }
+        const topCard = nodes[0];
+
+        if (!this.expanded) {
+            // Intercept clicks on peeking children to expand the stack
+            if (!path.includes(topCard)) {
+                this.expanded = true;
+                e.stopPropagation();
             }
         }
+        // If expanded, do nothing to the event. Clicks propagate natively to trigger entity actions.
     }
+
     _applyStackedZIndex() {
         const slot = this.shadowRoot.querySelector('slot');
         if (!slot) return;
         const children = slot.assignedElements({ flatten: true });
         const total = children.length;
         const isVisuallyStacked = this.stacked;
+        let parentHeight = 0;
 
         children.forEach((child, index) => {
             if (!child.style) return;
 
+            if (index === 0) {
+                parentHeight = child.offsetHeight;
+            }
             child.style.position = 'relative';
-            child.style.zIndex = total - index;
-            child.style.transition = 'margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s';
+            child.style.zIndex = index === 0 ? total + 2 : total - index;
+            child.style.transition = 'margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s, clip-path 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
             child.style.transformOrigin = 'top left';
             // Accordion Deck Physics
-            const maxVisibleIndexInCollapsed = total <= 3 ? total - 1 : 1;
+            const maxVisibleIndexInCollapsed = 1;
             if (this.accordion && !this.expanded && index > 0) {
                 if (index <= maxVisibleIndexInCollapsed) {
                     const peekAmount = 42;
@@ -245,11 +259,18 @@ export class YenvuiCardGroup extends LitElement {
                     if (childHeight > 0) {
                         const pullUp = childHeight - peekAmount;
                         child.style.marginTop = `-${pullUp}px`;
+
+                        const clipTop = Math.max(0, childHeight - parentHeight - peekAmount);
+                        if (clipTop > 0) {
+                            child.style.clipPath = `inset(${clipTop}px -20px -20px -20px)`;
+                        } else {
+                            child.style.clipPath = 'inset(0px -20px -20px -20px)';
+                        }
                     }
-                    const scaleVal = Math.max(0.95, 1 - (index * 0.01));
+                    const scaleVal = Math.max(0.96, 1 - (index * 0.02));
                     child.style.transform = `scale(${scaleVal})`;
                     child.style.opacity = '1';
-                    child.style.pointerEvents = 'auto';
+                    child.style.pointerEvents = 'auto'; 
                     child.style.display = '';
                 } else {
                     child.style.display = 'none';
@@ -260,6 +281,9 @@ export class YenvuiCardGroup extends LitElement {
                 child.style.opacity = '1';
                 child.style.pointerEvents = 'auto';
                 child.style.display = '';
+                child.style.clipPath = 'inset(0px -20px -20px -20px)';
+                child.style.maxHeight = '';
+                child.style.overflow = '';
             }
 
             if (isVisuallyStacked) {
@@ -306,22 +330,39 @@ export class YenvuiCardGroup extends LitElement {
                 child.style.removeProperty('--card-top-shadow');
             }
         });
+        if (this.accordion && this.expanded && total > 1) {
+            const topHandle = this.shadowRoot.querySelector('.collapse-handle.top');
+            if (topHandle) {
+                topHandle.style.zIndex = total + 1;
+                topHandle.style.top = `${parentHeight}px`;
+                if (children[1]) {
+                    children[1].style.marginTop = `${topHandle.offsetHeight}px`;
+                }
+            }
+        }
     }
     render() {
-        const moreCount = this._childCount - 2;
+        const moreCount = this._childCount - 1;
         return html`
             <div @touchstart=${this._handleTouchStart} @touchend=${this._handleTouchEnd} style="display: contents;">
                 <slot @slotchange=${this._handleSlotChange}></slot>
             </div>
-            ${this.accordion && this.stacked && !this.expanded && this._childCount > 3 ? html`
+            ${this.accordion && this.stacked && !this.expanded && this._childCount > 1 ? html`
                 <div class="more-handle" @click=${() => this.expanded = true}>
-                    ...and ${moreCount} more
+                    Expand ${moreCount} nested item${moreCount !== 1 ? 's' : ''}
                 </div>
             ` : ''}
-            ${this.accordion && this.stacked && this.expanded && this._childCount > 1 ? html`
-                <div class="collapse-handle" @click=${() => this.expanded = false}>
-                    <span style="font-size: 1.2rem; line-height: 1;">⌃</span> Collapse Stack
-                </div>
+            ${this.accordion && this.stacked && this.expanded ? html`
+                ${this._childCount > 3 ? html`
+                    <div class="collapse-handle top" @click=${() => this.expanded = false}>
+                        <span style="font-size: 1.2rem; line-height: 1; transform: translateY(2px);">⌃</span> Collapse Stack
+                    </div>
+                ` : ''}
+                ${this._childCount > 1 ? html`
+                    <div class="collapse-handle bottom" @click=${() => this.expanded = false}>
+                        <span style="font-size: 1.2rem; line-height: 1; transform: translateY(2px);">⌃</span> Collapse Stack
+                    </div>
+                ` : ''}
             ` : ''}
         `;
     }

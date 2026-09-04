@@ -6,7 +6,8 @@ export class YenvuiModal extends LitElement {
         maxWidth: { type: String },
         fullscreen: { type: Boolean, reflect: true },
         flush: { type: Boolean, reflect: true },
-        transparent: { type: Boolean, reflect: true }
+        transparent: { type: Boolean, reflect: true },
+        _hasFooter: { type: Boolean, state: true }
     };
     static styles = css`
         :host { display: contents; } /* Native dialog handles its own visibility. Host must remain permeable. */
@@ -151,13 +152,17 @@ export class YenvuiModal extends LitElement {
             --btn-border-radius: 6px;
         }
     `;
-
     constructor() {
         super();
         this.open = false;
         this.titleText = '';
         this.maxWidth = '';
         this.fullscreen = false;
+        this._hasFooter = false;
+    }
+
+    _handleFooterSlotChange(e) {
+        this._hasFooter = e.target.assignedElements({ flatten: true }).length > 0;
     }
     updated(changedProperties) {
         const dialog = this.shadowRoot.querySelector('dialog');
@@ -257,10 +262,10 @@ export class YenvuiModal extends LitElement {
                     <slot name="body"></slot>
                     <slot></slot>
                 </div>
-                <div class="footer">
-                    <slot name="footer"></slot>
+                <div class="footer" style="display: ${this._hasFooter ? 'flex' : 'none'};">
+                    <slot name="footer" @slotchange=${this._handleFooterSlotChange}></slot>
                 </div>
-                
+
             </dialog>
         `;
     }
