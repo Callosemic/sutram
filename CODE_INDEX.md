@@ -40,7 +40,7 @@ sutram/
 │       ├── shortcuts.js            # Centralized context-aware keydown shortcut router
 │       ├── sutram-boot.js          # Stage 1 bootloader for importmap synthesis, SemVer parsing, and guardrails
 │       ├── sw-core.js              # Abstracted Service Worker core runtime for offline caching and navigation fallbacks
-│       ├── utils.js                # Pure algorithmic utility helpers (fuzzy filter, debounce, slugify, time formatting)
+│       ├── utils.js                # Pure algorithmic utility helpers (fuzzy filter, debounce, coalescedAsync, slugify, time formatting)
 │       └── wordcount.js            # Ephemeral word count widget decoration plugin for CodeMirror 6
 ├── tests/                          # Automated presentation chassis compliance tests and fitness functions
 │   └── sutram_consumer_linter.py   # Reusable static analysis script for consumer UDF compliance

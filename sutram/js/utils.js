@@ -68,6 +68,31 @@ export function debounce(callback, delay = 300) {
         timer = setTimeout(() => callback.apply(this, args), delay);
     };
 }
+export function coalescedAsync(asyncFn) {
+    let promise = null;
+    let queued = false;
+    let latestArgs = null;
+    return async function(...args) {
+        latestArgs = args;
+        if (promise) {
+            queued = true;
+            return promise;
+        }
+        promise = (async () => {
+            try {
+                let result;
+                do {
+                    queued = false;
+                    result = await asyncFn.apply(this, latestArgs);
+                } while (queued);
+                return result;
+            } finally {
+                promise = null;
+            }
+        })();
+        return promise;
+    };
+}
 export function slugify(str) {
     if (!str) return '';
     return normalizeAccentText(str).replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
