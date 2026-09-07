@@ -13,12 +13,7 @@ export function createSutramStore(name, initialState, persistKeys = [], getScope
             { name: `${name}Store` }
         )
     );
-
     if (typeof window !== 'undefined') {
-        window.inSetu = window.inSetu || {};
-        window.inSetu.stores = window.inSetu.stores || {};
-        window.inSetu.stores[name] = store;
-
         window.Sutram = window.Sutram || {};
         window.Sutram.stores = window.Sutram.stores || {};
         window.Sutram.stores[name] = store;
@@ -96,8 +91,8 @@ export class SutramElement extends LitElement {
                     origConnected.apply(this, args);
                 } catch (e) {
                     console.error(`⚠️ [Component Error Boundary] <${this.tagName ? this.tagName.toLowerCase() : 'element'}> failed in connectedCallback:`, e);
-                    if (window.inSetu?.stores?.Toast?.getState) {
-                        window.inSetu.stores.Toast.getState().addToast(
+                    if (window.Sutram?.stores?.Toast?.getState) {
+                        window.Sutram.stores.Toast.getState().addToast(
                             `Component <${this.tagName ? this.tagName.toLowerCase() : 'element'}> error: ${e.message}`,
                             'danger'
                         );
@@ -123,8 +118,7 @@ export class SutramElement extends LitElement {
     subscribe(storeOrName, selectorOrListener, listener = undefined) {
         let store = storeOrName;
         if (typeof storeOrName === 'string') {
-            store = window.inSetu?.stores?.[storeOrName] || 
-                    window.Sutram?.stores?.[storeOrName] || 
+            store = window.Sutram?.stores?.[storeOrName] || 
                     window.stores?.[storeOrName];
 
             // Lazy Subscription: If the named store isn't on window yet, defer binding until it hydrates
@@ -132,7 +126,7 @@ export class SutramElement extends LitElement {
                 const pendingKey = storeOrName;
                 let activeUnsub = () => {};
                 const checkInterval = setInterval(() => {
-                    const lateStore = window.inSetu?.stores?.[pendingKey] || window.Sutram?.stores?.[pendingKey];
+                    const lateStore = window.Sutram?.stores?.[pendingKey];
                     if (lateStore) {
                         clearInterval(checkInterval);
                         activeUnsub = listener ? lateStore.subscribe(selectorOrListener, listener) : lateStore.subscribe(selectorOrListener);

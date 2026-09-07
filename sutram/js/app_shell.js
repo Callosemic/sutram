@@ -163,7 +163,7 @@ export class SutramAppShell extends SutramElement {
     render() {
         // Compile navigation and views strictly from the Extension Registry
         const registry = window.ExtensionRegistry || ExtensionRegistry;
-        const isOffline = window.inSetu?.stores?.App?.getState()?.isOffline;
+        const isOffline = window.Sutram?.stores?.Environment?.getState()?.isOffline || false;
         let primarySlots = this._layoutConfig.filter(s => s.slot === 'slots:primary-navigation');
         const globalSlots = this._layoutConfig.filter(s => s.slot === 'slots:global');
         // Phase 5: Visual Degradation for Offline Mode

@@ -1,11 +1,16 @@
 // sutram/js/poller.js
 // Standalone background job status polling routine
-
 export function createJobPoller(apiClient) {
     return function pollJob(jobId, options = {}) {
         const { onProgress = ()=>{}, onComplete = ()=>{}, onError = ()=>{}, interval = 1000, maxRetries = 300 } = options;
+
+        if (jobId === 'offline_queue') {
+            onComplete({ status: 'completed', message: 'Queued for offline sync.' });
+            return;
+        }
+
         let retries = 0;
-        
+
         const poll = async () => {
             try {
                 // Tier 0 Agnostic API call

@@ -36,12 +36,11 @@ export class SutramDB {
         });
         return this._dbPromise;
     }
-
     static async cacheVFSBlob(scopeId, filepath, blob) {
         const db = await this.getDB();
         return new Promise((resolve, reject) => {
             const tx = db.transaction('vfs_cache', 'readwrite');
-            tx.objectStore('vfs_cache').put(blob, `${scopeId}::${filepath}`);
+            tx.objectStore('vfs_cache').put({ blob, ts: Date.now() }, `${scopeId}::${filepath}`);
             tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
         });
@@ -50,26 +49,96 @@ export class SutramDB {
     static async getVFSBlob(scopeId, filepath) {
         const db = await this.getDB();
         return new Promise((resolve) => {
-            const tx = db.transaction('vfs_cache', 'readonly');
+            const tx = db.transaction('vfs_cache', 'readwrite');
             const req = tx.objectStore('vfs_cache').get(`${scopeId}::${filepath}`);
-            req.onsuccess = () => resolve(req.result || null);
+            req.onsuccess = () => {
+                const data = req.result;
+                if (!data) return resolve(null);
+
+                // Backwards compatibility for legacy pure blobs
+                if (data instanceof Blob) {
+                    resolve(data);
+                } else if (data.blob) {
+                    // Update access timestamp for true LRU execution
+                    data.ts = Date.now();
+                    tx.objectStore('vfs_cache').put(data, `${scopeId}::${filepath}`);
+                    resolve(data.blob);
+                } else {
+                    resolve(null);
+                }
+            };
             req.onerror = () => resolve(null);
         });
     }
 
-    static async enqueueMutation(scopeId, path, method, payload) {
+    static async pruneCache(targetBytesToFree) {
+        const db = await this.getDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('vfs_cache', 'readwrite');
+            const store = tx.objectStore('vfs_cache');
+
+            let entries = [];
+            const cursorReq = store.openCursor();
+
+            cursorReq.onsuccess = (e) => {
+                const cursor = e.target.result;
+                if (cursor) {
+                    const size = cursor.value instanceof Blob ? cursor.value.size : (cursor.value.blob ? cursor.value.blob.size : 0);
+                    const ts = cursor.value instanceof Blob ? 0 : (cursor.value.ts || 0);
+                    entries.push({ key: cursor.primaryKey, size, ts });
+                    cursor.continue();
+                } else {
+                    // Sort by oldest access time (Least Recently Used)
+                    entries.sort((a, b) => a.ts - b.ts);
+                    let freed = 0;
+                    for (const entry of entries) {
+                        if (freed >= targetBytesToFree) break;
+                        store.delete(entry.key);
+                        freed += entry.size;
+                    }
+                    resolve(freed);
+                }
+            };
+            cursorReq.onerror = () => reject(cursorReq.error);
+        });
+    }
+    static async enqueueMutation(scopeId, path, method, headers, bodyString, collapseKey = null) {
         const db = await this.getDB();
         return new Promise((resolve, reject) => {
             const tx = db.transaction('sutram_outbox', 'readwrite');
+            const store = tx.objectStore('sutram_outbox');
             const record = {
                 scope_id: scopeId,
                 path,
                 method,
-                payload,
+                headers,
+                bodyString,
+                collapseKey,
                 timestamp: Date.now()
             };
-            const req = tx.objectStore('sutram_outbox').add(record);
-            tx.oncomplete = () => resolve(req.result);
+
+            if (collapseKey) {
+                const index = store.index('by_scope');
+                const req = index.openCursor(IDBKeyRange.only(scopeId));
+                let updated = false;
+
+                req.onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if (cursor) {
+                        if (cursor.value.collapseKey === collapseKey) {
+                            cursor.update(record);
+                            updated = true;
+                        }
+                        cursor.continue();
+                    } else if (!updated) {
+                        store.add(record);
+                    }
+                };
+            } else {
+                store.add(record);
+            }
+
+            tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
         });
     }
@@ -120,22 +189,84 @@ export class SutramDB {
             return [];
         }
     }
-
     static async getDeadLetters(scopeId) {
         try {
             const db = await this.getDB();
             return new Promise((resolve) => {
                 const tx = db.transaction('dead_letter', 'readonly');
-                const req = tx.objectStore('dead_letter').getAll();
-                req.onsuccess = () => {
-                    const items = req.result || [];
-                    resolve(items.filter(i => i.scope_id === scopeId));
+                const req = tx.objectStore('dead_letter').openCursor();
+                const items = [];
+                req.onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if (cursor) {
+                        if (cursor.value.scope_id === scopeId) {
+                            items.push({ _key: cursor.primaryKey, ...cursor.value });
+                        }
+                        cursor.continue();
+                    } else {
+                        resolve(items);
+                    }
                 };
                 req.onerror = () => resolve([]);
             });
         } catch (e) {
             return [];
         }
+    }
+
+    static async deleteDeadLetter(key) {
+        const db = await this.getDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('dead_letter', 'readwrite');
+            tx.objectStore('dead_letter').delete(key);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    }
+
+    static async retryDeadLetter(item) {
+        const db = await this.getDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(['dead_letter', 'sutram_outbox'], 'readwrite');
+
+            // Reconstruct the outbox envelope
+            const record = {
+                scope_id: item.scope_id,
+                path: item.path,
+                method: item.method,
+                headers: item.headers,
+                bodyString: item.bodyString,
+                collapseKey: item.collapseKey,
+                timestamp: Date.now() // Fresh timestamp for the retry
+            };
+
+            if (item.collapseKey) {
+                const index = tx.objectStore('sutram_outbox').index('by_scope');
+                const req = index.openCursor(IDBKeyRange.only(item.scope_id));
+                let updated = false;
+
+                req.onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if (cursor) {
+                        if (cursor.value.collapseKey === item.collapseKey) {
+                            cursor.update(record);
+                            updated = true;
+                        }
+                        cursor.continue();
+                    } else if (!updated) {
+                        tx.objectStore('sutram_outbox').add(record);
+                    }
+                };
+            } else {
+                tx.objectStore('sutram_outbox').add(record);
+            }
+
+            // Remove it from the DLQ
+            tx.objectStore('dead_letter').delete(item._key);
+
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
     }
 }
 
@@ -148,13 +279,24 @@ export class OfflineHttpProvider {
         this.checkOfflineState = options.checkOfflineState || (() => false);
         this.setOfflineState = options.setOfflineState || (() => {});
     }
-
     async get(url, options = {}, scopeId = 'default') {
         const cacheKeyUrl = url.replace(/([?&])t=\d+&?/, '$1').replace(/[?&]$/, '');
 
-        if (this.checkOfflineState()) {
+        if (this.checkOfflineState() || options.onlyIfMissing) {
             const cachedBlob = await SutramDB.getVFSBlob(scopeId, cacheKeyUrl);
             if (cachedBlob) return new Response(cachedBlob, { status: 200 });
+            if (options.onlyIfMissing && this.checkOfflineState()) {
+                throw new TypeError("Failed to fetch (offline)");
+            }
+        }
+
+        // Circuit Breaker: Abort background warming if cache is heavily loaded
+        if (options.onlyIfMissing) {
+            const offlineState = window.Sutram?.stores?.Offline?.getState() || window.inSetu?.stores?.Offline?.getState() || {};
+            const limitBytes = 250 * 1024 * 1024; // Align with core schema setting
+            if (offlineState.storageUsage > limitBytes * 0.8) {
+                return new Response(null, { status: 204, statusText: 'Cache Full Circuit Breaker' });
+            }
         }
 
         try {
@@ -175,42 +317,38 @@ export class OfflineHttpProvider {
             throw err;
         }
     }
-
-    async executeMutation(url, method, payload, options = {}, scopeId = 'default') {
+    async executeMutation(url, method, bodyString, options = {}, scopeId = 'default') {
         if (this.checkOfflineState()) {
-            return this._handleOfflineQueue(url, method, payload, scopeId);
+            return this._handleOfflineQueue(url, method, bodyString, options, scopeId);
         }
 
         try {
             return await fetch(url, options);
         } catch (err) {
             this.setOfflineState(true);
-            return this._handleOfflineQueue(url, method, payload, scopeId);
+            return this._handleOfflineQueue(url, method, bodyString, options, scopeId);
         }
     }
 
-    async _handleOfflineQueue(url, method, payload, scopeId) {
+    async _handleOfflineQueue(url, method, bodyString, options, scopeId) {
         if (!this.isOfflineCapable(url)) {
             this.onError("Feature disabled or read-only while offline.", url);
             return new Response(JSON.stringify({ error: "Feature disabled while offline." }), { status: 503, statusText: "Service Unavailable" });
         }
 
-        const isFormData = payload instanceof FormData;
-        if (isFormData || url.includes('fs/upload')) {
-            this.onError("Binary uploads not supported offline.", url);
-            return new Response(JSON.stringify({ error: "Binary uploads not supported offline." }), { status: 503, statusText: "Service Unavailable" });
+        const isFormData = bodyString instanceof FormData;
+        if (isFormData || (bodyString !== null && typeof bodyString !== 'string')) {
+            this.onError("Payload must be stringified or FormData (which is unsupported offline).", url);
+            return new Response(JSON.stringify({ error: "Invalid offline payload format." }), { status: 503, statusText: "Service Unavailable" });
         }
 
         try {
-            if (url.includes('fs/save') && payload.filepath && payload.content) {
-                const fetchUrl = `/api/${scopeId}/fs/fetch?file=${encodeURIComponent(payload.filepath)}`;
-                await SutramDB.cacheVFSBlob(scopeId, fetchUrl, new Blob([payload.content], { type: 'text/plain;charset=utf-8' })).catch(()=>{});
-            }
-
-            await SutramDB.enqueueMutation(scopeId, url, method, payload);
+            const collapseKey = options.collapseKey || null;
+            const headers = options.plainHeaders || {};
+            await SutramDB.enqueueMutation(scopeId, url, method, headers, bodyString, collapseKey);
             const count = await SutramDB.getOutboxCount(scopeId);
 
-            this.onEnqueue(count, payload, url, method, scopeId);
+            this.onEnqueue(count, bodyString, headers, url, method, scopeId, options);
 
             return new Response(JSON.stringify({ status: "accepted", job_id: "offline_queue", message: "Queued for offline sync." }), { status: 202 });
         } catch (e) {
@@ -250,6 +388,16 @@ export class NetworkHysteresisManager {
 }
 export class OutboxReconciler {
     static async drain(scopeId, executePost) {
+        if (navigator.locks) {
+            return navigator.locks.request('sutram_outbox_drain', { ifAvailable: true }, async (lock) => {
+                if (!lock) return;
+                await this._executeDrain(scopeId, executePost);
+            });
+        }
+        return this._executeDrain(scopeId, executePost);
+    }
+
+    static async _executeDrain(scopeId, executePost) {
         const db = await SutramDB.getDB();
 
         // Stage 1: Read pending items into memory in a distinct transaction using an IDB cursor
@@ -275,20 +423,25 @@ export class OutboxReconciler {
         });
 
         if (!pendingItems || pendingItems.length === 0) return;
-
         // Stage 2: Sequentially process network mutations and shift IDB keys
         for (const { key, data } of pendingItems) {
+            const logger = window.Sutram?.offlineLog || (() => {});
             try {
-                const res = await executePost(data.path, data.method, data.payload, data.scope_id);
+                const fetchOptions = {
+                    method: data.method,
+                    headers: data.headers,
+                    body: data.bodyString
+                };
+                const res = await executePost(data.path, fetchOptions, data.scope_id);
                 if (res.ok || res.status === 202) {
-                    window.inSetu?.offlineLog?.(`Drained mutation [${data.method}] ${data.path}`, 'success');
+                    logger(`Drained mutation [${data.method}] ${data.path}`, 'success');
                     await new Promise((resolve) => {
                         const delTx = db.transaction('sutram_outbox', 'readwrite');
                         delTx.objectStore('sutram_outbox').delete(key);
                         delTx.oncomplete = () => resolve();
                     });
                 } else if (res.status >= 400 && res.status < 500) {
-                    window.inSetu?.offlineLog?.(`Poison pill moved to DLQ (HTTP ${res.status}): [${data.method}] ${data.path}`, 'error', data.payload);
+                    logger(`Poison pill moved to DLQ (HTTP ${res.status}): [${data.method}] ${data.path}`, 'error', data.bodyString);
                     // Dead Letter Queue: Safely sideline poison pills so the queue doesn't halt
                     await new Promise((resolve) => {
                         const dlqTx = db.transaction(['sutram_outbox', 'dead_letter'], 'readwrite');
@@ -298,11 +451,11 @@ export class OutboxReconciler {
                     });
                 } else {
                     // 5xx Server Error - Halt the queue to preserve chronological integrity
-                    window.inSetu?.offlineLog?.(`Server error (HTTP ${res.status}) on [${data.method}] ${data.path}. Halting queue.`, 'warning', data.payload);
+                    logger(`Server error (HTTP ${res.status}) on [${data.method}] ${data.path}. Halting queue.`, 'warning', data.bodyString);
                     break;
                 }
             } catch (e) {
-                window.inSetu?.offlineLog?.(`Connection dropped mid-drain on [${data.method}] ${data.path}. Halting queue.`, 'warning');
+                logger(`Connection dropped mid-drain on [${data.method}] ${data.path}. Halting queue.`, 'warning');
                 break; // Connection dropped mid-drain; abort processing and preserve remaining queue
             }
         }

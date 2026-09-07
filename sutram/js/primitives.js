@@ -746,10 +746,9 @@ export class SutramCard extends SutramElement {
     _getId() {
         return this.entityData?.filepath || this.entityData?.id || this.filename;
     }
-
     _getStore() {
         if (this.selectionStoreKey === 'Selection') return SelectionStore;
-        return window.inSetu?.stores?.[this.selectionStoreKey] || window.Sutram?.stores?.[this.selectionStoreKey];
+        return window.Sutram?.stores?.[this.selectionStoreKey];
     }
 
     connectedCallback() {
@@ -1099,10 +1098,9 @@ export class SutramSelectorModal extends SutramElement {
             <sutram-modal ?open=${this.open} titleText=${this.titleText} @sutram-modal-closed=${() => { this.open = false; this.dispatchEvent(new CustomEvent('selector-closed')); }}>
                 <div slot="body" style="display: flex; flex-direction: column; flex: 1; overflow: hidden; min-height: 300px;">
                     <input type="text" placeholder="Search..." .value=${this._searchQuery} @input=${e => this._searchQuery = e.target.value} style="width: 100%; padding: 10px; font-weight: bold; box-sizing: border-box; background: var(--input-bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; margin-bottom: 10px; flex-shrink: 0;">
-
                     <div style="display: flex; flex-direction: column; gap: 5px; flex: 1; overflow-y: auto; padding-bottom: 15px;">
                         ${filtered.length === 0 ? html`<span style="color: var(--text-muted); font-style: italic;">No matches found.</span>` : filtered.map(item => {
-                            const displayText = typeof item === 'string' && item.startsWith('prompts/') ? item.substring(8) : (item.label || item);
+                            const displayText = typeof item === 'string' ? item : (item.label || item);
                             return html`
                                 <button class="btn-sm" style="background: var(--bg); border: 1px solid var(--border); color: var(--text); text-align: left; padding: 12px 15px; font-size: 1.05rem; font-family: monospace; font-weight: bold; margin: 0; cursor: pointer; border-radius: 4px; transition: background 0.2s;"
                                     onmouseover="this.style.background='var(--input-bg)'"

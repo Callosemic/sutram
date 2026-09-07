@@ -160,17 +160,20 @@ export class YenvuiCardGroup extends LitElement {
         this._touchStartX = null;
         this._swipeAxis = null;
     }
-
     _getCardFromPoint(x, y) {
-        // Shadow DOM piercing hit detection to resolve the exact card component
+        // Shadow DOM piercing hit detection to resolve the exact component
         let el = document.elementFromPoint(x, y);
         while (el && el.shadowRoot) {
             const deeper = el.shadowRoot.elementFromPoint(x, y);
             if (!deeper || deeper === el) break;
             el = deeper;
         }
+
+        // Duck-Typing: Accept any Web Component that honors the yenVUI card selection contract
         while (el) {
-            if (el.tagName && (el.tagName.toLowerCase() === 'yenvui-card' || el.tagName.toLowerCase() === 'insetu-card')) return el;
+            if (el.tagName && el.tagName.includes('-') && 'selected' in el && 'disableSelection' in el) {
+                return el;
+            }
             el = el.getRootNode().host || el.parentElement;
         }
         return null;

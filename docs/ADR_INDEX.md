@@ -7,9 +7,9 @@
 * [ADR-0001: Sutram IoC Micro-Kernel Architecture](./adrs/0001_sutram_ioc_microkernel_architecture.md)
 * [ADR-0002: Sutram Bootloader and Resilience Patterns](./adrs/0002_sutram_bootloader_and_resilience_patterns.md)
 * [ADR-0007: Sutram Offline Micro-Kernel & Metronome Visibility Backoff](./adrs/0007_sutram_offline_microkernel_and_metronome_backoff.md)
-
 ### yenVUI Presentation Chassis
 * [ADR-0003: Dynamic Theme Mutation Observer Pattern](./adrs/0003_yenvui_theme_mutation_observers.md)
 * [ADR-0004: Encapsulated CodeMirror 6 Integration](./adrs/0004_yenvui_codemirror6_tab_view_caching.md)
 * [ADR-0005: Native Popover API Toast Container Elevation](./adrs/0005_yenvui_popover_toasts_gesture_selection.md)
 * [ADR-0006: Gesture Swipe Axis Locking](./adrs/0006_yenvui_gesture_swipe_axis_locking.md)
+* [ADR-0008: Duck-Typed Selection Contracts for yenVUI Gestures](./adrs/0008_yenvui_duck_typed_selection_contracts.md)

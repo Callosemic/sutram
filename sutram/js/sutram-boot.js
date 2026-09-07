@@ -21,7 +21,7 @@
                         origConnected.apply(this, args);
                     } catch (e) {
                         console.error(`⚠️ [Isolated Component Error] <${name}> failed in connectedCallback:`, e);
-                        const toastStore = window.inSetu?.stores?.Toast;
+                        const toastStore = window.Sutram?.stores?.Toast;
                         if (toastStore && typeof toastStore.getState === 'function') {
                             toastStore.getState().addToast(
                                 `Extension <${name}> error: ${e.message}`,

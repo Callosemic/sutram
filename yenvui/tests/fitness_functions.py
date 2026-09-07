@@ -169,4 +169,17 @@ def test_set_interval_ban_compliance():
                 if interval_pattern.search(line):
                     violations.append(f"{filepath}:{idx} -> Raw setInterval detected; use registerTick() or registerInterval()")
 
-    assert not violations, f"Raw setInterval usage detected in yenVUI components:\n" + "\n".join(violations)
+        assert not violations, f"Raw setInterval usage detected in yenVUI components:\n" + "\n".join(violations)
+
+def test_domain_isolation_compliance():
+        """Ensure Sutram and yenVUI frameworks do not hardcode consuming application global domains."""
+        domain_leak_pattern = re.compile(r'window\.inSetu\b')
+        violations = []
+
+        for filepath in glob.glob('js/**/*.js', recursive=True):
+            with open(filepath, 'r') as f:
+                for idx, line in enumerate(f, start=1):
+                    if domain_leak_pattern.search(line):
+                        violations.append(f"{filepath}:{idx} -> Hardcoded domain global (window.inSetu) detected. Framework must remain agnostic.")
+
+        assert not violations, f"Domain isolation violations detected:\n" + "\n".join(violations)
