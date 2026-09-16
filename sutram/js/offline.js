@@ -46,6 +46,16 @@ export class SutramDB {
         });
     }
 
+    static async deleteVFSBlob(scopeId, filepath) {
+        const db = await this.getDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('vfs_cache', 'readwrite');
+            tx.objectStore('vfs_cache').delete(`${scopeId}::${filepath}`);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    }
+
     static async getVFSBlob(scopeId, filepath) {
         const db = await this.getDB();
         return new Promise((resolve) => {

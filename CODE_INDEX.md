@@ -24,7 +24,7 @@ sutram/
 │   │   ├── 0005_yenvui_popover_toasts_gesture_selection.md # ADR-0005: Native popover API and selection physics
 │   │   ├── 0006_yenvui_gesture_swipe_axis_locking.md # ADR-0006: Gesture swipe axis locking and event handshakes
 │   │   ├── 0007_sutram_offline_microkernel_and_metronome_backoff.md # ADR-0007: Offline micro-kernel architecture and metronome visibility backoff
-│   │   └── 0008_yenvui_duck_typed_selection_contracts.md # [comment required]
+│   │   └── 0008_yenvui_duck_typed_selection_contracts.md # ADR-0008: Duck-typed selection contracts for gesture targets
 │   └── yenvui_contracts.md         # Interface contract specification and CSS intent tokens for yenVUI presentation chassis
 ├── pyproject.toml                  # Python project metadata and semantic release configuration
 ├── readme.md                       # Master repository architecture map and component reference
