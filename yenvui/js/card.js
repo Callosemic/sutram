@@ -13,7 +13,8 @@ export class YenvuiCard extends LitElement {
         _overlayActive: { type: Boolean, reflect: true },
         _hasActions: { type: Boolean, reflect: true, attribute: 'has-actions' },
         compact: { type: Boolean, reflect: true },
-        flush: { type: Boolean, reflect: true }
+        flush: { type: Boolean, reflect: true },
+        stale: { type: Boolean, reflect: true }
     };
     static styles = css`
         :host { display: block; margin-bottom: var(--card-margin-bottom, 12px); position: relative; touch-action: pan-x pan-y; }
@@ -80,6 +81,12 @@ export class YenvuiCard extends LitElement {
             border-color: var(--card-intent, #3b82f6);
             outline: 1px solid var(--card-intent, #3b82f6);
             outline-offset: -1px;
+        }
+        :host([stale]) .card-wrapper {
+            opacity: 0.65;
+            filter: grayscale(0.3);
+            border-style: dashed;
+            transition: opacity 0.3s ease, filter 0.3s ease;
         }
         .content-col {
             flex: 1;

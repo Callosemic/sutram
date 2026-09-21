@@ -22,6 +22,11 @@ export class YenvuiToastContainer extends LitElement {
             width: 100%;
         }
 
+        :host::backdrop {
+            display: none !important;
+            background: transparent !important;
+        }
+
         .toast {
             background: var(--pane-bg, #1e1e1e);
             color: var(--text, #e0e0e0);
@@ -65,12 +70,27 @@ export class YenvuiToastContainer extends LitElement {
         super();
         this.toasts = [];
     }
-
     connectedCallback() {
         super.connectedCallback();
-        // Annihilate the popover attribute to prevent the browser from generating
-        // an invisible blocking ::backdrop layer over the screen.
-        this.removeAttribute('popover');
+        if (typeof this.showPopover === 'function') {
+            this.setAttribute('popover', 'manual');
+            try {
+                this.showPopover();
+            } catch (e) {}
+        }
+    }
+
+    updated(changedProperties) {
+        super.updated(changedProperties);
+        // Re-promote the container to the top of the #top-layer whenever new toasts arrive
+        if (changedProperties.has('toasts') && this.toasts && this.toasts.length > 0) {
+            if (typeof this.showPopover === 'function') {
+                try {
+                    this.hidePopover();
+                    this.showPopover();
+                } catch (e) {}
+            }
+        }
     }
 
     _dismiss(id) {
