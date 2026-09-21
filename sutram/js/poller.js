@@ -49,6 +49,7 @@ export function createJobPoller(apiClient) {
                     onError(new Error(data.message || "Job failed."));
                 }
             } catch (e) {
+                if (e.name === 'AbortError') return; // Exit cleanly on workspace swap
                 if (retries < maxRetries) {
                     retries++;
                     setTimeout(poll, interval);

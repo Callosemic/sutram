@@ -308,7 +308,6 @@ export class OfflineHttpProvider {
                 return new Response(null, { status: 204, statusText: 'Cache Full Circuit Breaker' });
             }
         }
-
         try {
             const res = await fetch(url, options);
             if (!this.checkOfflineState() && res.ok && !cacheKeyUrl.includes('/deltas') && !cacheKeyUrl.includes('/jobs/')) {
@@ -321,6 +320,7 @@ export class OfflineHttpProvider {
             }
             return res;
         } catch (err) {
+            if (err.name === 'AbortError') throw err;
             this.setOfflineState(true);
             const cachedBlob = await SutramDB.getVFSBlob(scopeId, cacheKeyUrl);
             if (cachedBlob) return new Response(cachedBlob, { status: 200 });
@@ -329,19 +329,24 @@ export class OfflineHttpProvider {
     }
     async executeMutation(url, method, bodyString, options = {}, scopeId = 'default') {
         if (this.checkOfflineState()) {
-            return this._handleOfflineQueue(url, method, bodyString, options, scopeId);
+            return this._handleOfflineQueue(url, method, bodyString, options, scopeId, false);
         }
 
         try {
             return await fetch(url, options);
         } catch (err) {
-            this.setOfflineState(true);
-            return this._handleOfflineQueue(url, method, bodyString, options, scopeId);
+            const isAbort = err.name === 'AbortError';
+            if (!isAbort) this.setOfflineState(true);
+
+            // Route aborted mutations to the offline queue to prevent data loss, 
+            // but pass the abort signal so we can decide whether to drop or queue it.
+            return this._handleOfflineQueue(url, method, bodyString, options, scopeId, isAbort);
         }
     }
 
-    async _handleOfflineQueue(url, method, bodyString, options, scopeId) {
-        if (!this.isOfflineCapable(url)) {
+    async _handleOfflineQueue(url, method, bodyString, options, scopeId, isAbort = false) {
+        if (!this.isOfflineCapable(url) || (isAbort && url.includes('/search'))) {
+            if (isAbort) throw new DOMException("Aborted", "AbortError");
             this.onError("Feature disabled or read-only while offline.", url);
             return new Response(JSON.stringify({ error: "Feature disabled while offline." }), { status: 503, statusText: "Service Unavailable" });
         }
@@ -366,35 +371,53 @@ export class OfflineHttpProvider {
         }
     }
 }
-
 export class NetworkHysteresisManager {
     constructor(pingUrl, threshold = 3) {
         this.pingUrl = pingUrl;
         this.threshold = threshold;
-        this.consecutivePings = 0;
+        this.isChecking = false;
     }
 
     async check(onRestored) {
+        // Concurrency Guard: Prevent overlapping bursts if interval fires before execution finishes
+        if (this.isChecking) return;
+        this.isChecking = true;
+
         try {
+            // Primary slow-polling ping with a strict 2s fail-fast timeout
             const url = this.pingUrl.replace('{t}', Date.now());
-            const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+            const res = await fetch(url, { method: 'HEAD', cache: 'no-store', signal: AbortSignal.timeout(2000) });
+
             if (res.ok) {
-                this.consecutivePings++;
-                if (this.consecutivePings >= this.threshold) {
-                    this.consecutivePings = 0;
+                // First ping succeeded! Enter rapid verification burst.
+                let successCount = 1;
+                for (let i = 1; i < this.threshold; i++) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    const burstUrl = this.pingUrl.replace('{t}', Date.now());
+                    try {
+                        const burstRes = await fetch(burstUrl, { method: 'HEAD', cache: 'no-store', signal: AbortSignal.timeout(2000) });
+                        if (burstRes.ok) {
+                            successCount++;
+                        } else {
+                            break; // Burst failed, revert to slow polling
+                        }
+                    } catch (e) {
+                        break; // Network dropped or timed out during burst
+                    }
+                }
+
+                if (successCount >= this.threshold) {
                     await onRestored();
                 }
-            } else {
-                this.consecutivePings = 0;
             }
         } catch (e) {
-            this.consecutivePings = 0;
+            // Network remains offline, continue slow polling
+        } finally {
+            this.isChecking = false;
         }
     }
 
-    reset() {
-        this.consecutivePings = 0;
-    }
+    reset() {}
 }
 export class OutboxReconciler {
     static async drain(scopeId, executePost) {

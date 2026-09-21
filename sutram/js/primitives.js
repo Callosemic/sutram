@@ -460,7 +460,8 @@ export class SutramGenericSettingsModal extends SutramElement {
         open: { type: Boolean, reflect: true },
         extName: { type: String },
         schema: { type: Array },
-        formData: { type: Object }
+        formData: { type: Object },
+        _jsonBuffers: { type: Object }
     };
     static styles = [sharedStyles, css`:host { display: contents; }`];
 
@@ -470,12 +471,14 @@ export class SutramGenericSettingsModal extends SutramElement {
         this.extName = '';
         this.schema = [];
         this.formData = {};
+        this._jsonBuffers = {};
     }
 
     openModal(extName, schema, formData) {
         this.extName = extName;
         this.schema = schema || [];
         this.formData = formData || {};
+        this._jsonBuffers = {};
         this.open = true;
         this.requestUpdate();
     }
@@ -546,8 +549,9 @@ export class SutramGenericSettingsModal extends SutramElement {
                         } else if (field.type === 'number') {
                             inputHtml = html`<sutram-input type="number" .value=${val} @sutram-input-changed=${e => { this.formData = {...this.formData, [field.id]: parseFloat(e.detail.value)}; this.requestUpdate(); }} ?flush=${true}></sutram-input>`;
                         } else if (field.type === 'object' || field.type === 'json' || (typeof val === 'object' && val !== null)) {
-                            const strVal = typeof val === 'object' && val !== null ? JSON.stringify(val, null, 2) : val;
+                            const strVal = this._jsonBuffers[field.id] !== undefined ? this._jsonBuffers[field.id] : (typeof val === 'object' && val !== null ? JSON.stringify(val, null, 2) : val);
                             inputHtml = html`<sutram-textarea .value=${strVal} .monospace=${true} .minRows=${4} @sutram-input-changed=${e => {
+                                this._jsonBuffers = { ...this._jsonBuffers, [field.id]: e.detail.value };
                                 try {
                                     this.formData = {...this.formData, [field.id]: JSON.parse(e.detail.value)};
                                 } catch(err) {}
@@ -707,6 +711,7 @@ export class SutramCard extends SutramElement {
         selectionStoreKey: { type: String },
         compact: { type: Boolean, reflect: true },
         flush: { type: Boolean, reflect: true },
+        stale: { type: Boolean, reflect: true },
         hasActions: { type: Boolean, attribute: 'has-actions' }
     };
 
@@ -728,7 +733,18 @@ export class SutramCard extends SutramElement {
         this.selectionStoreKey = 'Selection';
         this.compact = false;
         this.flush = false;
+        this.stale = false;
         this.hasActions = false;
+    }
+
+    _isStale() {
+        return (
+            this.stale ||
+            !!this.entityData?.stale ||
+            !!this.entityData?.needs_recompile ||
+            !!this.entityData?.is_dirty ||
+            !!this.entityData?.outdated
+        );
     }
 
     _hasResolvedActions() {
@@ -794,6 +810,7 @@ export class SutramCard extends SutramElement {
                 ?disableSelection=${this.disableSelection}
                 ?compact=${this.compact}
                 ?flush=${this.flush}
+                ?stale=${this._isStale()}
                 @yenvui-card-select-toggled=${(e) => {
                     e.stopPropagation();
                     const id = this._getId();
