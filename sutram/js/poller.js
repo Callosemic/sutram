@@ -8,10 +8,16 @@ export function createJobPoller(apiClient) {
             onComplete({ status: 'completed', message: 'Queued for offline sync.' });
             return;
         }
-
         let retries = 0;
 
         const poll = async () => {
+            // Yield to the OS offline state to prevent useless network spam while disconnected
+            const isOffline = window.Sutram?.stores?.Environment?.getState()?.isOffline;
+            if (isOffline) {
+                setTimeout(poll, interval);
+                return;
+            }
+
             try {
                 // Tier 0 Agnostic API call
                 const res = await apiClient.get(`jobs/${jobId}`);
@@ -44,7 +50,12 @@ export function createJobPoller(apiClient) {
                         onError(new Error("Job polling timed out."));
                     }
                 } else if (data.status === 'completed') {
-                    onComplete(data);
+                    if (data.artifact && data.artifact.next_job_id) {
+                        jobId = data.artifact.next_job_id;
+                        setTimeout(poll, 50);
+                    } else {
+                        onComplete(data);
+                    }
                 } else if (data.status === 'failed') {
                     onError(new Error(data.message || "Job failed."));
                 }
