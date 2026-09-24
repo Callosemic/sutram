@@ -2,6 +2,106 @@
 
 <!-- version list -->
 
+## v1.0.0 (2026-09-24)
+
+### Bug Fixes
+
+- **yenvui**: Suppress accordion click expansion on single item card groups
+  ([`1fe63d8`](https://github.com/Callosemic/sutram/commit/1fe63d885037a733a2148e10daa357beb8a47923))
+
+### Chores
+
+- Code index
+  ([`bec6267`](https://github.com/Callosemic/sutram/commit/bec6267deac2fb6e119d7402d49a2f40bae3a6cf))
+
+- Global workspace sweep
+  ([`922c655`](https://github.com/Callosemic/sutram/commit/922c65559ec6766f14cfcdc2b8513126b7d18523))
+
+- Global workspace sweep
+  ([`337374a`](https://github.com/Callosemic/sutram/commit/337374ac1d7d5ca2016252cab13db7604154eb61))
+
+- Global workspace sweep
+  ([`9792b8e`](https://github.com/Callosemic/sutram/commit/9792b8ee9c105994ff706f8a75dd0ee463c81c6a))
+
+- Global workspace sweep
+  ([`8938d58`](https://github.com/Callosemic/sutram/commit/8938d586d14b842c7732d54c43adc606717779b5))
+
+- Global workspace sweep
+  ([`b08ee4c`](https://github.com/Callosemic/sutram/commit/b08ee4cc97807b1c7d2ab955f791f1372dab1d7c))
+
+- Global workspace sweep
+  ([`372106d`](https://github.com/Callosemic/sutram/commit/372106dd779fd0d917492dd62a68ac7f38a9b844))
+
+- Global workspace sweep
+  ([`b1edeab`](https://github.com/Callosemic/sutram/commit/b1edeabe85322b19da833fa09fae30f3f7d04315))
+
+- Global workspace sweep
+  ([`0677d1b`](https://github.com/Callosemic/sutram/commit/0677d1bdf6f831709f9c8266113eb28006f56cad))
+
+- Global workspace sweep
+  ([`a61d805`](https://github.com/Callosemic/sutram/commit/a61d805304242ee6cb36338b8996768f6efd9dfb))
+
+- Global workspace sweep
+  ([`bfce4e1`](https://github.com/Callosemic/sutram/commit/bfce4e1f1bb9635e6ba21b5f52969e951fedd7e4))
+
+- Global workspace sweep
+  ([`b1cff61`](https://github.com/Callosemic/sutram/commit/b1cff611722e751037efc7fab9738ea29e3df47c))
+
+- Global workspace sweep
+  ([`51d5198`](https://github.com/Callosemic/sutram/commit/51d51983e0594d52a9d58c31562bbc6841fa1523))
+
+- Global workspace sweep
+  ([`9afa0f9`](https://github.com/Callosemic/sutram/commit/9afa0f9f621001cf52c575525d678a7bf8ad7f74))
+
+- Global workspace sweep
+  ([`590c634`](https://github.com/Callosemic/sutram/commit/590c63402bed4710ea0d39cdab2f4e3cd3c26128))
+
+- Global workspace sweep
+  ([`a6ad125`](https://github.com/Callosemic/sutram/commit/a6ad125d5bb346b0858f0f009cffd098782d5b39))
+
+- Global workspace sweep
+  ([`5c897ad`](https://github.com/Callosemic/sutram/commit/5c897ad70881ff6ba9c14ce16ea0c3b436e2d68f))
+
+### Features
+
+- Add board, column, tag, and label primitives, synchronize editor loading, and improve modal
+  stacking
+  ([`376e8d2`](https://github.com/Callosemic/sutram/commit/376e8d2c1fd3947d7c6399ceb894d3e7c7874923))
+
+- Decouple Sutram micro-kernel from inSetu domain, implement duck-typed card selection physics, and
+  enhance offline IndexedDB with LRU eviction and cross-tab locks
+  ([`26e57fc`](https://github.com/Callosemic/sutram/commit/26e57fc2165789f0aa7ceea2c5461b7f158b6afd))
+
+- Enhance offline network hysteresis, abort handling, toast popover stacking, and stale card visuals
+  ([`8a348d9`](https://github.com/Callosemic/sutram/commit/8a348d93ffe832996cfa428723edfd56a6a8abe4))
+
+- Enhance offline network hysteresis, abort handling, toast popover stacking, and stale card visuals
+  ([`e529e3e`](https://github.com/Callosemic/sutram/commit/e529e3e8bc5eb237aa62acbac2ba77512d80c0c3))
+
+- Implement offline backoff yielding and sequential job chaining in poller
+  ([`589b01f`](https://github.com/Callosemic/sutram/commit/589b01fcd8f52dad0705240d2292eac8bf1b8df1))
+
+- Standardise bare specifiers for codemirror in yenvui editor and add active button and writing mode
+  support
+  ([`b216a76`](https://github.com/Callosemic/sutram/commit/b216a76577735b4bb07da947227d58eed09b60ed))
+
+- **offline**: Add deleteVFSBlob method to SutramDB micro-kernel
+  ([`4d72c1b`](https://github.com/Callosemic/sutram/commit/4d72c1b569fe194fdc972775706f42673346daa2))
+
+- **offline**: Introduce offline micro-kernel, metronome visibility backoff, and accordion deck
+  physics
+  ([`a806ae4`](https://github.com/Callosemic/sutram/commit/a806ae4b6213f9818e064604670d4a4a41b2ffa6))
+
+- **primitives**: Standardize settings modal inputs and support scrollable entity actions
+  ([`2f9bc11`](https://github.com/Callosemic/sutram/commit/2f9bc1106e0b379286953a945f36d260b704c901))
+
+- **utils**: Add coalescedAsync helper for deduplicating concurrent async calls
+  ([`a0f0d61`](https://github.com/Callosemic/sutram/commit/a0f0d61ee5dc54a9c3c94c853504e7e1d1c8dd9f))
+
+- **yenvui**: Add transparent backdrop property to modal primitive and generic settings
+  ([`33cd025`](https://github.com/Callosemic/sutram/commit/33cd0258aa5dc2ccc4bd0467b2527e4e7ca22c35))
+
+
 ## v0.1.1 (2026-08-11)
 
 ### Bug Fixes
