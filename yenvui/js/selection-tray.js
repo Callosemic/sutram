@@ -1,6 +1,7 @@
-import { LitElement, html, css } from 'lit';
+import { html, css } from 'lit';
+import { YenvuiBase } from './yenvui-base.js';
 
-export class YenvuiSelectionTray extends LitElement {
+export class YenvuiSelectionTray extends YenvuiBase {
     static properties = {
         count: { type: Number },
         open: { type: Boolean, reflect: true }
@@ -71,21 +72,6 @@ export class YenvuiSelectionTray extends LitElement {
         this.count = 0; 
         this.open = false; 
     }
-
-    connectedCallback() {
-        super.connectedCallback();
-        this._themeObserver = new MutationObserver(() => {
-            this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-        });
-        this._themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
-        this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-    }
-
-    disconnectedCallback() {
-        super.disconnectedCallback();
-        if (this._themeObserver) this._themeObserver.disconnect();
-    }
-
     render() {
         return html`
             <div class="count-badge">${this.count}</div>

@@ -1,8 +1,9 @@
-import { LitElement, html, css } from 'lit';
+import { html, css } from 'lit';
+import { YenvuiBase } from './yenvui-base.js';
 import './search-bar.js';
 import './dropdown.js';
 
-export class YenvuiToolbar extends LitElement {
+export class YenvuiToolbar extends YenvuiBase {
     static properties = {
         searchQuery: { type: String },
         searchPlaceholder: { type: String },
@@ -46,21 +47,6 @@ export class YenvuiToolbar extends LitElement {
         this.hasFiltersOverride = false;
         this.bottomBorder = false;
     }
-
-    connectedCallback() {
-        super.connectedCallback();
-        this._themeObserver = new MutationObserver(() => {
-            this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-        });
-        this._themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
-        this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-    }
-
-    disconnectedCallback() {
-        super.disconnectedCallback();
-        if (this._themeObserver) this._themeObserver.disconnect();
-    }
-
     render() {
         let btnText = this.filterText;
         let hasF = this.hasFiltersOverride || false;

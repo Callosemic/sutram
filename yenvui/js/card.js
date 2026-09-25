@@ -1,5 +1,7 @@
-import { LitElement, html, css } from 'lit';
-export class YenvuiCard extends LitElement {
+import { html, css } from 'lit';
+import { YenvuiBase } from './yenvui-base.js';
+
+export class YenvuiCard extends YenvuiBase {
     static properties = {
         titleText: { type: String },
         detailText: { type: String },
@@ -416,12 +418,6 @@ export class YenvuiCard extends LitElement {
             }
         };
         this.addEventListener('touchmove', this._touchMoveListener, { passive: false });
-
-        this._themeObserver = new MutationObserver(() => {
-            this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-        });
-        this._themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
-        this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
     }
 
     disconnectedCallback() {
@@ -430,7 +426,6 @@ export class YenvuiCard extends LitElement {
         this.removeEventListener('focusout', this._focusOutListener);
         document.removeEventListener('click', this._docClickListener);
         document.removeEventListener('yenvui-overlay-opened', this._overlayListener);
-        if (this._themeObserver) this._themeObserver.disconnect();
     }
     updated(changedProperties) {
         super.updated(changedProperties);

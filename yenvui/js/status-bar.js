@@ -38,6 +38,9 @@ export class YenvuiStatusBar extends LitElement {
         if (this.syncState === 'pending') icon = '🟡 Pending Sync';
         if (this.syncState === 'syncing') icon = '🔄 Syncing...';
         if (this.syncState === 'synced') icon = '✅ Synced';
+        if (this.syncState === 'offline') icon = '⚡ Offline';
+        if (this.syncState === 'reconciling') icon = '🌩️ Reconciling...';
+        if (this.syncState === 'error') icon = '❌ Sync Error';
 
         return html`
             <div class="bottom-bar ${this.isError ? 'error' : ''}" title="${this.text}">

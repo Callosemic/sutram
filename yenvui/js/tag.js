@@ -1,6 +1,7 @@
-import { LitElement, html, css } from 'lit';
+import { html, css } from 'lit';
+import { YenvuiBase } from './yenvui-base.js';
 
-export class YenvuiTag extends LitElement {
+export class YenvuiTag extends YenvuiBase {
     static properties = {
         text: { type: String },
         intent: { type: String }
@@ -38,21 +39,6 @@ export class YenvuiTag extends LitElement {
             color: var(--tag-color, #0f172a);
         }
     `;
-
-    connectedCallback() {
-        super.connectedCallback();
-        this._themeObserver = new MutationObserver(() => {
-            this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-        });
-        this._themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
-        this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-    }
-
-    disconnectedCallback() {
-        super.disconnectedCallback();
-        if (this._themeObserver) this._themeObserver.disconnect();
-    }
-
     render() {
         return html`<span class="tag ${this.intent ? 'intent-' + this.intent : ''}">${this.text}<slot></slot></span>`;
     }

@@ -1,6 +1,7 @@
-import { LitElement, html, css } from 'lit';
+import { html, css } from 'lit';
+import { YenvuiBase } from './yenvui-base.js';
 
-export class YenvuiSearchBar extends LitElement {
+export class YenvuiSearchBar extends YenvuiBase {
     static properties = {
         placeholder: { type: String },
         value: { type: String }
@@ -68,18 +69,8 @@ export class YenvuiSearchBar extends LitElement {
         this.value = ''; 
         this._debounceTimer = null;
     }
-
-    connectedCallback() {
-        super.connectedCallback();
-        this._themeObserver = new MutationObserver(() => {
-            this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-        });
-        this._themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
-        this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-    }
     disconnectedCallback() {
         super.disconnectedCallback();
-        if (this._themeObserver) this._themeObserver.disconnect();
         if (this._debounceTimer) clearTimeout(this._debounceTimer);
     }
     _handleInput(e) {

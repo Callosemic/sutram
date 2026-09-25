@@ -1,6 +1,7 @@
-import { LitElement, html, css } from 'lit';
+import { html, css } from 'lit';
+import { YenvuiBase } from './yenvui-base.js';
 
-export class YenvuiTabs extends LitElement {
+export class YenvuiTabs extends YenvuiBase {
     static properties = {
         tabs: { type: Array }, // Expected format: [{ id: 'string', label: 'string', component?: 'string' }]
         activeTab: { type: String },
@@ -124,21 +125,6 @@ export class YenvuiTabs extends LitElement {
         this.variant = 'primary';
         this.cacheViews = true;
     }
-
-    connectedCallback() {
-        super.connectedCallback();
-        this._themeObserver = new MutationObserver(() => {
-            this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-        });
-        this._themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
-        this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-    }
-
-    disconnectedCallback() {
-        super.disconnectedCallback();
-        if (this._themeObserver) this._themeObserver.disconnect();
-    }
-
     _handleTabClick(tabId) {
         // Emits the intent to change tabs, maintaining strict UDF purity
         this.dispatchEvent(new CustomEvent('yenvui-tab-selected', {

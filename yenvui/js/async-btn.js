@@ -1,6 +1,7 @@
-import { LitElement, html, css } from 'lit';
+import { html, css } from 'lit';
+import { YenvuiBase } from './yenvui-base.js';
 
-export class YenvuiAsyncBtn extends LitElement {
+export class YenvuiAsyncBtn extends YenvuiBase {
     static properties = {
         label: { type: String },
         loadingLabel: { type: String },
@@ -90,20 +91,6 @@ export class YenvuiAsyncBtn extends LitElement {
         this.btntype = 'button';
         this.disabled = false;
         this.active = false;
-    }
-
-    connectedCallback() {
-        super.connectedCallback();
-        this._themeObserver = new MutationObserver(() => {
-            this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-        });
-        this._themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
-        this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-    }
-
-    disconnectedCallback() {
-        super.disconnectedCallback();
-        if (this._themeObserver) this._themeObserver.disconnect();
     }
     async _handleClick(e) {
         if (this.disabled || this.status === 'loading') {

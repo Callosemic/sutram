@@ -1,5 +1,7 @@
-import { LitElement, html, css } from 'lit';
-export class YenvuiBoard extends LitElement {
+import { html, css } from 'lit';
+import { YenvuiBase } from './yenvui-base.js';
+
+export class YenvuiBoard extends YenvuiBase {
     static styles = css`
         :host { 
             display: grid; 
@@ -26,7 +28,7 @@ export class YenvuiBoard extends LitElement {
     }
 }
 customElements.define('yenvui-board', YenvuiBoard);
-export class YenvuiColumn extends LitElement {
+export class YenvuiColumn extends YenvuiBase {
     static properties = {
         titleText: { type: String },
         intentColor: { type: String }
@@ -68,21 +70,6 @@ export class YenvuiColumn extends LitElement {
         this.titleText = '';
         this.intentColor = '';
     }
-
-    connectedCallback() {
-        super.connectedCallback();
-        this._themeObserver = new MutationObserver(() => {
-            this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-        });
-        this._themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
-        this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-    }
-
-    disconnectedCallback() {
-        super.disconnectedCallback();
-        if (this._themeObserver) this._themeObserver.disconnect();
-    }
-
     render() {
         return html`
             ${this.titleText ? html`<div class="header" style="color: ${this.intentColor || 'var(--text, #e0e0e0)'};">${this.titleText}</div>` : ''}
