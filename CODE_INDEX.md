@@ -69,7 +69,8 @@ sutram/
     │   ├── tabs.js                 # Horizontal swipe carousel tab navigation and cached view router
     │   ├── tag.js                  # Semantic intent tag primitive with high-contrast theme overrides
     │   ├── toast.js                # Non-blocking toast notification alert container
-    │   └── toolbar.js              # Sticky header toolbar integrating search, filters, and action slots
+    │   ├── toolbar.js              # Sticky header toolbar integrating search, filters, and action slots
+    │   └── yenvui-base.js          # Base presentation class encapsulating theme mutation observation and lifecycle hooks
     └── tests/                      # Automated presentation chassis compliance tests and fitness functions
         ├── .gitkeep                # Folder preservation tracking marker
         └── fitness_functions.py    # Static analysis and linting fitness functions enforcing yenVUI standards
