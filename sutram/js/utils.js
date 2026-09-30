@@ -126,6 +126,54 @@ export function downloadBlob(blob, filename) {
     window.URL.revokeObjectURL(url);
     a.remove();
 }
+export async function nativeShareFiles(fileObjects) {
+    if (!navigator.share || !navigator.canShare) {
+        throw new Error("File sharing not supported by this browser.");
+    }
+
+    const hardenedFiles = [];
+
+    for (const fileObj of fileObjects) {
+        const { blob, buffer, content, filename, type } = fileObj;
+        let safeMime = type || (blob && blob.type) || 'text/plain';
+        if (safeMime.includes('octet-stream') || safeMime.includes('json') || safeMime.includes('javascript') || safeMime.includes('python')) {
+            safeMime = 'text/plain';
+        }
+
+        let safeName = filename;
+        if (safeMime === 'text/plain' && !safeName.toLowerCase().endsWith('.txt') && !safeName.toLowerCase().endsWith('.csv')) {
+            safeName += '.txt';
+        }
+
+        let fileData;
+        if (content !== undefined) {
+            fileData = content;
+        } else if (buffer) {
+            fileData = buffer;
+        } else if (blob) {
+            fileData = await blob.arrayBuffer();
+        }
+
+        const hardenedFile = new File([fileData], safeName, { type: safeMime, lastModified: Date.now() });
+        hardenedFiles.push(hardenedFile);
+    }
+    // GC Protection: Shield the raw File array until the OS Clipboard successfully reads the pointers
+    window._lastSharePreserver = hardenedFiles;
+
+    // Failsafe: Some mobile browsers hang the promise if the user backgrounds the app
+    const gcFallback = setTimeout(() => { window._lastSharePreserver = null; }, 60000);
+
+    if (navigator.canShare({ files: hardenedFiles })) {
+        return navigator.share({ files: hardenedFiles }).finally(() => {
+            clearTimeout(gcFallback);
+            window._lastSharePreserver = null;
+        });
+    } else {
+        clearTimeout(gcFallback);
+        window._lastSharePreserver = null;
+        throw new Error("The OS rejected the file payload structure.");
+    }
+}
 
 export async function downloadFile(fetchUrl, fallbackFilename, fetchOptions = {}) {
     const res = await fetch(fetchUrl, fetchOptions);

@@ -286,16 +286,25 @@ export class SutramSelectionTray extends SutramElement {
                     intent="danger" 
                     .onClick=${() => SelectionStore.getState().clearSelection()}>
                 </sutram-async-btn>
-                ${batchActions.map(act => html`
-                    <sutram-async-btn   
-                        slot="footer"
-                        label="${act.icon} ${act.label}" 
-                        intent="${act.intent || 'primary'}" 
-                        .onClick=${async (e) => {
-                            await act.asyncAction(itemsArray, e);
-                        }}>
-                    </sutram-async-btn>
-                `)}
+                ${batchActions.map(act => {
+                    if (act.asyncAction) {
+                        return html`
+                            <sutram-async-btn   
+                                slot="footer"
+                                label="${act.icon} ${act.label}" 
+                                intent="${act.intent || 'primary'}" 
+                                .onClick=${async (e) => {
+                                    await act.asyncAction(itemsArray, e);
+                                }}>
+                            </sutram-async-btn>
+                        `;
+                    }
+                    return html`
+                        <button slot="footer" class="btn-sm" style="background: var(--intent-${act.intent || 'primary'}); color: ${act.intent === 'warning' ? '#000' : '#fff'}; border: none; font-weight: bold; cursor: pointer; padding: 12px; margin: 0; font-size: 1.05rem; border-radius: 6px;" @click=${(e) => act.onClick(itemsArray, e)}>
+                            ${act.icon} ${act.label}
+                        </button>
+                    `;
+                })}
             </yenvui-modal>
         `;
     }
