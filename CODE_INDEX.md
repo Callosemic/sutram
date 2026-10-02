@@ -24,7 +24,8 @@ sutram/
 │   │   ├── 0005_yenvui_popover_toasts_gesture_selection.md # ADR-0005: Native popover API and selection physics
 │   │   ├── 0006_yenvui_gesture_swipe_axis_locking.md # ADR-0006: Gesture swipe axis locking and event handshakes
 │   │   ├── 0007_sutram_offline_microkernel_and_metronome_backoff.md # ADR-0007: Offline micro-kernel architecture and metronome visibility backoff
-│   │   └── 0008_yenvui_duck_typed_selection_contracts.md # ADR-0008: Duck-typed selection contracts for gesture targets
+│   │   ├── 0008_yenvui_duck_typed_selection_contracts.md # ADR-0008: Duck-typed selection contracts for gesture targets
+│   │   └── 0009_sutram_spatial_layout_and_projection_engine.md # [comment required]
 │   └── yenvui_contracts.md         # Interface contract specification and CSS intent tokens for yenVUI presentation chassis
 ├── pyproject.toml                  # Python project metadata and semantic release configuration
 ├── readme.md                       # Master repository architecture map and component reference
@@ -32,10 +33,12 @@ sutram/
 │   └── js/                         # Pure ES module frontend runtime kernel and utilities
 │       ├── app_shell.js            # Declarative web component app shell and tab layout router
 │       ├── client.js               # Agnostic data provider client and HTTP transport provider interface
+│       ├── drag-coordinator.js     # Spatial drag-and-drop overlay coordinator for interactive column reordering
 │       ├── inputs.js               # Standard form input elements (text, select, textarea, toggle)
 │       ├── offline.js              # Offline IndexedDB persistence manager, outbox reconciler, and network hysteresis manager
 │       ├── poller.js               # Background job status polling factory with tier-0 API integration
 │       ├── primitives.js           # Presentation primitives (buttons, modals, toast, selection, status)
+│       ├── projection_engine.js    # DOM node caching pool (SutramDOMPool) and layout projection compiler
 │       ├── sdk.js                  # IoC Micro-Kernel, SutramElement base class, and ExtensionRegistry
 │       ├── shared_styles.js        # Lit CSS intent tokens, presentation primitives, and theme styles
 │       ├── shortcuts.js            # Centralized context-aware keydown shortcut router
@@ -55,12 +58,14 @@ sutram/
     │   ├── card.js                 # Polymorphic card primitive with drawer overlay and long-press selection
     │   ├── category-section.js     # Categorized list section wrapper with header action slot
     │   ├── collapsible.js          # Expandable accordion container with semantic intent styling
+    │   ├── drop-zone.js            # Top-layer popover drop overlay and drop target presentation primitives
     │   ├── dropdown.js             # Context popover trigger menus and filter dropdown panels
     │   ├── editor.js               # CodeMirror 6 code editor wrapper with dynamic ESM language loading
     │   ├── empty-state.js          # Centered empty state feedback container with icon and text slot
     │   ├── filter-group.js         # Interactive pill array for multi-attribute filtering
     │   ├── label.js                # Standardized form label primitive with theme observation support
     │   ├── modal.js                # Native HTML5 top-layer dialog modal overlay with backdrop handling
+    │   ├── physics.js              # Universal gesture physics controller and Shadow DOM point resolution
     │   ├── pill.js                 # Toggleable tag/badge primitive supporting standard and text variants
     │   ├── search-bar.js           # Standardized text search input with instant clear action
     │   ├── selection-tray.js       # Floating action tray for batch selection operations
