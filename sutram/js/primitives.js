@@ -570,14 +570,13 @@ export class SutramGenericSettingsModal extends SutramElement {
                             const inputType = field.type === 'password' ? 'password' : 'text';
                             inputHtml = html`<sutram-input type="${inputType}" .value=${val} @sutram-input-changed=${e => { this.formData = {...this.formData, [field.id]: e.detail.value}; this.requestUpdate(); }} ?flush=${true}></sutram-input>`;
                         }
-
                         const displayLabel = field.title || field.label || field.id;
                         return html`
                             <div style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px;">
                                 ${field.type === 'boolean' 
                                     ? html`<div style="display: flex; align-items: center; gap: 10px;"><label style="font-size: 0.95rem; color: var(--text); font-weight: bold; margin: 0; cursor: pointer;">${displayLabel}</label>${inputHtml}</div>` 
                                     : html`<label style="font-size: 0.85rem; color: var(--text-muted); font-weight: bold;">${displayLabel}</label>${inputHtml}`}
-                                ${field.description || field.desc ? html`<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: -2px;">${field.description || field.desc}</div>` : ''}
+                                ${field.html_desc ? html`<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: -2px;" .innerHTML=${field.html_desc}></div>` : (field.description || field.desc ? html`<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: -2px;">${field.description || field.desc}</div>` : '')}
                             </div>
                         `;
                     })}
@@ -641,19 +640,9 @@ export class SutramEntityActions extends SutramElement {
         :host([data-theme="e-ink"]) .sync-btn:hover { background: #f1f5f9 !important; }
         :host([data-theme="e-ink"]) .sync-btn.active { background: #000000 !important; color: #ffffff !important; }
     `;
-
     connectedCallback() {
         super.connectedCallback();
-        this._themeObserver = new MutationObserver(() => {
-            this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-        });
-        this._themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
-        this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-    }
-
-    disconnectedCallback() {
-        super.disconnectedCallback();
-        if (this._themeObserver) this._themeObserver.disconnect();
+        this.observeTheme();
     }
 
     render() {
@@ -723,9 +712,12 @@ export class SutramCard extends SutramElement {
         stale: { type: Boolean, reflect: true },
         hasActions: { type: Boolean, attribute: 'has-actions' }
     };
-
     static styles = [sharedStyles, css`
         :host { display: block; }
+        ::slotted(p), ::slotted(h1), ::slotted(h2), ::slotted(h3), ::slotted(h4), ::slotted(h5), ::slotted(h6) {
+            margin-block-start: 0;
+            margin-block-end: 0;
+        }
     `];
     constructor() {
         super();
@@ -733,7 +725,7 @@ export class SutramCard extends SutramElement {
         this.titleText = '';
         this.descriptionText = '';
         this.detailText = '';
-        this.icon = '📄';
+        this.icon = '<i data-lucide="file-text" style="width: 16px; height: 16px;"></i>';
         this.intentColor = '';
         this.entityType = '';
         this.entityData = {};
@@ -808,6 +800,7 @@ export class SutramCard extends SutramElement {
     render() {
         return html`
             <yenvui-card
+                .filename=${this.filename}
                 .titleText=${this.titleText}
                 .descriptionText=${this.descriptionText}
                 .detailText=${this.detailText}
@@ -836,13 +829,14 @@ export class SutramCard extends SutramElement {
                         composed: true
                     }));
                 }}
-                @click=${(e) => {
+                @yenvui-card-clicked=${(e) => {
                     this.dispatchEvent(new CustomEvent('card-clicked', {
                         detail: { filename: this.filename, isSource: true },
                         bubbles: true,
                         composed: true
                     }));
                 }}>
+                <slot name="header-actions" slot="header-actions"></slot>
                 <slot name="header-tags" slot="header-tags"></slot>
                 <slot name="detail" slot="detail"></slot>
                 <slot name="inline-actions" slot="inline-actions"></slot>
@@ -958,7 +952,7 @@ export class SutramToolbar extends LitElement {
                 .activeFilters=${this.activeFilters || []}
                 ?hasFiltersOverride=${this.hasFiltersOverride}
                 ?bottomBorder=${this.bottomBorder}
-                @search-changed=${e => this.dispatchEvent(new CustomEvent('search-changed', { detail: e.detail, bubbles: true, composed: true }))}>
+                @yenvui-search-changed=${e => this.dispatchEvent(new CustomEvent('search-changed', { detail: e.detail, bubbles: true, composed: true }))}>
                 <slot name="filters" slot="filters"></slot>
                 <slot name="bottom-row" slot="bottom-row"></slot>
             </yenvui-toolbar>

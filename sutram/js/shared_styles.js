@@ -76,17 +76,41 @@ export const sharedStyles = css`
         padding: 8px 14px;
         font-size: 14px;
     }
-
     /* Sub-Tabs (Inherited for Shadow DOM components) */
-    .sub-tabs-bar { position: relative; display: flex; justify-content: space-between; align-items: center; background: var(--bg); z-index: 99; border-bottom: 1px solid var(--border); padding: 0 20px; height: 44px; box-sizing: border-box; }
+    .sub-tabs-bar { position: relative; display: flex; justify-content: space-between; align-items: center; background: var(--bg); z-index: 99; border-bottom: 1px solid var(--border); padding: 0 12px; height: 36px; box-sizing: border-box; }
     .sub-tabs-actions:empty { display: none !important; }
-    .sub-tabs { display: flex; gap: 8px; margin: 0; padding: 0; overflow-x: auto; align-items: center; height: 100%; scrollbar-width: none; }
-    .system-action-btn { background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-weight: bold; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; padding: 0; font-size: 1.1rem; transition: background 0.2s; margin: 0; box-sizing: border-box; }
-    .system-action-btn:hover { background: var(--input-bg); }
-    yenvui-dropdown { display: inline-flex; align-items: center; }
-    .sub-tab { cursor: pointer; padding: 0 12px; font-size: 0.9rem; font-weight: bold; color: var(--text-muted); white-space: nowrap; transition: all 0.2s; height: 100%; display: flex; align-items: center; border-top: 2px solid transparent; border-bottom: 2px solid transparent; box-sizing: border-box; outline: none; }
+    .sub-tabs { display: flex; gap: 2px; margin: 0; padding: 0; overflow-x: auto; align-items: center; height: 100%; scrollbar-width: none; }
+    .system-action-btn, .masthead-action-rail-cell {
+        width: 44px !important;
+        height: auto !important;
+        align-self: stretch !important;
+        flex-shrink: 0 !important;
+        border-radius: 0 !important;
+        border: none !important;
+        border-left: 1px solid var(--border) !important;
+        background: var(--rail-bg, rgba(255,255,255,0.02)) !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+        color: var(--text-muted) !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-sizing: border-box;
+    }
+    .system-action-btn:hover, .masthead-action-rail-cell:hover {
+        background: var(--rail-hover, rgba(99, 102, 241, 0.22)) !important;
+        color: var(--text) !important;
+    }
+    /* Ensure any icons inside these buttons inherit the forced text color */
+    .system-action-btn i, .system-action-btn svg, .masthead-action-rail-cell i, .masthead-action-rail-cell svg {
+        color: currentColor !important;
+    }
+    yenvui-dropdown { display: inline-flex; align-items: center; height: 100%; }
+    .sub-tab { cursor: pointer; padding: 0 10px; margin-right: 0; font-size: 0.9rem; font-weight: 500; color: var(--text-muted); white-space: nowrap; transition: all 0.2s; height: 100%; display: flex; align-items: center; border-bottom: 2px solid transparent; box-sizing: border-box; outline: none; }
     .sub-tab:hover { color: var(--text); }
-    .sub-tab.active { color: var(--text); border-bottom: 2px solid var(--btn); }
+    .sub-tab.active { color: var(--text); border-bottom: 2px solid var(--intent-primary); }
 
     :host-context([data-theme="e-ink"]) .sub-tab {
         transition: none !important;

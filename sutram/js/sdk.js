@@ -74,6 +74,20 @@ export function bindStoreInput(store, statePath, currentValue, options = {}) {
     }
     return html`<sutram-input id=${id} type=${type} style=${style} .label=${label} placeholder=${placeholder} min=${min||''} max=${max||''} .value=${currentValue || ''} ?inline=${inline} ?flush=${flush} @sutram-input-changed=${handleInput}></sutram-input>`;
 }
+let globalSutramThemeObserver = null;
+const sutramThemeSubscribers = new Set();
+
+function subscribeSutramToTheme(element) {
+    sutramThemeSubscribers.add(element);
+    element.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
+    if (!globalSutramThemeObserver) {
+        globalSutramThemeObserver = new MutationObserver(() => {
+            const theme = document.body.getAttribute('data-theme') || 'dark';
+            sutramThemeSubscribers.forEach(el => el.setAttribute('data-theme', theme));
+        });
+        globalSutramThemeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
+    }
+}
 
 export class SutramElement extends LitElement {
     constructor() {
@@ -115,6 +129,19 @@ export class SutramElement extends LitElement {
             proto._isSafeRender = true;
         }
     }
+    observeTheme() {
+        subscribeSutramToTheme(this);
+    }
+
+    registerOutsideClick(callback) {
+        const listener = (e) => {
+            if (!e.composedPath().includes(this)) {
+                callback(e);
+            }
+        };
+        this.registerGlobalListener('click', document, listener);
+    }
+
     subscribe(storeOrName, selectorOrListener, listener = undefined) {
         let store = storeOrName;
         if (typeof storeOrName === 'string') {
@@ -170,10 +197,10 @@ export class SutramElement extends LitElement {
             composed: true 
         }));
     }
-
     disconnectedCallback() {
         super.disconnectedCallback();
-        
+        sutramThemeSubscribers.delete(this);
+
         // Memory safety: automated teardown of all subscriptions and listeners
         this._storeUnsubs.forEach(unsub => unsub());
         this._storeUnsubs = [];
@@ -215,14 +242,23 @@ export const ExtensionRegistry = {
             this.compileLayout();
         }
     },
-
     getLayoutSlots: function() {
         const slots = [];
         this._manifests.forEach((manifest, extName) => {
             if (manifest.layoutSlots && Array.isArray(manifest.layoutSlots)) {
                 slots.push(...manifest.layoutSlots.map(s => {
                     const slotType = (s.slot || '').startsWith('slots:') ? s.slot : 'slots:' + s.slot;
-                    return { ...s, slot: slotType, extName };
+
+                    // Legacy Adapter: Map targetParent to spatial columns for the Strangler Fig rollout
+                    let pCol = s.preferredColumn;
+                    if (!pCol && s.targetParent) {
+                        const t = s.targetParent.toLowerCase();
+                        if (t === 'context' || t === 'library') pCol = 'left';
+                        else if (t === 'edit' || t === 'ctrl') pCol = 'center';
+                        else pCol = 'right';
+                    }
+
+                    return { ...s, slot: slotType, extName, preferredColumn: pCol || 'center' };
                 }));
             }
         });
@@ -471,7 +507,42 @@ toggleSelection: (id, entityType, data) => {
 },
 clearSelection: () => SelectionStore.setState({ selectedItems: new Map() })
 });
-
 export const EnvironmentStore = createSutramStore('Environment', {
     isOffline: false
+});
+
+export const LayoutStore = createSutramStore('Layout', {
+    columns: {
+        left: { active: null, pinned: [] },
+        center: { active: null, pinned: [] },
+        right: { active: null, pinned: [] }
+    },
+    focusedColumn: 'center',
+    mobileViewportIndex: 1, // 0 = left, 1 = center, 2 = right
+    capacity: 3, // 1, 2, or 3 columns
+
+    pinToColumn: (column, entity) => LayoutStore.setState((state) => ({
+        columns: { 
+            ...state.columns, 
+            [column]: { ...state.columns[column], pinned: [...state.columns[column].pinned, entity] } 
+        }
+    })),
+
+    unpinFromColumn: (column, entityId) => LayoutStore.setState((state) => ({
+        columns: { 
+            ...state.columns, 
+            [column]: { ...state.columns[column], pinned: state.columns[column].pinned.filter(e => e.id !== entityId) } 
+        }
+    })),
+
+    setFocusedColumn: (col) => LayoutStore.setState({ focusedColumn: col }),
+    setMobileViewport: (index) => LayoutStore.setState({ mobileViewportIndex: index }),
+    setCapacity: (cap) => LayoutStore.setState({ capacity: cap }),
+
+    evictProjection: (id) => {
+        // Dispatch a global intent so the shell and domain stores can perform surgical garbage collection
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('sutram-evict-projection', { detail: { id }, bubbles: true, composed: true }));
+        }
+    }
 });
