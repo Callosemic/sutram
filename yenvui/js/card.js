@@ -1,5 +1,6 @@
 import { html, css } from 'lit';
 import { YenvuiBase } from './yenvui-base.js';
+import { YenvuiGestureController } from './physics.js';
 
 export class YenvuiCard extends YenvuiBase {
     static properties = {
@@ -20,70 +21,70 @@ export class YenvuiCard extends YenvuiBase {
     };
     static styles = css`
         :host { display: block; margin-bottom: var(--card-margin-bottom, 12px); position: relative; touch-action: pan-x pan-y; }
-        .selection-gutter {
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 20px;
-            z-index: 5;
-            cursor: pointer;
-            touch-action: pan-y;
-        }
         .card-wrapper {
             touch-action: pan-x pan-y;
-            background: var(--input-bg, #2d2d2d);
-            border: 1px solid var(--border, #444);
-            border-top: var(--card-border-top, 1px solid var(--border, #444));
-            border-left: 4px solid var(--card-intent, #64748b);
-            padding-left: 10px;
-            border-top-left-radius: var(--card-border-top-left-radius, var(--card-border-radius, 6px));
-            border-top-right-radius: var(--card-border-top-right-radius, var(--card-border-radius, 6px));
-            border-bottom-left-radius: var(--card-border-bottom-left-radius, var(--card-border-radius, 6px));
-            border-bottom-right-radius: var(--card-border-bottom-right-radius, var(--card-border-radius, 6px));
+            background: var(--bg-card, var(--input-bg));
+            border: 1px solid var(--border);
+            border-top: var(--card-border-top, 1px solid var(--border));
+            border-top-left-radius: var(--card-border-top-left-radius, var(--card-border-radius, 8px));
+            border-top-right-radius: var(--card-border-top-right-radius, var(--card-border-radius, 8px));
+            border-bottom-left-radius: var(--card-border-bottom-left-radius, var(--card-border-radius, 8px));
+            border-bottom-right-radius: var(--card-border-bottom-right-radius, var(--card-border-radius, 8px));
             display: flex;
             flex-direction: row;
             position: relative;
             box-sizing: border-box;
             overflow: hidden;
-            box-shadow: var(--card-box-shadow, 0 4px 12px rgba(0,0,0,0.1));
-            transition: border-color 0.2s, box-shadow 0.2s, border-left-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--card-box-shadow, 0 1px 3px rgba(0,0,0,0.05));
+            transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
         }
-        .top-shadow {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 6px;
-            background: var(--card-top-shadow, transparent);
-            pointer-events: none;
-            z-index: 20;
-            border-top-left-radius: var(--card-border-top-left-radius, 0);
-            border-top-right-radius: var(--card-border-top-right-radius, 0);
+        /* Switch to edge-to-edge flush mode when the container column becomes narrow */
+        @container (max-width: 480px) {
+            .card-wrapper {
+                border-left-width: 0 !important;
+                border-right-width: 0 !important;
+                border-radius: 0 !important;
+                margin-bottom: 0 !important;
+                border-bottom: 1px solid var(--border) !important;
+            }
+        }
+        .selection-strip {
+            width: 14px !important;
+            min-width: 14px !important;
+            max-width: 14px !important;
+            flex-shrink: 0 !important;
+            cursor: pointer;
+            box-sizing: border-box !important;
+            position: relative;
+            background: transparent !important;
+            border-left: 4px solid var(--card-intent, var(--intent-primary));
+            border-right: none !important;
+            border-top: none !important;
+            border-bottom: none !important;
+            opacity: var(--peek-rail-opacity, 1);
+            transition: opacity 0.3s ease, border-left-width 0.15s ease, box-shadow 0.15s ease;
         }
         @media (hover: hover) {
-            .selection-gutter:hover + .card-wrapper {
-                border-left-width: 14px;
-                padding-left: 0px;
-                border-color: var(--card-intent, #3b82f6);
+            .selection-strip:hover {
+                border-left-width: 6px;
             }
             .card-wrapper:hover {
-                border-color: var(--card-intent, #3b82f6);
+                border-color: var(--border-hover, var(--intent-primary));
+                background: var(--bg-card-hover, var(--bg-hover));
             }
         }
-        :host([_overlayactive]) {
-            z-index: 10;
-        }
+        :host([selected]) .card-wrapper,
         :host([_overlayactive]) .card-wrapper {
-            border-color: var(--card-intent, #3b82f6);
+            background: var(--bg-card-selected, color-mix(in srgb, var(--card-intent, var(--intent-primary)) var(--intent-bg-mix, 15%), var(--input-bg))) !important;
+            border-color: var(--border-highlight, var(--card-intent, var(--intent-primary))) !important;
         }
-        :host([selected]) .card-wrapper {
-            border-left-width: 14px;
-            padding-left: 0px;
-            border-color: var(--card-intent, #3b82f6);
-            outline: 1px solid var(--card-intent, #3b82f6);
-            outline-offset: -1px;
+
+        :host([selected]) .selection-strip {
+            border-left-width: 14px !important;
+            border-left-color: var(--card-intent, var(--intent-primary)) !important;
+            box-shadow: 2px 0 10px rgba(99, 102, 241, 0.45);
         }
+
         :host([stale]) .card-wrapper {
             opacity: 0.65;
             filter: grayscale(0.3);
@@ -95,17 +96,20 @@ export class YenvuiCard extends YenvuiBase {
             display: flex;
             flex-direction: column;
             min-width: 0;
+            padding: 12px;
+            transform: translateY(var(--peek-content-y, 0px));
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .card-header {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            padding: 12px 15px 8px 15px;
+            margin-bottom: 4px;
         }
         .card-title {
             font-weight: bold;
             color: var(--text, #e0e0e0);
-            font-size: 1.05rem;
+            font-size: 0.95rem;
             display: flex;
             align-items: center;
             gap: 8px;
@@ -113,21 +117,21 @@ export class YenvuiCard extends YenvuiBase {
             word-break: break-word;
         }
         .card-desc {
-            padding: 0 15px 8px 15px;
             color: var(--text-muted, #888);
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             overflow-wrap: anywhere;
             word-break: break-word;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
+            margin-bottom: 4px;
         }
         .card-body {
-            padding: 0 15px 6px 15px;
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            min-width: 0;
         }
         :host([flush]) .card-body {
             padding: 0;
@@ -136,10 +140,13 @@ export class YenvuiCard extends YenvuiBase {
             overflow-wrap: anywhere;
             word-break: break-word;
         }
+        ::slotted(p), ::slotted(h1), ::slotted(h2), ::slotted(h3), ::slotted(h4), ::slotted(h5), ::slotted(h6) {
+            margin-block-start: 0;
+            margin-block-end: 0;
+        }
         .card-detail {
-            padding: 0 15px 12px 15px;
             font-family: var(--font-mono, monospace);
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             color: var(--text-muted, #888);
             opacity: 0.8;
             white-space: nowrap;
@@ -149,179 +156,157 @@ export class YenvuiCard extends YenvuiBase {
         @container (max-width: 480px) {
             .card-detail-main { display: none; }
         }
-        .trigger-bar {
-            width: 22px;
+        .action-grip-rail {
+            width: 26px;
             flex-shrink: 0;
-            background: var(--card-intent, var(--intent-neutral, #64748b));
-            cursor: pointer;
-            transition: filter 0.2s;
+            background: var(--rail-bg, rgba(255,255,255,0.02));
+            border-left: 1px solid var(--border);
             display: none;
             align-items: center;
             justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 1.2rem;
-            line-height: 1;
+            cursor: pointer;
             user-select: none;
-            border-top-right-radius: var(--card-border-top-right-radius, var(--card-border-radius, 5px));
-            border-bottom-right-radius: var(--card-border-bottom-right-radius, var(--card-border-radius, 5px));
+            opacity: var(--peek-rail-opacity, 1);
+            transition: opacity 0.3s ease, background 0.15s ease, color 0.15s ease;
         }
-        :host([has-actions]) .trigger-bar {
+        :host([has-actions]) .action-grip-rail {
             display: flex;
         }
-        .trigger-bar:hover {
-            filter: brightness(1.2);
-        }
-        .trigger-icon {
-            transition: transform 0.2s ease;
-            margin-top: -2px;
-        }
-        :host([_overlayactive]) .trigger-icon {
-            transform: rotate(180deg);
+        .action-grip-rail:hover {
+            background: var(--rail-hover, rgba(99, 102, 241, 0.22));
+            color: var(--text);
         }
         .actions-tray {
             position: absolute;
-            left: -1px;
-            right: 21px;
-            top: -1px;
-            min-height: calc(100% + 2px);
-            box-sizing: border-box;
-            background: var(--input-bg, #2d2d2d);
-            background: color-mix(in srgb, var(--input-bg, #2d2d2d) 75%, transparent);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
-            border: 1px solid var(--border, #444);
-            border-right: none;
+            left: 0;
+            right: 26px;
+            top: 0;
+            bottom: 0;
+            background: var(--bg-card, var(--input-bg));
+            background: color-mix(in srgb, var(--bg-card, var(--input-bg)) 94%, transparent);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             display: flex;
             flex-direction: column;
             justify-content: center;
-            /* Pass CSS variables to penetrate slotted async buttons */
-            --btn-padding: 8px 16px;
-            --btn-font-size: 0.85rem;
-            padding: 6px 10px 0px 10px;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 8px;
             opacity: 0;
             pointer-events: none;
-            transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform: translateX(10px);
+            transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
             z-index: 10;
-            border-radius: 6px 0 0 6px;
-            transform: scale(0.98);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
         }
         .actions-wrapper {
             display: flex;
             justify-content: flex-start;
             align-items: center;
             flex-wrap: nowrap;
-            gap: 8px;
-            margin-top: 0;
+            gap: 6px;
             overflow-x: auto;
             scrollbar-width: none;
-            -webkit-overflow-scrolling: touch;
-            padding-bottom: 8px;
             width: 100%;
             box-sizing: border-box;
-        }
-        .actions-wrapper::before {
-            content: '';
-            margin-left: auto;
         }
         .actions-wrapper::-webkit-scrollbar {
             display: none;
         }
-
-        /* Show slim scrollbars for users with a mouse */
-        @media (pointer: fine) {
-            .actions-wrapper {
-                scrollbar-width: thin;
-                scrollbar-color: var(--border, #444) transparent;
-                padding-bottom: 8px;
-            }
-            .actions-wrapper::-webkit-scrollbar {
-                display: block;
-                height: 6px;
-            }
-            .actions-wrapper::-webkit-scrollbar-thumb {
-                background-color: var(--border, #444);
-                border-radius: 10px;
-            }
+        .actions-wrapper::before, .actions-wrapper::after {
+            content: ''; margin: auto;
         }
 
         :host([_overlayactive]) .actions-tray {
             opacity: 1;
             pointer-events: auto;
-            transform: scale(1);
+            transform: translateX(0);
         }
         .tray-caption {
-            position: absolute;
-            top: 4px;
-            left: 10px;
-            right: 10px;
             font-size: 0.65rem;
-            font-weight: bold;
-            color: var(--text-muted, #888);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            font-weight: 700;
+            font-family: var(--font-mono, monospace);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            user-select: none;
+            max-width: 90%;
             text-align: center;
-            pointer-events: none;
+            margin-bottom: 4px;
         }
-        :host([data-theme="light"]) .actions-tray {
-            background: #ffffff;
-            background: color-mix(in srgb, #ffffff 75%, transparent);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-        }
-        :host([data-theme="e-ink"]) .actions-tray {
-            background: #ffffff;
-            backdrop-filter: none;
-            -webkit-backdrop-filter: none;
-            border: 2px solid #000000;
-            border-right: none;
-            box-shadow: 4px 4px 0 #14b8a6;
-        }
+
         /* Unstyled slots for host-injected buttons */
-        ::slotted(button) {
-            background: var(--input-bg);
-            color: var(--text);
-            border: 1px solid var(--border);
-            padding: var(--btn-padding) !important;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: var(--btn-font-size) !important;
-            transition: all 0.2s;
-            box-sizing: border-box;
+        ::slotted(button), ::slotted(sutram-async-btn) {
+            height: 30px;
+            padding: 0 10px !important;
+            border-radius: 6px;
+            font-size: 0.75rem !important;
+            font-weight: 700;
             display: inline-flex !important;
             align-items: center;
             justify-content: center;
+            gap: 5px;
+            cursor: pointer;
+            transition: filter 0.15s ease, transform 0.1s ease;
+            white-space: nowrap;
+            user-select: none;
             margin: 0 !important;
+            background: var(--input-bg);
+            color: var(--text);
+            border: 1px solid var(--border);
         }
         ::slotted(button:hover) {
-            background: var(--bg-hover);
+            filter: brightness(1.12);
         }
+
         /* E-Ink High Contrast Overrides */
-        :host([data-theme="e-ink"]) .card-wrapper {
-            border: 2px solid #8b5cf6 !important;
-            box-shadow: 4px 4px 0 #14b8a6 !important;
+        :host-context([data-theme="e-ink"]) .card-wrapper {
+            border: 2px solid var(--card-intent, #8b5cf6) !important;
+            box-shadow: 3px 4px 0 #14b8a6 !important; /* Colorful Teal Bottom Shadow */
             background: #ffffff !important;
             color: #000000 !important;
             transition: none !important;
         }
-        :host([selected][data-theme="e-ink"]) .card-wrapper {
-            border-left-width: 14px !important;
-            padding-left: 0px !important;
+        :host-context([data-theme="e-ink"]):host([selected]) .card-wrapper,
+        :host-context([data-theme="e-ink"]):host([_overlayactive]) .card-wrapper {
+            border: 2px solid #ec4899 !important;
+            box-shadow: 3px 4px 0 #eab308 !important; /* Yellow Bottom Shadow on Selected */
         }
-        :host([data-theme="e-ink"]) .actions-tray {
+
+        :host-context([data-theme="e-ink"]) .selection-strip {
+            border-left-width: 5px !important;
+        }
+        :host-context([data-theme="e-ink"]):host([selected]) .selection-strip,
+        :host-context([data-theme="e-ink"]):host([_overlayactive]) .selection-strip {
+            border-left-width: 14px !important;
+            border-left-color: #ec4899 !important; /* Hot Pink thick slab */
+        }
+
+        :host-context([data-theme="e-ink"]) .action-grip-rail {
+            background: #8b5cf6 !important;
+            border-left: 2px solid #000000 !important;
+            color: #ffffff !important;
+            font-weight: 900 !important;
+        }
+        :host-context([data-theme="e-ink"]):host([selected]) .action-grip-rail,
+        :host-context([data-theme="e-ink"]):host([_overlayactive]) .action-grip-rail {
+            background: #ec4899 !important;
+        }
+
+        :host-context([data-theme="e-ink"]) .actions-tray {
+            background: #ffffff !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            border-right: 2px solid #000000 !important;
             transition: none !important;
             transform: none !important;
         }
-        :host([data-theme="e-ink"]) .card-title {
+        :host-context([data-theme="e-ink"]) .tray-caption,
+        :host-context([data-theme="e-ink"]) .card-title {
             color: #000000 !important;
             font-weight: 900 !important;
         }
-        :host([data-theme="e-ink"]) .card-desc,
-        :host([data-theme="e-ink"]) .card-detail {
+        :host-context([data-theme="e-ink"]) .card-desc,
+        :host-context([data-theme="e-ink"]) .card-detail {
             color: #000000 !important;
             opacity: 1 !important;
             font-weight: 600 !important;
@@ -340,10 +325,10 @@ export class YenvuiCard extends YenvuiBase {
             padding: 6px 12px;
         }
         :host([compact]) .card-header {
-            padding: 0;
+            margin-bottom: 0;
         }
         :host([compact]) .card-title {
-            font-size: 0.95rem;
+            font-size: 0.85rem;
         }
         :host([compact]) .card-desc,
         :host([compact]) .card-body {
@@ -358,11 +343,49 @@ export class YenvuiCard extends YenvuiBase {
         super();
         this._overlayActive = false;
         this._hasActions = false;
-        this._touchStartX = null;
-        this._touchStartY = null;
-        this._isSwipingHorizontal = null;
         this.selected = false;
-        this._docClickListener = this._handleDocumentClick.bind(this);
+
+        this._gestureController = new YenvuiGestureController(this, {
+            scrollableContainerSelector: 'actions-wrapper',
+            onPanStart: (startX, startY) => {
+                const rect = this.getBoundingClientRect();
+                this._cardWidth = rect.width;
+                this._localStartX = startX - rect.left;
+                const wrapper = this.shadowRoot.querySelector('.actions-wrapper');
+                this._actionsScrollLeft = wrapper ? wrapper.scrollLeft : null;
+            },
+            onPanEnd: (endX, endY, axis) => {
+                if (axis !== 'horizontal') return;
+
+                const deltaX = this._gestureController.startX - endX;
+
+                if (Math.abs(deltaX) > 30) {
+                    const isLeftSwipe = deltaX > 30;   // Right-to-Left
+                    const isRightSwipe = deltaX < -30; // Left-to-Right
+
+                    const isLeftSide = this._localStartX < Math.max((this._cardWidth * 0.25), 70);
+
+                    if (isLeftSide) {
+                        if (isRightSwipe && !this.disableSelection) {
+                            this._toggleSelection();
+                        }
+                    } else {
+                        const hasActions = this._hasActions || !!this.querySelector('[slot="actions"]');
+                        if (hasActions) {
+                            if (isLeftSwipe) {
+                                this._overlayActive = true;
+                            } else if (isRightSwipe) {
+                                if (this._actionsScrollLeft !== null && this._actionsScrollLeft > 0) {
+                                    // User is scrolling the buttons back to the start; don't close the drawer yet
+                                } else {
+                                    this._overlayActive = false;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
         this._overlayListener = (e) => {
             if (e.detail.source !== this && this._overlayActive) {
                 this._overlayActive = false;
@@ -377,54 +400,15 @@ export class YenvuiCard extends YenvuiBase {
     connectedCallback() {
         super.connectedCallback();
         this.addEventListener('focusout', this._focusOutListener);
-        document.addEventListener('click', this._docClickListener);
         document.addEventListener('yenvui-overlay-opened', this._overlayListener);
-        // Native Edge-Swipe Navigation Defeater
-        this._touchMoveListener = (e) => {
-            if (this._touchStartX === null) return;
-            const currentX = e.changedTouches[0].clientX;
-            const currentY = e.changedTouches[0].clientY;
-            const diffX = Math.abs(this._touchStartX - currentX);
-            const diffY = Math.abs(this._touchStartY - currentY);
-
-            // Lock the gesture axis upon initial 5px of movement
-            if (this._isSwipingHorizontal === null) {
-                if (diffX > 5 || diffY > 5) {
-                    this._isSwipingHorizontal = diffX > diffY;
-                }
-            }
-            // If the gesture is horizontal, forcefully intercept the touch event
-            // to prevent the mobile browser from triggering "Swipe to Go Back"
-            if (this._isSwipingHorizontal) {
-                let shouldPrevent = true;
-                const path = e.composedPath();
-                const wrapper = path.find(el => el.classList && el.classList.contains('actions-wrapper'));
-
-                if (wrapper) {
-                    const isRightSwipe = currentX > this._touchStartX;
-                    const isLeftSwipe = currentX < this._touchStartX;
-                    const maxScroll = Math.max(0, wrapper.scrollWidth - wrapper.clientWidth);
-
-                    if (isRightSwipe && wrapper.scrollLeft > 0) {
-                        shouldPrevent = false;
-                    } else if (isLeftSwipe && wrapper.scrollLeft < maxScroll) {
-                        shouldPrevent = false;
-                    }
-                }
-
-                if (shouldPrevent) {
-                    e.preventDefault();
-                }
-            }
-        };
-        this.addEventListener('touchmove', this._touchMoveListener, { passive: false });
+        this.registerOutsideClick(() => {
+            if (this._overlayActive) this._overlayActive = false;
+        });
     }
 
     disconnectedCallback() {
         super.disconnectedCallback();
-        this.removeEventListener('touchmove', this._touchMoveListener);
         this.removeEventListener('focusout', this._focusOutListener);
-        document.removeEventListener('click', this._docClickListener);
         document.removeEventListener('yenvui-overlay-opened', this._overlayListener);
     }
     updated(changedProperties) {
@@ -445,24 +429,6 @@ export class YenvuiCard extends YenvuiBase {
         }
     }
 
-    _handleDocumentClick(e) {
-        const path = e.composedPath();
-        if (!path.includes(this) && this._overlayActive) {
-            this._overlayActive = false;
-        }
-    }
-    _handleTouchStart(e) {
-        this._touchStartX = e.changedTouches[0].clientX;
-        this._touchStartY = e.changedTouches[0].clientY;
-        const rect = this.getBoundingClientRect();
-        this._cardWidth = rect.width;
-        this._localStartX = this._touchStartX - rect.left;
-        this._isSwipingHorizontal = null;
-
-        const wrapper = e.composedPath().find(el => el.classList && el.classList.contains('actions-wrapper'));
-        this._actionsScrollLeft = wrapper ? wrapper.scrollLeft : null;
-    }
-
     _toggleSelection() {
         this.selected = !this.selected;
         this.dispatchEvent(new CustomEvent('yenvui-card-select-toggled', {
@@ -470,44 +436,6 @@ export class YenvuiCard extends YenvuiBase {
             bubbles: true,
             composed: true
         }));
-    }
-    _handleTouchEnd(e) {
-        if (this._touchStartX === null) return;
-        const touchEndX = e.changedTouches[0].clientX;
-        const touchEndY = e.changedTouches[0].clientY;
-        const deltaX = this._touchStartX - touchEndX;
-        const deltaY = this._touchStartY - touchEndY;
-
-        // Ensure horizontal swipe is dominant to prevent accidental triggers during vertical scrolling
-        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 30) {
-            const isLeftSwipe = deltaX > 30;   // Right-to-Left
-            const isRightSwipe = deltaX < -30; // Left-to-Right
-            // Widen the hit target to 25% for better ergonomics, and guarantee at least 70px
-            const isLeftSide = this._localStartX < Math.max((this._cardWidth * 0.25), 70);
-
-            if (isLeftSide) {
-                if (isRightSwipe && !this.disableSelection) {
-                    this._toggleSelection();
-                }
-            } else {
-                const hasActions = this._hasActions || !!this.querySelector('[slot="actions"]');
-                if (hasActions) {
-                    if (isLeftSwipe) {
-                        this._overlayActive = true;
-                    } else if (isRightSwipe) {
-                        if (this._actionsScrollLeft !== null && this._actionsScrollLeft > 0) {
-                            // User is scrolling the buttons back to the start; don't close the drawer yet
-                        } else {
-                            this._overlayActive = false;
-                        }
-                    }
-                }
-            }
-        }
-
-        this._touchStartX = null;
-        this._touchStartY = null;
-        this._isSwipingHorizontal = null;
     }
     firstUpdated() {
         this._checkActions();
@@ -528,137 +456,89 @@ export class YenvuiCard extends YenvuiBase {
     }
     render() {
         return html`
-            ${!this.disableSelection ? html`<div class="selection-gutter" title="Select Item" @click=${(e) => { e.stopPropagation(); this._toggleSelection(); }}></div>` : ''}
             <div class="card-wrapper" style="--card-intent: ${this.intentColor || 'var(--intent-neutral)'}"
                 @mouseleave=${() => { if (window.matchMedia('(hover: hover)').matches) this._overlayActive = false; }}
-                @touchstart=${this._handleTouchStart}
-                @touchend=${this._handleTouchEnd}>
+                @pointerdown=${(e) => this._gestureController.start(e)}>
 
-                <div class="content-col">
-                    <div class="card-header">
-                        <div class="card-title">
-                            ${this.icon ? html`<span>${this.icon}</span>` : ''}
-                            ${this.titleText}
+                ${!this.disableSelection ? html`<div class="selection-strip" title="Select Item" @click=${(e) => { e.stopPropagation(); this._toggleSelection(); }}></div>` : ''}
+                <div class="content-col" @click=${(e) => {
+                    this.dispatchEvent(new CustomEvent('yenvui-card-clicked', {
+                        detail: { filename: this.filename, isSource: true },
+                        bubbles: true,
+                        composed: true
+                    }));
+                }} style="cursor: pointer; padding: 12px; min-width: 0;">
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; gap: 8px;">
+                        <div class="card-title" style="display: flex; align-items: center; gap: 6px; font-weight: bold; color: var(--text); font-size: 0.85rem; min-width: 0; overflow: hidden;">
+                            ${this.icon && this.icon.startsWith('<i') ? html`<div style="flex-shrink: 0;" .innerHTML=${this.icon}></div>` : (this.icon ? html`<span style="flex-shrink: 0;">${this.icon}</span>` : '')}
+                            <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${this.titleText}</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                            <slot name="header-actions"></slot>
+                            ${this.detailSuffix ? html`
+                                <div class="card-detail-suffix" style="font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); opacity: 0.8; flex-shrink: 0; margin-left: 8px;">
+                                    ${this.detailSuffix.replace(/^[\s|]+/, '')}
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
-                    ${this.descriptionText ? html`<div class="card-desc">${this.descriptionText}</div>` : ''}
+
+                    ${this.descriptionText ? html`
+                        <div class="card-desc" style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                            ${this.descriptionText}
+                        </div>
+                    ` : ''}
+                    ${this.detailText ? html`
+                        <div class="card-detail" style="font-family: var(--font-mono); font-size: 10px; color: var(--card-intent, var(--intent-primary)); opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            ${this.detailPrefix || ''}${this.detailText}
+                        </div>
+                    ` : ''}
+
                     <div class="card-body">
                         <slot></slot>
                     </div>
-                    ${(this.detailText || this.detailPrefix || this.detailSuffix) ? html`
-                        <div class="card-detail">
-                            ${this.detailPrefix ? html`<span class="card-detail-prefix">${this.detailPrefix}</span>` : ''}
-                            ${this.detailText ? html`<span class="card-detail-main">${this.detailText}</span>` : ''}
-                            ${this.detailSuffix ? html`<span class="card-detail-suffix">${this.detailSuffix}</span>` : ''}
-                        </div>
-                    ` : ''}
+
                     <slot name="detail"></slot>
                     <slot name="inline-actions"></slot>
                 </div>
 
-                <div class="trigger-bar"  
+                <div class="action-grip-rail"  
                     @pointerenter=${(e) => { if (e.pointerType === 'mouse') this._overlayActive = true; }}
                     @click=${(e) => { e.stopPropagation(); e.preventDefault(); this._overlayActive = !this._overlayActive; }}>
-                    <span class="trigger-icon">‹</span>
+                    <i data-lucide=${this._overlayActive ? "chevron-right" : "chevron-left"} style="width: 14px; height: 14px;"></i>
                 </div>
-                <div class="actions-tray" @click=${(e) => { if(e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.tagName.includes('YENVUI')) this._overlayActive = false; }}>
+
+                <div class="actions-tray" @click=${(e) => { if(e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.tagName.includes('YENVUI') || e.target.tagName.includes('SUTRAM')) this._overlayActive = false; }}>
                     <span class="tray-caption">${this.titleText}</span>
                     <div class="actions-wrapper">
                         <slot name="actions" @slotchange=${this._handleSlotChange}></slot>
                     </div>
                 </div>
             </div>
-            <div class="top-shadow"></div>
         `;
+    }
+
+    updated(changedProperties) {
+        super.updated(changedProperties);
+        if (changedProperties.has('_overlayActive') && this._overlayActive) {
+            this.dispatchEvent(new CustomEvent('yenvui-overlay-opened', {
+                bubbles: true,
+                composed: true,
+                detail: { source: this }
+            }));
+        }
+
+        // Initialize Lucide icons if they exist in the rendered shadow dom
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+            window.lucide.createIcons({ root: this.shadowRoot });
+        }
+
+        // Self-Healing Wrapper: Reset transient overlay state if Lit recycles the DOM node for a new item
+        if (changedProperties.has('entityData') || changedProperties.has('filename') || changedProperties.has('titleText')) {
+            if (this._overlayActive) {
+                this._overlayActive = false;
+            }
+        }
     }
 }
 customElements.define('yenvui-card', YenvuiCard);
-
-// ============================================================================
-// GLOBAL EDGE-SWIPE COORDINATOR (Module Scope)
-// ============================================================================
-// Safari ignores CSS overscroll-behavior for extreme edge swipes. 
-// We lock the OS gesture natively at the document level and resolve the 
-// drop target to allow global card selection without requiring a DOM wrapper.
-let _edgeSwipeStartX = null;
-let _edgeSwipeStartY = null;
-let _isEdgeSwipe = false;
-let _globalSwipeAxis = null;
-
-function getDeepClosestFromPoint(x, y, selector) {
-    let el = document.elementFromPoint(x, y);
-    while (el && el.shadowRoot) {
-        const deeper = el.shadowRoot.elementFromPoint(x, y);
-        if (!deeper || deeper === el) break;
-        el = deeper;
-    }
-    while (el) {
-        if (el.closest && el.closest(selector)) return el.closest(selector);
-        el = el.getRootNode().host;
-    }
-    return null;
-}
-
-function isElementInside(el, selector) {
-    while (el) {
-        if (el.closest && el.closest(selector)) return true;
-        el = el.getRootNode().host;
-    }
-    return false;
-}
-document.addEventListener('touchstart', (e) => {
-    if (e.touches[0].clientX < 30) {
-        _isEdgeSwipe = true;
-        _edgeSwipeStartX = e.touches[0].clientX;
-        _edgeSwipeStartY = e.touches[0].clientY;
-        _globalSwipeAxis = null;
-    } else {
-        _isEdgeSwipe = false;
-    }
-}, { passive: true });
-
-document.addEventListener('touchmove', (e) => {
-    if (_isEdgeSwipe && _edgeSwipeStartX !== null) {
-        // Wait for 5px of movement to mathematically lock the axis
-        if (_globalSwipeAxis === null) {
-            const dx = Math.abs(e.changedTouches[0].clientX - _edgeSwipeStartX);
-            const dy = Math.abs(e.changedTouches[0].clientY - _edgeSwipeStartY);
-            if (dx > 5 || dy > 5) {
-                _globalSwipeAxis = dx > dy ? 'horizontal' : 'vertical';
-            }
-        }
-
-        if (_globalSwipeAxis === 'horizontal') {
-            e.preventDefault(); // Kills Safari back-navigation & locks vertical drift
-        } else if (_globalSwipeAxis === 'vertical') {
-            _isEdgeSwipe = false; // Releases the lock to allow native vertical scrolling
-        }
-    }
-}, { passive: false });
-
-document.addEventListener('touchend', (e) => {
-    if (_isEdgeSwipe && _edgeSwipeStartX !== null) {
-        const endX = e.changedTouches[0].clientX;
-        const endY = e.changedTouches[0].clientY;
-        const deltaX = endX - _edgeSwipeStartX;
-        const deltaY = Math.abs(endY - _edgeSwipeStartY);
-
-        // Only intervene if the swipe started on the background padding/gutter.
-        const startedOnCard = isElementInside(e.target, 'yenvui-card');
-
-        // If it was a clean rightward swipe from the background
-        if (!startedOnCard && deltaX > 30 && deltaX > deltaY) {
-            const card = getDeepClosestFromPoint(endX, endY, 'yenvui-card');
-            if (card && !card.disableSelection) {
-                card.selected = !card.selected;
-                card.dispatchEvent(new CustomEvent('yenvui-card-select-toggled', {
-                    detail: { selected: card.selected },
-                    bubbles: true,
-                    composed: true
-                }));
-            }
-        }
-        _isEdgeSwipe = false;
-        _edgeSwipeStartX = null;
-    }
-});

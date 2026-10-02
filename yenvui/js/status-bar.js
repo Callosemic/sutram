@@ -8,11 +8,11 @@ export class YenvuiStatusBar extends LitElement {
     static styles = css`
         :host { display: block; width: 100%; flex-shrink: 0; z-index: 1000; }
         .bottom-bar {
-            width: 100%; box-sizing: border-box; height: 30px; 
-            background: var(--bg, #121212); border-top: 1px solid var(--border, #444); 
-            padding: 0 15px; font-family: var(--font-mono, monospace); 
-            font-size: 0.8rem; color: var(--text, #e0e0e0); font-weight: bold; 
-            line-height: 29px; white-space: nowrap; display: flex; 
+            width: 100%; box-sizing: border-box; height: 28px; 
+            background: var(--bg-deep, #05070a); border-top: 1px solid var(--border, #444); 
+            padding: 0 12px; font-family: var(--font-mono, monospace); 
+            font-size: 11px; color: var(--text-muted, #94a3b8); font-weight: normal; 
+            line-height: 27px; white-space: nowrap; display: flex; 
             justify-content: space-between; align-items: center;
         }
         .bottom-bar.error {

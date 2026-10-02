@@ -18,8 +18,8 @@ export class YenvuiTabs extends YenvuiBase {
         }
         .tabs-container {
             display: flex;
-            gap: 8px;
-            padding: 0 15px 0 3px;
+            gap: 2px;
+            padding: 0 15px 0 2px;
             margin: 0;
             overflow-x: auto;
             align-items: center;
@@ -34,16 +34,16 @@ export class YenvuiTabs extends YenvuiBase {
             display: none;
         }
         .tab-btn {
-            padding: 6px 12px;
+            padding: 6px 10px;
             cursor: pointer;
-            font-weight: bold;
+            font-weight: 500;
             color: var(--text-muted);
             background: transparent;
             border-radius: 4px;
             white-space: nowrap;
             border: 2px solid transparent;
             box-sizing: border-box;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             transition: all 0.2s;
             outline: none;
         }
@@ -89,7 +89,7 @@ export class YenvuiTabs extends YenvuiBase {
         /* E-Ink High Contrast Overrides */
         :host([data-theme="e-ink"]) .tab-btn {
             color: #000000 !important;
-            font-weight: 900 !important;
+            font-weight: 600 !important;
             border: 2px solid transparent;
             transition: none !important;
         }
@@ -147,7 +147,7 @@ export class YenvuiTabs extends YenvuiBase {
                     `)}
                 </div>
                 <!-- Projection slot for right-aligned header items (e.g., Settings dropdown) -->
-                <div style="display: flex; align-items: center; padding-right: 15px;">
+                <div style="display: flex; align-items: stretch; padding-right: 0;">
                     <slot name="header-actions"></slot>
                 </div>
             </div>

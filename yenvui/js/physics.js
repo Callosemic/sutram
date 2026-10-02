@@ -1,0 +1,156 @@
+// sutram/yenvui/js/physics.js
+
+/**
+ * Traverses Shadow DOM boundaries to find the deepest element at given coordinates.
+ */
+export function getDeepElementFromPoint(x, y, selector = null) {
+    let el = document.elementFromPoint(x, y);
+    while (el && el.shadowRoot) {
+        const deeper = el.shadowRoot.elementFromPoint(x, y);
+        if (!deeper || deeper === el) break;
+        el = deeper;
+    }
+    if (!selector) return el;
+    
+    while (el) {
+        if (el.closest && el.closest(selector)) return el.closest(selector);
+        if (el.matches && el.matches(selector)) return el;
+        // Duck-typing for yenVUI selection contracts
+        if (el.tagName && el.tagName.includes('-') && 'selected' in el && 'disableSelection' in el) return el;
+        el = el.getRootNode().host || el.parentElement;
+    }
+    return null;
+}
+
+/**
+ * Universal Gesture Controller
+ * Normalizes PointerEvents for unified desktop/mobile dragging while 
+ * maintaining an invisible TouchEvent listener to defeat iOS Safari history swiping.
+ */
+export class YenvuiGestureController {
+    constructor(host, options = {}) {
+        this.host = host;
+        this.lockAxis = options.lockAxis || 'both';
+        this.onPanStart = options.onPanStart || (() => {});
+        this.onPanMove = options.onPanMove || (() => {});
+        this.onPanEnd = options.onPanEnd || (() => {});
+        this.scrollableContainerSelector = options.scrollableContainerSelector || null;
+        
+        this.active = false;
+        this.startX = 0;
+        this.startY = 0;
+        this.currentX = 0;
+        this.currentY = 0;
+        this.swipeAxis = null;
+        this.longPressDelay = options.longPressDelay || 0;
+        this.onLongPress = options.onLongPress || (() => {});
+        this._dragTimer = null;
+
+        this._boundPointerMove = this._handlePointerMove.bind(this);
+        this._boundPointerUp = this._handlePointerUp.bind(this);
+        this._boundTouchMove = this._handleTouchMove.bind(this);
+    }
+    start(e, overrides = {}) {
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
+        this._currentLockAxis = overrides.lockAxis || this.lockAxis;
+        if (this.active) {
+            this._handlePointerUp(e);
+        }
+
+        this.active = true;
+
+        // Globally disable text selection while a gesture is active
+        document.body.style.userSelect = 'none';
+        document.body.style.webkitUserSelect = 'none';
+
+        this.startX = e.clientX || (e.touches && e.touches[0].clientX);
+        this.startY = e.clientY || (e.touches && e.touches[0].clientY);
+        this.currentX = this.startX;
+        this.currentY = this.startY;
+        this.swipeAxis = null;
+        window.addEventListener('pointermove', this._boundPointerMove);
+        window.addEventListener('pointerup', this._boundPointerUp);
+        window.addEventListener('pointercancel', this._boundPointerUp);
+
+        // Safari edge-swipe defeater (passive: false required to intercept)
+        this.host.addEventListener('touchmove', this._boundTouchMove, { passive: false });
+
+        this.onPanStart(this.startX, this.startY, e);
+
+        if (this.longPressDelay > 0) {
+            this._dragTimer = setTimeout(() => {
+                this.onLongPress(this.currentX, this.currentY, e);
+            }, this.longPressDelay);
+        }
+    }
+
+    _handlePointerMove(e) {
+        if (!this.active) return;
+        this.currentX = e.clientX;
+        this.currentY = e.clientY;
+        if (!this.swipeAxis) {
+            const dx = Math.abs(this.currentX - this.startX);
+            const dy = Math.abs(this.currentY - this.startY);
+            if (dx > 5 || dy > 5) {
+                this.swipeAxis = dx > dy ? 'horizontal' : 'vertical';
+
+                if ((this._currentLockAxis === 'horizontal' && this.swipeAxis === 'vertical') ||
+                    (this._currentLockAxis === 'vertical' && this.swipeAxis === 'horizontal')) {
+                    this._handlePointerUp(e);
+                    return;
+                }
+
+                if (this._dragTimer) {
+                    clearTimeout(this._dragTimer);
+                    this._dragTimer = null;
+                }
+            }
+        }
+
+        this.onPanMove(this.currentX, this.currentY, this.swipeAxis, e);
+    }
+    _handlePointerUp(e) {
+        if (!this.active) return;
+        this.active = false;
+
+        // Restore text selection
+        document.body.style.userSelect = '';
+        document.body.style.webkitUserSelect = '';
+
+        if (this._dragTimer) {
+            clearTimeout(this._dragTimer);
+            this._dragTimer = null;
+        }
+
+        window.removeEventListener('pointermove', this._boundPointerMove);
+        window.removeEventListener('pointerup', this._boundPointerUp);
+        window.removeEventListener('pointercancel', this._boundPointerUp);
+        this.host.removeEventListener('touchmove', this._boundTouchMove);
+
+        this.onPanEnd(this.currentX, this.currentY, this.swipeAxis, e);
+    }
+
+    _handleTouchMove(e) {
+        if (!this.active || this.swipeAxis !== 'horizontal') return;
+        
+        let shouldPrevent = true;
+        if (this.scrollableContainerSelector) {
+            const path = e.composedPath();
+            const wrapper = path.find(el => el.classList && el.classList.contains(this.scrollableContainerSelector));
+            
+            if (wrapper) {
+                const currentX = e.changedTouches[0].clientX;
+                const isRightSwipe = currentX > this.startX;
+                const isLeftSwipe = currentX < this.startX;
+                const maxScroll = Math.max(0, wrapper.scrollWidth - wrapper.clientWidth);
+
+                if (isRightSwipe && wrapper.scrollLeft > 0) shouldPrevent = false;
+                else if (isLeftSwipe && wrapper.scrollLeft < maxScroll) shouldPrevent = false;
+            }
+        }
+
+        if (shouldPrevent) {
+            e.preventDefault();
+        }
+    }
+}

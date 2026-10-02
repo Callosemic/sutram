@@ -13,28 +13,36 @@ export class YenvuiToolbar extends YenvuiBase {
         hasFiltersOverride: { type: Boolean },
         bottomBorder: { type: Boolean }
     };
-    
     static styles = css`
         :host { display: contents; }
         .sticky-header {
             position: relative;
             flex-shrink: 0;
             padding: 0;
+            margin-bottom: 12px;
             background: var(--bg, #121212);
             z-index: 10;
-            border-bottom: 1px solid var(--border, #444);
             display: flex;
             flex-direction: column;
+            border-bottom: 1px solid var(--border);
         }
         .toolbar-row {
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 5px 15px;
+            padding: 0 0 0 12px;
             height: 44px;
             box-sizing: border-box;
+            background: var(--input-bg);
+            border: none;
+            border-radius: 0;
         }
-        .bottom-border { border-bottom: 1px solid var(--border, #444); }
+        yenvui-filter-dropdown {
+            height: 100%;
+            display: flex;
+            align-self: stretch;
+        }
+        .bottom-border { border-bottom: none; }
     `;
 
     constructor() {
@@ -67,7 +75,7 @@ export class YenvuiToolbar extends YenvuiBase {
                         style="flex: 1;"
                         .placeholder=${this.searchPlaceholder} 
                         .value=${this.searchQuery} 
-                        @yenvui-search-changed=${(e) => this.dispatchEvent(new CustomEvent('search-changed', { detail: e.detail, bubbles: true, composed: true }))}>
+                        @yenvui-search-changed=${(e) => this.dispatchEvent(new CustomEvent('yenvui-search-changed', { detail: e.detail, bubbles: true, composed: true }))}>
                     </yenvui-search-bar>
                     ${this.enableFilterDropdown ? html`
                         <yenvui-filter-dropdown filterText=${btnText} .hasFilters=${hasF}>

@@ -1,36 +1,43 @@
 /* ==========================================================================
    yenVUI: Universal Theme Tokens
    ========================================================================== */
-
 :root {
-    /* --- STRUCTURAL BACKGROUNDS --- */
-    --bg-deep: #0f0f0f;      /* Console base / Darkest backdrop */
-    --bg: #121212;           /* Standard application background */
-    --pane-bg: #1e1e1e;      /* Elevated surfaces (Modals, Panels) */
-    --input-bg: #2d2d2d;     /* Deep inputs and code blocks */
-    --bg-hover: #27272a;     /* Interactive surface hover states */
+   /* --- STRUCTURAL BACKGROUNDS --- */
+   --bg-deep: #05070a;      /* Console base / Darkest backdrop */
+   --bg: #05070a;           /* Standard application canvas */
+   --pane-bg: #080a10;      /* Elevated surfaces (Modals, Panels) */
+   --input-bg: #0b0d14;     /* Deep inputs and code blocks */
+   --bg-hover: #10131d;     /* Interactive surface hover states */
+   --modal-backdrop: rgba(0, 0, 0, 0.85);
 
-    /* --- BORDERS --- */
-    --border: #444444;
-    --border-dim: #333333;
+   /* --- BORDERS --- */
+   --border: rgba(255, 255, 255, 0.08);
+   --border-dim: rgba(255, 255, 255, 0.04);
 
-    /* --- TYPOGRAPHY --- */
-    --text: #e0e0e0;
-    --text-muted: #888888;
-    --font-mono: "JetBrains Mono", "Cascadia Code", "SF Mono", Consolas, Menlo, monospace;
-
+   /* --- TYPOGRAPHY --- */
+   --text: #f1f5f9;
+   --text-muted: #94a3b8;
+   --font-mono: "JetBrains Mono", "Cascadia Code", "SF Mono", Consolas, Menlo, monospace;
     /* --- SEMANTIC INTENT TOKENS --- */
-    --intent-primary: #3b82f6;   /* Standard Actions / Blue */
+    --intent-primary: #8b5cf6;   /* Base System Actions / Purple */
     --intent-success: #10b981;   /* Approvals / Emerald */
-    --intent-danger: #ef4444;    /* Destructive / Red */
+    --intent-danger: #f43f5e;    /* Destructive / Rose */
     --intent-warning: #f59e0b;   /* Paused/Alerts / Amber */
-    --intent-highlight: #8b5cf6; /* Special/AI Actions / Violet */
-    --intent-neutral: #64748b;   /* Passive/Default / Slate */
+    --intent-highlight: #06b6d4; /* Special/AI Actions / Aqua */
+    --intent-neutral: #6366f1;   /* Passive/Default / Indigo */
 
+    /* --- RAIL INJECTIONS --- */
+    --rail-bg: rgba(255, 255, 255, 0.02);
+    --rail-hover: rgba(99, 102, 241, 0.22);
     /* --- PRIMITIVE CONTROLS --- */
+    --overlay-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
     --btn: var(--intent-primary);
-    --btn-hover: #0056b3;
-    --console-bg: #000000;
+    --btn-hover: #4f46e5;
+    --console-bg: #05070a;
+
+    /* Dynamic Color-Mix Intensities */
+    --intent-bg-mix: 15%;
+    --header-bg-mix: 20%;
 }
 
 /* ==========================================================================
@@ -42,24 +49,30 @@
     --pane-bg: #ffffff;
     --input-bg: #f1f5f9;
     --bg-hover: #e2e8f0;
+    --modal-backdrop: rgba(255, 255, 255, 0.85);
 
     --border: #cbd5e1;
     --border-dim: #d4d4d8;
 
     --text: #0f172a;
     --text-muted: #64748b;
-
+    --overlay-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
     /* Deepened intents for WCAG contrast on white backgrounds */
-    --intent-primary: #0284c7;
+    --intent-primary: #7e22ce;
     --intent-success: #059669;
     --intent-danger: #dc2626;
     --intent-warning: #d97706;
-    --intent-highlight: #c026d3;
-    --intent-neutral: #475569;
-
+    --intent-highlight: #0e7490;
+    --intent-neutral: #4338ca;
     --btn: var(--intent-primary);
     --btn-hover: #0369a1;
     --console-bg: #f8fafc;
+    --rail-bg: rgba(0, 0, 0, 0.03);
+    --rail-hover: rgba(126, 34, 206, 0.12); /* Maps to the deepened primary purple */
+
+    /* Dynamic Color-Mix Intensities */
+    --intent-bg-mix: 8%;
+    --header-bg-mix: 6%;
 }
 
 /* ==========================================================================
@@ -71,20 +84,21 @@
     --pane-bg: #ffffff;
     --input-bg: #ffffff;
     --bg-hover: #f1f5f9;
+    --modal-backdrop: rgba(255, 255, 255, 0.95);
 
     --border: #000000;
     --border-dim: #000000;
 
     --text: #000000;
     --text-muted: #000000;
-
+    --overlay-shadow: none;
     /* Retain stark colors strictly for borders, accents, and hard shadows */
-    --intent-primary: #3b82f6;
+    --intent-primary: #8b5cf6;
     --intent-success: #14b8a6;
     --intent-danger: #ef4444;
     --intent-warning: #eab308;
-    --intent-highlight: #8b5cf6;
-    --intent-neutral: #9ca3af;
+    --intent-highlight: #06b6d4;
+    --intent-neutral: #3b82f6;
     --btn: #ffffff;
     --btn-hover: #f1f5f9;
     --console-bg: #ffffff;
@@ -116,13 +130,17 @@ body, html {
    display: flex; 
    flex-direction: column; 
 }
-
 /* Global Custom Scrollbars */
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: var(--input-bg); border-radius: 4px; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; border: 2px solid var(--input-bg); }
-::-webkit-scrollbar-thumb:hover { background: var(--intent-neutral); }
-[data-theme="e-ink"] ::-webkit-scrollbar-thumb { background: #000; border: 2px solid #fff; }
+* {
+   scrollbar-width: thin;
+   scrollbar-color: var(--border) transparent;
+}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+[data-theme="e-ink"] * { scrollbar-color: #000 transparent; }
+[data-theme="e-ink"] ::-webkit-scrollbar-thumb { background: #000; border: none; }
 
 h1, h2, h3, h4, h5, h6 { 
     color: var(--text); 

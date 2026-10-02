@@ -1,13 +1,14 @@
-import { LitElement, html, css } from 'lit';
+import { html, css } from 'lit';
+import { YenvuiBase } from './yenvui-base.js';
 
-export class YenvuiDropdown extends LitElement {
+export class YenvuiDropdown extends YenvuiBase {
     static properties = {
         items: { type: Array },
         open: { type: Boolean, reflect: true },
         align: { type: String }
     };
-
     static styles = css`
+        :host { display: block; height: 100%; }
         .dropdown-menu {
             position: absolute;
             top: calc(100% + 5px);
@@ -16,7 +17,7 @@ export class YenvuiDropdown extends LitElement {
             border-radius: 6px;
             padding: 5px;
             min-width: 220px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            box-shadow: var(--overlay-shadow);
             z-index: 2000;
             display: flex;
             flex-direction: column;
@@ -36,30 +37,19 @@ export class YenvuiDropdown extends LitElement {
         .menu-item:hover { background: var(--input-bg, #2d2d2d); }
         .icon { font-size: 1.1rem; line-height: 1; }
     `;
-
     constructor() {
         super();
         this.items = [];
         this.open = false;
         this.align = 'right';
-        this._handleOutsideClick = this._handleOutsideClick.bind(this);
     }
 
     connectedCallback() {
         super.connectedCallback();
-        document.addEventListener('click', this._handleOutsideClick);
-    }
-
-    disconnectedCallback() {
-        super.disconnectedCallback();
-        document.removeEventListener('click', this._handleOutsideClick);
-    }
-
-    _handleOutsideClick(e) {
-        if (!this.open) return;
-        const path = e.composedPath();
-        if (!path.includes(this)) {
-            this.open = false;
+        if (this.registerOutsideClick) {
+            this.registerOutsideClick(() => {
+                if (this.open) this.open = false;
+            });
         }
     }
 
@@ -71,11 +61,10 @@ export class YenvuiDropdown extends LitElement {
         this.open = false;
         if (item.onClick) item.onClick(e);
     }
-
     render() {
         return html`
-            <div style="position: relative; display: inline-block; width: 100%;">
-                <div @click=${this._toggle}>
+            <div style="position: relative; display: flex; align-items: stretch; width: 100%; height: 100%;">
+                <div @click=${this._toggle} style="display: flex; align-items: stretch; width: 100%; height: 100%;">
                     <slot name="trigger"></slot>
                 </div>
                 ${this.open && this.items && this.items.length > 0 ? html`
@@ -93,31 +82,32 @@ export class YenvuiDropdown extends LitElement {
     }
 }
 customElements.define('yenvui-dropdown', YenvuiDropdown);
-
-export class YenvuiFilterDropdown extends LitElement {
+export class YenvuiFilterDropdown extends YenvuiBase {
     static properties = {
         filterText: { type: String },
         open: { type: Boolean, reflect: true },
         hasFilters: { type: Boolean }
     };
     static styles = css`
-        :host { display: block; position: static; }
-        .container { display: flex; align-items: center; }
+        :host { display: block; position: static; height: 100%; }
+        .container { display: flex; align-items: stretch; height: 100%; }
         .panel {
             display: none; position: absolute; top: 100%; left: 0; right: 0;
             z-index: 2000; padding: 15px 20px; background: var(--pane-bg, #1e1e1e); border-bottom: 1px solid var(--border, #444);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            box-shadow: var(--overlay-shadow);
             max-height: 50vh; overflow-y: auto;
         }
         :host([open]) .panel { display: flex; flex-direction: column; }
-        
+
         .system-action-btn { 
-            background: transparent; color: var(--text, #e0e0e0); border: 1px solid var(--border, #444); 
-            border-radius: 4px; cursor: pointer; font-weight: bold; width: 34px; height: 34px; 
+            background: var(--rail-bg, transparent); color: var(--text-muted, #888); border: none;
+            border-left: 1px solid var(--border, #444); 
+            border-radius: 0; border-top-right-radius: inherit; border-bottom-right-radius: inherit;
+            cursor: pointer; font-weight: bold; width: 44px; height: 100%; 
             display: flex; align-items: center; justify-content: center; padding: 0; 
-            font-size: 1.1rem; transition: background 0.2s; margin: 0; box-sizing: border-box;
+            font-size: 1.1rem; transition: background 0.2s, color 0.2s; margin: 0; box-sizing: border-box;
         }
-        .system-action-btn:hover { background: var(--input-bg, #2d2d2d); }
+        .system-action-btn:hover { background: var(--rail-hover, var(--input-bg, #2d2d2d)); color: var(--text); }
         
         .btn {
             padding: 4px 8px; margin: 0; font-size: 0.85rem; white-space: nowrap;
@@ -131,28 +121,18 @@ export class YenvuiFilterDropdown extends LitElement {
         this.open = false;
         this.filterText = 'Filters';
         this.hasFilters = false;
-        this._handleOutsideClick = this._handleOutsideClick.bind(this);
     }
     connectedCallback() {
         super.connectedCallback();
-        document.addEventListener('click', this._handleOutsideClick);
-    }
-    disconnectedCallback() {
-        super.disconnectedCallback();
-        document.removeEventListener('click', this._handleOutsideClick);
-    }
-    _handleOutsideClick(e) {
-        if (!this.open) return;
-        const path = e.composedPath();
-        if (!path.includes(this)) {
-            this.open = false;
-        }
+        this.registerOutsideClick(() => {
+            if (this.open) this.open = false;
+        });
     }
     render() {
         return html`
             <div class="container">
                 <button class="system-action-btn" title=${this.filterText} @click=${() => this.open = !this.open} style="opacity: ${this.hasFilters ? '1' : '0.5'};">
-                    ${this.hasFilters ? '🔻' : '▽'}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
                 </button>
                 <div class="panel">
                     <slot></slot>
