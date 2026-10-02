@@ -1,56 +1,46 @@
-# Sutram & yenVUI Engineering Standards
+# Sutram & yenVUI Engineering Standards & Guardrails
 
-Baseline rules, anti-patterns, and strict compliance guardrails specific to the unified Sutram micro-kernel and yenVUI Edge-Native environment.
+## 1. Core Architectural Laws
 
-## I. Micro-Kernel Guardrails (Sutram)
+### The "Dumb Component" Rule
+`yenVUI` UI primitives (e.g., `<yenvui-card>`, `<yenvui-modal>`) must remain zero-state, presentation-only components. They MUST NOT query application registries, maintain business logic, or trigger side effects. Communication flows strictly via top-down property binding and bottom-up bubbleable custom events (`yenvui-*` or `yv-*`).
 
-### 1. Component Error Boundaries
-To maintain system resilience, components must wrap `connectedCallback` and `render` lifecycle methods in try-catch boundaries. Unhandled exceptions should log detailed diagnostics and render localized fallback UI without interrupting the host application execution.
+### Composition Over Inheritance
+Consuming applications and extension modules MUST NOT extend `yenVUI` UI primitive classes directly. Host applications extend `SutramElement` for Unidirectional Data Flow (UDF) state subscriptions and project templates into `sutram` containers using native HTML `<slot>` tags.
 
-### 2. Automated Resource Teardown
-Components extending `SutramElement` must utilize managed arrays for store subscriptions (`subscribe`), intervals (`registerInterval`), and DOM listeners (`registerGlobalListener`). Manual teardown logic is an anti-pattern; rely on the base class `disconnectedCallback()` to guarantee memory safety.
-### 3. Lazy Store Hydration
-Components must anticipate mounting before state hydration completes. Use string store keys in `SutramElement.subscribe` to dynamically poll for global store instantiation, preventing race conditions during Stage 1 boot.
-### 4. Session-Pinned Dynamic Module Imports
-Dynamic imports in batch loaders (e.g., `ExtensionRegistry.loadBatches`) must pin version query parameters to a stable session boot timestamp (`window.SUTRAM_BOOT_TS`) rather than using per-call timestamps like `Date.now()`. This ensures consistent module caching throughout an active session while maintaining cache-busting upon session restarts.
-### 5. Decoupled Measurement & Height Resizing
-Any Web Component performing dynamic DOM measurements or height recalculations based on content changes must schedule measurements asynchronously via `requestAnimationFrame` or `IntersectionObserver`. Direct synchronous DOM measurement during `updated()` or render cycles is prohibited to prevent `ResizeObserver` loop limit warnings and layout thrashing.
+### The Universal CSS Vacuum
+Host applications are forbidden from defining raw structural CSS or hardcoding hex colors in component templates. All visual styling MUST utilize semantic CSS intent variables (`var(--bg)`, `var(--pane-bg)`, `var(--intent-primary)`, `var(--border)`, `var(--rail-bg)`), ensuring instant theme re-skinning across Dark, Light, and E-Ink brutalist modes.
 
-### 6. Metronome Battery Preservation & Visibility Backoff
-Periodic background tasks registered via `ExtensionRegistry.registerTick` must rely on the central metronome loop. The metronome dynamically backs off to 60-second intervals when `document.hidden` is true and wakes instantly upon `visibilitychange` refocus to preserve battery life on mobile devices.
+---
 
-### 7. Automatic IoC Action Tray Resolution
-Card containers must automatically resolve action tray visibility by querying `ExtensionRegistry.getEntityActions` and inspecting assigned `slot[name="actions"]` elements. Explicit boolean attributes (e.g. `has-actions`) are deprecated.
+## 2. Interaction & Gesture Standards
 
-## II. Presentation Chassis Guardrails (yenVUI)
+### The Gesture Controller Mandate
+All custom drag, swipe, spatial reordering, or long-press interactions MUST utilize `YenvuiGestureController` (`yenvui/js/physics.js`) rather than binding raw `pointerdown` or `touchstart` event listeners. 
 
-### 1. Theme Observation Standard
-Web Component host elements requiring theme-aware styling must establish a `MutationObserver` targeting `document.body`'s `data-theme` attribute during `connectedCallback()` and clean it up in `disconnectedCallback()`.
+* **Hit Detection:** Use `getDeepElementFromPoint(x, y, selector)` to pierce Shadow DOM boundaries when resolving gesture drop targets.
+* **Axis Locking:** Explicitly configure `lockAxis` (`'horizontal'`, `'vertical'`, or `'both'`) to prevent interference with native vertical document scrolling.
+* **OS Navigation Defeat:** `YenvuiGestureController` automatically intercepts horizontal drag sequences originating near viewport boundaries to defeat mobile browser edge-swipe back-navigation.
+* **Automated Cleanup:** Drag handles and gesture listeners attached via `YenvuiGestureController` automatically unbind global `pointermove` and `pointerup` handlers when gestures complete or cancel.
 
-### 2. Native Dialog Visibility & Unmount Teardown
-Components wrapping native HTML `<dialog>` elements must maintain `:host { display: contents; }` in shadow DOM CSS to allow proper native centering in the browser's `#top-layer`. Furthermore, dialog components must implement a `disconnectedCallback()` unmount hook that temporarily re-attaches open `<dialog>` elements to `document.body` before calling `dialog.close()` to cleanly strip the document-level `inert` attribute.
+---
 
-### 3. Custom Event Namespacing
-All custom events emitted by yenVUI primitives must be prefixed with `yenvui-` or `yv-` to ensure zero event collisions with standard DOM events or host application handlers.
+## 3. DOM & State Management
 
-### 4. Event & Property Hybrid Handshake (The "Pit of Success")
-While yenVUI primitives must emit pure DOM events (e.g., `@yv-click`) to remain decoupled, they must also accommodate legacy state orchestrators. If a component receives asynchronous execution logic, it must explicitly declare a property (e.g., `onClick: { type: Object }`) and natively `await` its execution during the event lifecycle.
+### Spatial Projection & Non-Destructive DOM Caching
+Complex workspace switching and spatial column views MUST route through `SutramDOMPool` (`sutram/js/projection_engine.js`) and `SutramProjectionCompiler`:
 
-### 5. Shadow DOM Slot Permeability
-Web Component containers must explicitly define an unnamed fallback `<slot></slot>` to gracefully accept unstructured projections. Use the `::slotted(*)` CSS selector to forcefully normalize the geometry of any element the host application attempts to project.
+* **Node Recycling:** Component instances MUST be cached in `SutramDOMPool` and toggled via CSS (`display: flex` / `display: none`) during spatial column swaps.
+* **State Preservation:** Never destroy `.innerHTML` or unmount active extension views during routing. Non-destructive caching preserves active buffer states, scroll positions, and uncommitted form inputs.
+* **Garbage Collection:** Eviction of cached DOM nodes MUST occur exclusively through the global `sutram-evict-projection` custom event.
 
-### 6. Safari Touch-Action Gesture Interception
-Web Components handling custom horizontal gestures must combine `touch-action: pan-y` CSS directives on container hosts with explicit, non-passive `touchmove` listeners (`{ passive: false }`) executing `e.preventDefault()` once horizontal swipe dominance is established, preventing Safari's back-navigation.
+### Consolidated Theme Observer Pattern
+Components requiring dynamic theme adaptation MUST NOT instantiate individual `MutationObserver` instances on `document.body`. Components MUST extend `YenvuiBase` (which auto-subscribes via `subscribeToTheme`) or call `this.observeTheme()` in `SutramElement` to utilize the shared, Set-based theme subscriber registry.
 
-### 7. Flexbox & Grid Min-Width Blowout Defense
-Shadow DOM containers using flexbox or CSS grid layouts with text content, code blocks, or scrollable body regions must explicitly declare `min-width: 0` and `box-sizing: border-box` on child items to prevent content blowouts.
-### 8. The DOM-First Vacuum Rule
-CSS deprecation must strictly follow: 1) Construct the presentational component (The Paint). 2) Wrap legacy logic into the new primitive (The State). 3) Delete legacy classes from the host application only after the transition is complete (The Vacuum).
+### Automated Lifecycle Teardowns
+To prevent ghost memory leaks and dangling subscriptions, components extending `SutramElement` MUST register listeners and subscriptions via lifecycle helpers:
 
-### 9. Decoupled Measurement & Height Resizing Standard
-Any Web Component performing dynamic DOM measurements or height recalculations based on content changes must schedule measurements asynchronously via `requestAnimationFrame` or `IntersectionObserver`. Direct synchronous DOM measurement during `updated()` or render cycles is prohibited to prevent `ResizeObserver` loop limit warnings and layout thrashing.
-
-## III. Ecosystem Compliance
-
-### 1. Sub-Module Test Isolation
-While housed in a unified repository, the `sutram/` and `yenvui/` sub-directories must maintain their own dedicated `tests/` folders. This isolates boundary checks, ensuring visual UI fitness functions do not unnecessarily entangle with functional micro-kernel constraints.
+* **Zustand Subscriptions:** Use `this.subscribe(store, selector, listener)`.
+* **Timers & Metronomes:** Use `this.registerInterval(callback, delayMs)` or `ExtensionRegistry.registerTick()` instead of raw `setInterval`.
+* **Global DOM Listeners:** Use `this.registerGlobalListener(eventType, targetNode, callback)` and `this.registerOutsideClick(callback)`.
+* **Automatic Disconnection:** All registered subscriptions, intervals, and listeners are automatically torn down within `SutramElement.disconnectedCallback()`.
