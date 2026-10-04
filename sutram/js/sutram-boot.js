@@ -49,11 +49,29 @@
 
         return originalDefine(name, constructor, options);
     };
-
     // =========================================================================
     // 2. Fetch Manifests & Parse SemVer
     // =========================================================================
     // The host HTML (inSetu) passes the discovery URLs via a global array
+    const urlParams = new URLSearchParams(window.location.search);
+    const isPopout = urlParams.get('popout') === 'true';
+
+    if (isPopout) {
+        const allowedModules = (urlParams.get('modules') || '').split(',').map(m => m.trim());
+        if (allowedModules.length > 0 && window.ACTIVE_EXTENSIONS) {
+            // Prune extensions down to exactly what was requested
+            window.ACTIVE_EXTENSIONS = window.ACTIVE_EXTENSIONS.filter(ext => allowedModules.includes(ext));
+
+            // Prune manifests down to core OS and requested modules to save network requests
+            if (window.SUTRAM_MANIFEST_URLS) {
+                window.SUTRAM_MANIFEST_URLS = window.SUTRAM_MANIFEST_URLS.filter(url => {
+                    if (url === '/static/vendor.json') return true;
+                    return allowedModules.some(mod => url.includes(`/extensions/${mod}/`));
+                });
+            }
+        }
+    }
+
     const manifestUrls = window.SUTRAM_MANIFEST_URLS || [];
     const packages = {}; // Tracks highest version of each specifier
 

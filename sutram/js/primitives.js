@@ -9,6 +9,7 @@ import '../../yenvui/js/async-btn.js';
 import '../../yenvui/js/status-bar.js';
 import '../../yenvui/js/toast.js';
 import '../../yenvui/js/modal.js';
+import '../../yenvui/js/window.js';
 import '../../yenvui/js/category-section.js';
 import '../../yenvui/js/card.js';
 import '../../yenvui/js/card-group.js';
@@ -25,8 +26,46 @@ import '../../yenvui/js/empty-state.js';
 import '../../yenvui/js/board.js';
 import '../../yenvui/js/tag.js';
 import '../../yenvui/js/label.js';
+// 1. Synchronous Action Button
+export class SutramBtn extends SutramElement {
+    static properties = {
+        label: { type: String },
+        intent: { type: String },
+        variant: { type: String },
+        emphasis: { type: Boolean },
+        disabled: { type: Boolean },
+        active: { type: Boolean }
+    };
+    static styles = [sharedStyles, css`
+        :host { display: inline-flex; flex-shrink: 0; vertical-align: middle; min-width: max-content; }
+        yenvui-btn { display: inline-flex; width: 100%; min-width: max-content; }
+    `];
+    constructor() {
+        super();
+        this.label = 'Submit';
+        this.intent = 'primary';
+        this.variant = 'tinted';
+        this.emphasis = false;
+        this.disabled = false;
+        this.active = false;
+    }
+    render() {
+        return html`
+            <yenvui-btn
+                .label=${this.label}
+                .intent=${this.intent}
+                .variant=${this.variant}
+                ?emphasis=${this.emphasis}
+                ?disabled=${this.disabled}
+                ?active=${this.active}>
+                <slot></slot>
+            </yenvui-btn>
+        `;
+    }
+}
+customElements.define('sutram-btn', SutramBtn);
 
-// 1. Async Action Button
+// 1.5 Async Action Button
 export class SutramAsyncBtn extends SutramElement {
     static properties = {
         label: { type: String },
@@ -34,6 +73,8 @@ export class SutramAsyncBtn extends SutramElement {
         successLabel: { type: String },
         errorLabel: { type: String },
         intent: { type: String },
+        variant: { type: String },
+        emphasis: { type: Boolean },
         onClick: { type: Object },
         disabled: { type: Boolean },
         active: { type: Boolean },
@@ -51,6 +92,8 @@ export class SutramAsyncBtn extends SutramElement {
         this.successLabel = '✅';
         this.errorLabel = '❌';
         this.intent = 'primary';
+        this.variant = 'tinted';
+        this.emphasis = false;
         this.disabled = false;
         this.active = false;
         this._status = 'idle';
@@ -104,7 +147,6 @@ export class SutramAsyncBtn extends SutramElement {
     render() {
         const isDisabled = this.disabled || this._isOfflineReadOnly;
         const displayLabel = this._isOfflineReadOnly ? '🚫 Offline' : this.label;
-
         return html`
             <yenvui-async-btn
                 .label=${displayLabel}
@@ -112,6 +154,8 @@ export class SutramAsyncBtn extends SutramElement {
                 .successLabel=${this.successLabel}
                 .errorLabel=${this.errorLabel}
                 .intent=${this.intent}
+                .variant=${this.variant}
+                ?emphasis=${this.emphasis}
                 .status=${this._status}
                 ?disabled=${isDisabled}
                 ?active=${this.active}
@@ -210,25 +254,86 @@ export class SutramSelectionTray extends SutramElement {
 
     static styles = css`
         .cart-btn {
-            background: var(--intent-highlight);
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 28px;
-            height: 28px;
+            background: color-mix(in srgb, var(--intent-warning) 15%, transparent);
+            color: var(--intent-warning);
+            border: 1px solid color-mix(in srgb, var(--intent-warning) 40%, transparent);
+            border-radius: 20px;
+            height: 32px;
+            padding: 0 12px;
             font-size: 0.85rem;
             font-weight: bold;
             cursor: pointer;
             display: flex;
             align-items: center;
-            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s;
             margin-right: 12px;
-            transition: transform 0.2s;
-            padding: 0;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
         .cart-btn:hover {
-            transform: scale(1.1);
+            background: color-mix(in srgb, var(--intent-warning) 25%, transparent);
+        }
+        .cart-badge.mobile-only { display: none; }
+        .cart-badge {
+            background: var(--intent-warning);
+            color: #000;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+        }
+        @media (max-width: 768px) {
+            .cart-text { display: none; }
+            .cart-badge.mobile-only { display: flex; }
+            .cart-btn { padding: 0 8px; }
+        }
+
+        .tray-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2999;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .tray-overlay.open { opacity: 1; pointer-events: auto; }
+
+        .tray-panel {
+            position: fixed; top: 60px; right: 20px; width: 450px; max-width: calc(100vw - 40px);
+            background: var(--pane-bg); border: 1px solid var(--border); border-radius: 12px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.5); z-index: 3000; display: flex; flex-direction: column;
+            transform: translateY(-20px); opacity: 0; pointer-events: none; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            max-height: calc(100dvh - 80px);
+        }
+        .tray-panel.open { transform: translateY(0); opacity: 1; pointer-events: auto; }
+
+        .tray-header {
+            display: flex; justify-content: space-between; align-items: flex-start; padding: 20px 20px 15px 20px;
+        }
+        .tray-header h3 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 1.1rem; color: var(--text); }
+        .tray-header p { margin: 4px 0 0 0; color: var(--text-muted); font-size: 0.85rem; font-family: var(--font-mono); }
+        .tray-header button { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem; }
+        .tray-header button:hover { color: var(--text); }
+
+        .tray-subheader {
+            padding: 0 20px 15px 20px; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+            font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted);
+        }
+
+        .tray-items {
+            flex: 1; overflow-y: auto; padding: 15px 20px; display: flex; flex-direction: column; gap: 10px;
+        }
+        .tray-item {
+            display: flex; align-items: center; justify-content: space-between;
+            background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px;
+            padding: 12px; border-left: 4px solid var(--intent-warning); gap: 12px;
+        }
+        .tray-item-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+        .tray-item-title { font-weight: bold; color: var(--text); font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+        .tray-item-path { font-family: monospace; font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .pack-tag { background: color-mix(in srgb, var(--intent-warning) 20%, transparent); color: var(--intent-warning); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; }
+
+        .tray-footer {
+            display: flex; gap: 10px; padding: 15px 20px; border-top: 1px solid var(--border); background: var(--bg-deep); border-radius: 0 0 12px 12px;
         }
     `;
 
@@ -248,9 +353,22 @@ export class SutramSelectionTray extends SutramElement {
         this.selectedItems = SelectionStore.getState().selectedItems;
     }
 
+    updated(changedProperties) {
+        super.updated(changedProperties);
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+            window.lucide.createIcons({ root: this.shadowRoot });
+        }
+    }
+
     render() {
         const count = this.selectedItems.size;
         const itemsArray = Array.from(this.selectedItems.values());
+
+        let totalSize = 0;
+        itemsArray.forEach(item => {
+            if (item.data?.size_bytes) totalSize += item.data.size_bytes;
+            else totalSize += 4096; // Fallback estimate
+        });
 
         let batchActions = [];
         const registry = window.ExtensionRegistry;
@@ -264,48 +382,69 @@ export class SutramSelectionTray extends SutramElement {
             });
         }
         batchActions.sort((a, b) => (a.order || 99) - (b.order || 99));
+
         return html`
             ${count > 0 ? html`
-                <button class="cart-btn" title="View Selected Items" @click=${() => this.modalOpen = true}>${count}</button>
+                <button class="cart-btn" @click=${() => this.modalOpen = true}>
+                    <i data-lucide="zap" style="width: 14px; height: 14px;"></i>
+                    <span class="cart-text">${count} items</span>
+                    <span class="cart-badge mobile-only">${count}</span>
+                </button>
             ` : ''}
-            <yenvui-modal ?open=${this.modalOpen} ?fullscreen=${true} titleText="Selected Items (${count})" @yenvui-modal-closed=${() => this.modalOpen = false}>
-                <div slot="body" style="display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; overflow-y: auto;">
-                    ${itemsArray.map(item => html`
-                        <div style="display: flex; justify-content: space-between; align-items: center; background: var(--input-bg); padding: 10px 15px; border: 1px solid var(--border); border-radius: 4px;">
-                            <span style="font-family: monospace; font-size: 0.85rem; color: var(--text); word-break: break-all;">${item.data?.filepath || item.data?.folderpath || item.data?.id || 'Unknown Item'}</span>
-                            <button class="btn-sm" style="background: transparent; color: var(--intent-danger); border: none; padding: 4px 8px; font-size: 1rem; cursor: pointer; margin: 0;" @click=${() => {
-                                const id = item.data?.filepath || item.data?.folderpath || item.data?.id;
-                                if (id) SelectionStore.getState().toggleSelection(id, item.entityType, item.data);
-                            }}>✕</button>
+
+            <div class="tray-overlay ${this.modalOpen ? 'open' : ''}" @click=${() => this.modalOpen = false}></div>
+            <div class="tray-panel ${this.modalOpen ? 'open' : ''}">
+                <div class="tray-header">
+                    <div style="display: flex; gap: 12px;">
+                        <div style="width: 32px; height: 32px; border-radius: 8px; background: color-mix(in srgb, var(--intent-warning) 15%, transparent); border: 1px solid color-mix(in srgb, var(--intent-warning) 40%, transparent); display: flex; align-items: center; justify-content: center; color: var(--intent-warning);">
+                            <i data-lucide="zap" style="width: 18px; height: 18px;"></i>
                         </div>
+                        <div>
+                            <h3>Quickpack Staging Deck <span class="cart-badge" style="margin-left: 8px;">${count}</span></h3>
+                            <p>Compiled payload bundle staging</p>
+                        </div>
+                    </div>
+                    <button @click=${() => this.modalOpen = false}>✕</button>
+                </div>
+                <div class="tray-subheader">
+                    <div style="display: flex; gap: 15px; align-items: center;">
+                        <span style="display: flex; align-items: center; gap: 6px;"><i data-lucide="layers" style="width: 14px; height: 14px;"></i> ${count} items</span>
+                        <span style="display: flex; align-items: center; gap: 6px;"><i data-lucide="database" style="width: 14px; height: 14px;"></i> ~${Math.round(totalSize / 1024)} kb</span>
+                    </div>
+                </div>
+                <div class="tray-items">
+                    ${itemsArray.map(item => {
+                        const name = item.data?.titleText || item.data?.filepath?.split('/').pop() || 'Unknown Item';
+                        const path = item.data?.filepath || item.data?.folderpath || item.data?.id || '';
+                        const sizeText = item.data?.size_bytes ? `${Math.round(item.data.size_bytes / 1024)} kb` : '';
+                        return html`
+                        <div class="tray-item">
+                            <div class="tray-item-info">
+                                <div class="tray-item-title">
+                                    <div style="display: flex; align-items: center; gap: 8px;"><span class="pack-tag">PACK</span> ${name}</div>${sizeText ? html`<span style="color: var(--text-muted); font-weight: normal; font-size: 0.85rem; font-family: monospace;">${sizeText}</span>` : ''}
+                                </div>
+                                <div class="tray-item-path">${path}</div>
+                            </div>
+                            <button class="btn-sm" style="background: transparent; color: var(--text-muted); border: none; font-size: 1.2rem; cursor: pointer; padding: 4px;" @click=${() => SelectionStore.getState().toggleSelection(path, item.entityType, item.data)}>✕</button>
+                        </div>
+                    `})}
+                </div>
+                <div class="tray-footer">
+                    <sutram-async-btn label="🗑️ Clear" intent="danger" variant="tinted" .onClick=${() => { SelectionStore.getState().clearSelection(); this.modalOpen = false; }} style="margin-right: auto;"></sutram-async-btn>
+                    ${batchActions.map(act => html`
+                        <sutram-async-btn 
+                            label="${act.icon}${act.label}" 
+                            intent="${act.intent || 'primary'}" 
+                            variant="${act.variant || 'solid'}"
+                            ?emphasis=${act.emphasis}
+                            .onClick=${async (e) => {
+                                if (act.asyncAction) await act.asyncAction(itemsArray, e);
+                                else if (act.onClick) act.onClick(itemsArray, e);
+                            }}>
+                        </sutram-async-btn>
                     `)}
                 </div>
-                <sutram-async-btn 
-                    slot="footer" 
-                    label="🗑️ Clear" 
-                    intent="danger" 
-                    .onClick=${() => SelectionStore.getState().clearSelection()}>
-                </sutram-async-btn>
-                ${batchActions.map(act => {
-                    if (act.asyncAction) {
-                        return html`
-                            <sutram-async-btn   
-                                slot="footer"
-                                label="${act.icon} ${act.label}" 
-                                intent="${act.intent || 'primary'}" 
-                                .onClick=${async (e) => {
-                                    await act.asyncAction(itemsArray, e);
-                                }}>
-                            </sutram-async-btn>
-                        `;
-                    }
-                    return html`
-                        <button slot="footer" class="btn-sm" style="background: var(--intent-${act.intent || 'primary'}); color: ${act.intent === 'warning' ? '#000' : '#fff'}; border: none; font-weight: bold; cursor: pointer; padding: 12px; margin: 0; font-size: 1.05rem; border-radius: 6px;" @click=${(e) => act.onClick(itemsArray, e)}>
-                            ${act.icon} ${act.label}
-                        </button>
-                    `;
-                })}
-            </yenvui-modal>
+            </div>
         `;
     }
 }
@@ -396,11 +535,12 @@ export class SutramFolderBrowser extends LitElement {
         }
 
         const keys = Object.keys(current).filter(k => k !== '_isFile' && !current[k]._isFile).sort((a, b) => a.localeCompare(b));
-
         return html`
-            <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
-                <button class="btn-sm" style="background: var(--intent-neutral);" ?disabled=${this.currentPath.length === 0} @click=${() => this._setPath(this.currentPath.slice(0, -1))}>⬆️ Up</button>
-                <span style="font-family: monospace; color: var(--text); opacity: 0.7; word-break: break-all; font-size: 0.9rem;">/${this.currentPath.join('/')}</span>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; overflow: hidden;">
+                <sutram-btn intent="neutral" ?disabled=${this.currentPath.length === 0} @click=${() => this._setPath(this.currentPath.slice(0, -1))}>⬆️ Up</sutram-btn>
+                <yenvui-scrub-track style="flex: 1; min-width: 0; font-family: monospace; color: var(--text); opacity: 0.7; font-size: 0.9rem;">
+                    /${this.currentPath.join('/')}
+                </yenvui-scrub-track>
             </div>
             <div style="flex: 1; overflow-y: auto;">
                 ${keys.length === 0 ? html`<div style="color: var(--text-muted); font-style: italic; font-size: 0.9rem; margin-top: 10px;">No sub-folders available.</div>` : keys.map(key => html`
@@ -462,6 +602,31 @@ export class SutramModal extends SutramElement {
     }
 }
 customElements.define('sutram-modal', SutramModal);
+
+export class SutramWindow extends SutramElement {
+    static properties = {
+        titleText: { type: String },
+        x: { type: Number },
+        y: { type: Number },
+        z: { type: Number },
+        icon: { type: String },
+        intent: { type: String }
+    };
+    static styles = css`:host { display: contents; }`;
+    render() {
+        return html`
+            <yenvui-window .titleText=${this.titleText} .x=${this.x} .y=${this.y} .z=${this.z} .icon=${this.icon} .intent=${this.intent}
+                @yenvui-window-close=${() => this.dispatchEvent(new CustomEvent('sutram-window-closed', { bubbles: true, composed: true }))}
+                @yenvui-window-move=${(e) => this.dispatchEvent(new CustomEvent('sutram-window-moved', { detail: e.detail, bubbles: true, composed: true }))}
+                @yenvui-window-focus=${() => this.dispatchEvent(new CustomEvent('sutram-window-focused', { bubbles: true, composed: true }))}
+                @yenvui-window-drag-start=${(e) => this.dispatchEvent(new CustomEvent('sutram-window-drag-start', { detail: e.detail, bubbles: true, composed: true }))}
+                @yenvui-window-dock=${() => this.dispatchEvent(new CustomEvent('sutram-window-dock', { bubbles: true, composed: true }))}>
+                <slot></slot>
+            </yenvui-window>
+        `;
+    }
+}
+customElements.define('sutram-window', SutramWindow);
 
 // 8. Generic Settings Engine
 export class SutramGenericSettingsModal extends SutramElement {
@@ -594,18 +759,70 @@ export class SutramEntityActions extends SutramElement {
     static properties = {
         entityType: { type: String },
         entityData: { type: Object },
-        scrollable: { type: Boolean, reflect: true }
+        scrollable: { type: Boolean, reflect: true },
+        variant: { type: String },
+        _trayOpen: { type: Boolean, state: true }
     };
     static styles = css`
         :host { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
         :host([scrollable]) {
             flex-wrap: nowrap;
-            overflow-x: auto;
-            scrollbar-width: none;
             width: 100%;
+            display: block;
         }
-        :host([scrollable])::-webkit-scrollbar {
-            display: none;
+        .action-tray-dialog {
+            background: transparent;
+            border: none;
+            padding: 0;
+            margin: 0;
+            max-width: 100vw;
+            width: 100%;
+            max-height: 100dvh;
+            height: 100%;
+            overflow: hidden;
+            pointer-events: auto !important;
+        }
+        .action-tray-dialog::backdrop {
+            background: var(--modal-backdrop, rgba(0,0,0,0.6));
+            backdrop-filter: var(--modal-backdrop-filter, blur(3px));
+            pointer-events: auto !important;
+        }
+        .action-tray-dialog[open] {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+        }
+        .action-tray-panel {
+            background: var(--pane-bg);
+            border-bottom: 1px solid var(--border);
+            border-bottom-left-radius: 12px;
+            border-bottom-right-radius: 12px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            max-width: 800px;
+            max-height: 85dvh;
+            overflow: hidden;
+            margin: 0 auto;
+            animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes slideDown {
+            from { transform: translateY(-100%); }
+            to { transform: translateY(0); }
+        }
+        :host([data-theme="e-ink"]) .action-tray-panel {
+            border: 2px solid #000;
+            border-top: none;
+            box-shadow: 4px 4px 0 #8b5cf6;
+        }
+        .tray-group-header {
+            font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+            color: var(--intent-primary); border-bottom: 1px solid color-mix(in srgb, var(--intent-primary) 30%, transparent);
+            padding: 0 4px 4px 4px; margin: 15px 15px 10px 15px;
+        }
+        .tray-group-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; padding: 0 15px;
         }
         .sync-btn {
             display: inline-flex;
@@ -640,16 +857,78 @@ export class SutramEntityActions extends SutramElement {
         :host([data-theme="e-ink"]) .sync-btn:hover { background: #f1f5f9 !important; }
         :host([data-theme="e-ink"]) .sync-btn.active { background: #000000 !important; color: #ffffff !important; }
     `;
+    updated(changedProperties) {
+        super.updated(changedProperties);
+        if (changedProperties.has('_trayOpen')) {
+            const dialog = this.shadowRoot.querySelector('.action-tray-dialog');
+            if (dialog) {
+                if (this._trayOpen && !dialog.open) {
+                    dialog.showModal();
+                } else if (!this._trayOpen && dialog.open) {
+                    dialog.close();
+                }
+            }
+        }
+    }
     connectedCallback() {
         super.connectedCallback();
         this.observeTheme();
     }
-
     render() {
         if (!this.entityType || !window.ExtensionRegistry?.getEntityActions) return '';
         const actions = window.ExtensionRegistry.getEntityActions(this.entityType, this.entityData || {});
 
-        return actions.map(act => {
+        if (actions.length === 0) return '';
+
+        const executeAction = async (act, e) => {
+            if (window.ExtensionRegistry.executeEntityAction) {
+                return await window.ExtensionRegistry.executeEntityAction(act, this.entityData, e);
+            }
+            if (act.asyncAction) return await act.asyncAction(this.entityData, e);
+            if (act.onClick) return act.onClick(this.entityData, e);
+        };
+
+        if (this.variant === 'menu-bar') {
+            const groups = { file: [], edit: [], share: [], tools: [] };
+            actions.forEach(act => {
+                const g = act.group && groups[act.group] ? act.group : 'tools';
+                groups[g].push({
+                    ...act,
+                    label: typeof act.label === 'function' ? act.label(this.entityData) : act.label,
+                    icon: typeof act.icon === 'function' ? act.icon(this.entityData) : (act.icon || ''),
+                    asyncAction: act.asyncAction ? (e) => executeAction(act, e) : null,
+                    onClick: (!act.asyncAction && act.onClick) ? (e) => executeAction(act, e) : null
+                });
+            });
+
+            const groupLabels = { file: 'File', edit: 'Edit', share: 'Share', tools: 'Tools' };
+            const groupIcons = { file: '📄', edit: '✏️', share: '📤', tools: '🔧' };
+
+            return html`
+                <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+                    ${Object.keys(groups).map(g => {
+                        if (groups[g].length === 0) return '';
+                        return html`
+                            <sutram-dropdown .items=${groups[g]} align="left">
+                                <button slot="trigger" class="sync-btn" style="background: transparent; color: var(--text); border: 1px solid var(--border); padding: 6px 10px;">
+                                    ${groupIcons[g]} <span style="margin-left: 4px;">${groupLabels[g]}</span>
+                                </button>
+                            </sutram-dropdown>
+                        `;
+                    })}
+                </div>
+            `;
+        }
+
+        const primaryActions = [];
+        const secondaryActions = [];
+
+        actions.forEach(act => {
+            if ((act.order || 99) < 20) primaryActions.push(act);
+            else secondaryActions.push(act);
+        });
+
+        const renderDirectAction = (act) => {
             if (act.component) {
                 return html`<div style="display: contents; order: ${act.order || 99};">${act.component(this.entityData)}</div>`;
             }
@@ -657,37 +936,128 @@ export class SutramEntityActions extends SutramElement {
             const icon = typeof act.icon === 'function' ? act.icon(this.entityData) : (act.icon || '');
             const intent = typeof act.intent === 'function' ? act.intent(this.entityData) : (act.intent || 'primary');
             const isActive = typeof act.isActive === 'function' ? act.isActive(this.entityData) : !!act.isActive;
-            if (act.asyncAction) {
+
+            if (act.asyncAction || (window.ExtensionRegistry.executeEntityAction && act.vfsBound)) {
                 return html`
                     <sutram-async-btn 
                         style="margin: 0; order: ${act.order || 99};" 
                         label="${icon} ${label}" 
                         intent="${intent}" 
                         ?active=${isActive}
-                        .onClick=${(e) => act.asyncAction(this.entityData, e)}>
+                        .onClick=${(e) => executeAction(act, e)}>
                     </sutram-async-btn>
                 `;
             }
-
             const clickHandler = (e) => {
                 if (e) e.stopPropagation();
                 if (act.emitEvent) {
                     const payload = act.emitEvent(this.entityData);
                     window.dispatchEvent(new CustomEvent(payload.name, { detail: payload.detail, bubbles: true, composed: true }));
-                } else if (act.onClick) {
-                    act.onClick(this.entityData, e);
+                } else {
+                    executeAction(act, e);
                 }
             };
 
             return html`
-                <button 
-                    class="sync-btn ${isActive ? 'active' : ''}" 
-                    style="order: ${act.order || 99}; background: var(--intent-${intent}); color: ${intent === 'warning' ? '#000' : '#fff'}; gap: 4px;" 
+                <sutram-btn 
+                    intent=${intent} 
+                    ?active=${isActive}
+                    style="order: ${act.order || 99}; gap: 4px;" 
                     @click=${clickHandler}>
                     ${icon} ${label}
-                </button>
+                </sutram-btn>
             `;
-        });
+        };
+        const renderTray = () => {
+            const groups = { file: [], edit: [], share: [], tools: [] };
+            actions.forEach(act => {
+                const g = act.group && groups[act.group] ? act.group : 'tools';
+                groups[g].push(act);
+            });
+
+            const groupLabels = { file: 'File', edit: 'Edit', share: 'Share', tools: 'Tools' };
+            const groupIcons = { file: '📄', edit: '✏', share: '📤', tools: '🔧' };
+
+            const handleTrayAction = async (act, e) => {
+                this._trayOpen = false;
+                await executeAction(act, e);
+            };
+
+            const title = this.entityData?.titleText || this.entityData?.filepath?.split('/').pop() || this.entityData?.id || 'Actions';
+            const subtitle = this.entityData?.filepath || this.entityData?.folderpath || this.entityData?.repoDir || '';
+
+            return html`
+                <dialog class="action-tray-dialog" @cancel=${(e) => { e.preventDefault(); this._trayOpen = false; }} @click=${(e) => { if (e.target.tagName === 'DIALOG') this._trayOpen = false; }}>
+                    <div class="action-tray-panel">
+                        <div style="padding: 15px 20px; border-bottom: 1px solid var(--border); background: var(--bg-deep); display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; padding-right: 15px;">
+                                <span style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase; font-weight: bold;">${this.entityType.replace(':', ' / ')}</span>
+                                <span style="font-weight: bold; font-size: 1.15rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${title}</span>
+                                ${subtitle ? html`<span style="font-size: 0.8rem; color: var(--intent-highlight); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${subtitle}</span>` : ''}
+                            </div>
+                            <button class="sync-btn" @click=${() => this._trayOpen = false} style="background: var(--input-bg); color: var(--text-muted); border: 1px solid var(--border); padding: 4px; font-size: 1.2rem; line-height: 1;">✕</button>
+                        </div>
+                        <div style="flex: 1; overflow-y: auto; padding-bottom: 20px;">
+                            ${Object.keys(groups).map(g => {
+                                if (groups[g].length === 0) return '';
+                                return html`
+                                    <div class="tray-group-header">${groupIcons[g]}${groupLabels[g]}</div>
+                                    <div class="tray-group-grid">
+                                        ${groups[g].map(act => {
+                                            const label = typeof act.label === 'function' ? act.label(this.entityData) : act.label;
+                                            const icon = typeof act.icon === 'function' ? act.icon(this.entityData) : (act.icon || '');
+                                            const intent = typeof act.intent === 'function' ? act.intent(this.entityData) : (act.intent || 'primary');
+                                            const isActive = typeof act.isActive === 'function' ? act.isActive(this.entityData) : !!act.isActive;
+
+                                            if (act.asyncAction || (window.ExtensionRegistry.executeEntityAction && act.vfsBound)) {
+                                                return html`
+                                                    <sutram-async-btn 
+                                                        style="margin: 0; width: 100%; justify-content: flex-start; --btn-padding: 10px 12px; font-size: 0.9rem;" 
+                                                        label="${icon} ${label}" 
+                                                        intent="${intent}" 
+                                                        ?active=${isActive}
+                                                        .onClick=${(e) => handleTrayAction(act, e)}>
+                                                    </sutram-async-btn>
+                                                `;
+                                            }
+
+                                            return html`
+                                                <button 
+                                                    class="sync-btn ${isActive ? 'active' : ''}" 
+                                                    style="width: 100%; justify-content: flex-start; padding: 10px 12px; font-size: 0.9rem; background: var(--intent-${intent}); color: ${intent === 'warning' ? '#000' : '#fff'};" 
+                                                    @click=${(e) => handleTrayAction(act, e)}>
+                                                    ${icon} ${label}
+                                                </button>
+                                            `;
+                                        })}
+                                    </div>
+                                `;
+                            })}
+                        </div>
+                    </div>
+                </dialog>
+            `;
+        };
+        const content = html`
+            ${actions.length > 0 ? html`
+                <sutram-btn intent="neutral" style="padding: 4px 12px; font-size: 1.1rem; line-height: 1; order: -1; margin-right: 4px;"
+                    @click=${(e) => { e.stopPropagation(); this._trayOpen = true; }}>
+                    ⋮
+                </sutram-btn>
+            ` : ''}
+            ${primaryActions.map(renderDirectAction)}
+        `;
+
+        return html`
+            ${this.scrollable ? html`
+                <sutram-scrub-track>
+                    <div style="display: flex; gap: 8px; align-items: center; width: max-content;">
+                        ${content}
+                    </div>
+                </sutram-scrub-track>
+            ` : content}
+            ${renderTray()}
+        `;
     }
 }
 customElements.define('sutram-entity-actions', SutramEntityActions);
@@ -784,7 +1154,6 @@ export class SutramCard extends SutramElement {
             }
         }
     }
-
     updated(changedProperties) {
         super.updated(changedProperties);
         if (changedProperties.has('entityData') || changedProperties.has('filename')) {
@@ -797,9 +1166,21 @@ export class SutramCard extends SutramElement {
             }
         }
     }
+
+    _handleOverlayOpened(e) {
+        if (!this.entityType || !this.entityData) return;
+        const actions = window.ExtensionRegistry?.getEntityActions?.(this.entityType, this.entityData) || [];
+        actions.forEach(act => {
+            if (typeof act.onReveal === 'function') {
+                act.onReveal(this.entityData);
+            }
+        });
+    }
+
     render() {
         return html`
             <yenvui-card
+                @yenvui-overlay-opened=${this._handleOverlayOpened}
                 .filename=${this.filename}
                 .titleText=${this.titleText}
                 .descriptionText=${this.descriptionText}
@@ -923,13 +1304,18 @@ export class SutramTag extends LitElement {
     render() { return html`<yenvui-tag .text=${this.text} .intent=${this.intent}><slot></slot></yenvui-tag>`; }
 }
 customElements.define('sutram-tag', SutramTag);
-
 export class SutramLabel extends LitElement {
     static properties = { text: { type: String } };
     static styles = [css`:host { display: contents; }`];
     render() { return html`<yenvui-label .text=${this.text}><slot></slot></yenvui-label>`; }
 }
 customElements.define('sutram-label', SutramLabel);
+
+export class SutramScrubTrack extends LitElement {
+    static styles = [css`:host { display: block; width: 100%; overflow: hidden; }`];
+    render() { return html`<yenvui-scrub-track><slot></slot></yenvui-scrub-track>`; }
+}
+customElements.define('sutram-scrub-track', SutramScrubTrack);
 
 export class SutramToolbar extends LitElement {
     static properties = {
@@ -1060,7 +1446,8 @@ export class SutramEditor extends SutramElement {
         language: { type: String }, 
         writingMode: { type: Boolean }, 
         customExtensions: { type: Array },
-        enableWordcount: { type: Boolean }
+        enableWordcount: { type: Boolean },
+        _memoizedExtensions: { type: Array, state: true }
     };
     static styles = [sharedStyles, css`
         :host { display: flex; flex-direction: column; flex: 1; min-height: 0; height: 100%; }
@@ -1070,6 +1457,17 @@ export class SutramEditor extends SutramElement {
     constructor() {
         super();
         this.enableWordcount = true;
+        this._memoizedExtensions = _EMPTY_EXTENSIONS;
+    }
+
+    willUpdate(changedProperties) {
+        if (changedProperties.has('customExtensions') || changedProperties.has('enableWordcount')) {
+            const extensions = [...(this.customExtensions || _EMPTY_EXTENSIONS)];
+            if (this.enableWordcount) {
+                extensions.push(wordCountPlugin);
+            }
+            this._memoizedExtensions = extensions;
+        }
     }
 
     insertAtCursor(text) {
@@ -1077,18 +1475,13 @@ export class SutramEditor extends SutramElement {
         if (editor && editor.insertAtCursor) editor.insertAtCursor(text);
     }
     render() {
-        const extensions = [...(this.customExtensions || _EMPTY_EXTENSIONS)];
-        if (this.enableWordcount) {
-            extensions.push(wordCountPlugin);
-        }
-
         return html`
             <yenvui-editor
                 .value=${this.value || ''}
                 .language=${this.language || 'markdown'}
                 ?readOnly=${this.readOnly}
                 ?writingMode=${this.writingMode}
-                .customExtensions=${extensions}
+                .customExtensions=${this._memoizedExtensions}
                 @yenvui-editor-changed=${e => this.dispatchEvent(new CustomEvent('editor-changed', { detail: e.detail, bubbles: true, composed: true }))}>
             </yenvui-editor>
         `;

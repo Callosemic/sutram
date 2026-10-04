@@ -3,7 +3,7 @@
 import { LitElement, html } from 'lit';
 import { createStore } from 'https://esm.sh/zustand/vanilla';
 import { devtools, subscribeWithSelector } from 'https://esm.sh/zustand/middleware';
-export function createSutramStore(name, initialState, persistKeys = [], getScopeId = () => 'default', prefix = 'sutram') {
+export function createSutramStore(name, initialState, persistenceSchema = {}, getScopeId = () => 'default', prefix = 'sutram') {
     const store = createStore(
         devtools(
             subscribeWithSelector((set, get) => ({
@@ -19,11 +19,18 @@ export function createSutramStore(name, initialState, persistKeys = [], getScope
         window.Sutram.stores[name] = store;
     }
 
-    if (persistKeys && persistKeys.length > 0) {
+    const isLegacyArray = Array.isArray(persistenceSchema);
+    const schema = isLegacyArray ? { localSync: persistenceSchema } : (persistenceSchema || {});
+    const localKeys = schema.localSync || [];
+    const sessionKeys = schema.sessionSync || [];
+
+    if (localKeys.length > 0 || sessionKeys.length > 0 || schema.urlParser) {
         const hydrate = (scope) => {
             const hydrated = {};
-            persistKeys.forEach(k => {
-                const val = localStorage.getItem(`${prefix}_${name.toLowerCase()}_${k}_${scope}`);
+
+            localKeys.forEach(k => {
+                const storageKey = isLegacyArray ? `${prefix}_${name.toLowerCase()}_${k}_${scope}` : `${prefix}_local_${scope}_${name}_${k}`;
+                const val = localStorage.getItem(storageKey);
                 if (val) {
                     try { 
                         const parsed = JSON.parse(val); 
@@ -31,18 +38,42 @@ export function createSutramStore(name, initialState, persistKeys = [], getScope
                     } catch(e) {}
                 }
             });
+
+            sessionKeys.forEach(k => {
+                const val = sessionStorage.getItem(`${prefix}_session_${scope}_${name}_${k}`);
+                if (val) {
+                    try { 
+                        const parsed = JSON.parse(val); 
+                        hydrated[k] = initialState[k] instanceof Set ? new Set(parsed) : parsed;
+                    } catch(e) {}
+                }
+            });
+
+            if (typeof schema.urlParser === 'function' && typeof window !== 'undefined') {
+                const urlState = schema.urlParser(window.location.hash);
+                if (urlState && typeof urlState === 'object') {
+                    Object.assign(hydrated, urlState);
+                }
+            }
+
             if (Object.keys(hydrated).length > 0) store.setState(hydrated);
         };
 
-        // Defer hydration to allow downstream consumers to set up their scope
         setTimeout(() => hydrate(getScopeId()), 0);
 
         store.subscribe((state, prevState) => {
             const scope = getScopeId();
-            persistKeys.forEach(k => {
+            localKeys.forEach(k => {
                 if (state[k] !== prevState[k]) {
                     const valToSave = state[k] instanceof Set ? Array.from(state[k]) : state[k];
-                    localStorage.setItem(`${prefix}_${name.toLowerCase()}_${k}_${scope}`, JSON.stringify(valToSave));
+                    const storageKey = isLegacyArray ? `${prefix}_${name.toLowerCase()}_${k}_${scope}` : `${prefix}_local_${scope}_${name}_${k}`;
+                    localStorage.setItem(storageKey, JSON.stringify(valToSave));
+                }
+            });
+            sessionKeys.forEach(k => {
+                if (state[k] !== prevState[k]) {
+                    const valToSave = state[k] instanceof Set ? Array.from(state[k]) : state[k];
+                    sessionStorage.setItem(`${prefix}_session_${scope}_${name}_${k}`, JSON.stringify(valToSave));
                 }
             });
         });
@@ -133,6 +164,13 @@ export class SutramElement extends LitElement {
         subscribeSutramToTheme(this);
     }
 
+    updated(changedProperties) {
+        super.updated(changedProperties);
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+            window.lucide.createIcons({ root: this.shadowRoot });
+        }
+    }
+
     registerOutsideClick(callback) {
         const listener = (e) => {
             if (!e.composedPath().includes(this)) {
@@ -219,9 +257,28 @@ export const ExtensionRegistry = {
     uiHooks: {},
     shortcuts: {},
     _entityActions: new Map(),
+    _actionMiddlewares: [],
     _filterPredicate: null,
     tabOrder: [],
     isBooting: true,
+
+    registerActionMiddleware: function(middlewareFn) {
+        this._actionMiddlewares.push(middlewareFn);
+    },
+
+    executeEntityAction: async function(action, data, e) {
+        // Execute all registered middleware sequentially
+        for (const middleware of this._actionMiddlewares) {
+            await middleware(action, data);
+        }
+
+        // If middleware passes without throwing, execute the target action
+        if (action.asyncAction) {
+            return await action.asyncAction(data, e);
+        } else if (action.onClick) {
+            return action.onClick(data, e);
+        }
+    },
 
     setFilterPredicate: function(fn) {
         this._filterPredicate = fn;
@@ -520,6 +577,22 @@ export const LayoutStore = createSutramStore('Layout', {
     focusedColumn: 'center',
     mobileViewportIndex: 1, // 0 = left, 1 = center, 2 = right
     capacity: 3, // 1, 2, or 3 columns
+    windows: [],
+    openWindow: (entity, x = 100, y = 100) => LayoutStore.setState((state) => ({
+        windows: [...state.windows.filter(w => w.id !== entity.id), { ...entity, x, y, z: Date.now() }]
+    })),
+    closeWindow: (id) => {
+        LayoutStore.setState((state) => ({
+            windows: state.windows.filter(w => w.id !== id)
+        }));
+        LayoutStore.getState().evictProjection(id);
+    },
+    updateWindowPosition: (id, x, y) => LayoutStore.setState((state) => ({
+        windows: state.windows.map(w => w.id === id ? { ...w, x, y, z: Date.now() } : w)
+    })),
+    focusWindow: (id) => LayoutStore.setState((state) => ({
+        windows: state.windows.map(w => w.id === id ? { ...w, z: Date.now() } : w)
+    })),
 
     pinToColumn: (column, entity) => LayoutStore.setState((state) => ({
         columns: { 
@@ -538,11 +611,13 @@ export const LayoutStore = createSutramStore('Layout', {
     setFocusedColumn: (col) => LayoutStore.setState({ focusedColumn: col }),
     setMobileViewport: (index) => LayoutStore.setState({ mobileViewportIndex: index }),
     setCapacity: (cap) => LayoutStore.setState({ capacity: cap }),
-
     evictProjection: (id) => {
         // Dispatch a global intent so the shell and domain stores can perform surgical garbage collection
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('sutram-evict-projection', { detail: { id }, bubbles: true, composed: true }));
         }
     }
+}, {
+    sessionSync: ['columns', 'capacity', 'mobileViewportIndex', 'windows'],
+    localSync: ['columns']
 });
