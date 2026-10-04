@@ -25,7 +25,8 @@ sutram/
 │   │   ├── 0006_yenvui_gesture_swipe_axis_locking.md # ADR-0006: Gesture swipe axis locking and event handshakes
 │   │   ├── 0007_sutram_offline_microkernel_and_metronome_backoff.md # ADR-0007: Offline micro-kernel architecture and metronome visibility backoff
 │   │   ├── 0008_yenvui_duck_typed_selection_contracts.md # ADR-0008: Duck-typed selection contracts for gesture targets
-│   │   └── 0009_sutram_spatial_layout_and_projection_engine.md # [comment required]
+│   │   ├── 0009_sutram_spatial_layout_and_projection_engine.md # ADR-0009: Spatial 3-column layout engine and DOM projection pooling
+│   │   └── 0010_sutram_floating_window_projection.md # ADR-0010: Floating window projection layer and z-index management
 │   └── yenvui_contracts.md         # Interface contract specification and CSS intent tokens for yenVUI presentation chassis
 ├── pyproject.toml                  # Python project metadata and semantic release configuration
 ├── readme.md                       # Master repository architecture map and component reference
@@ -75,6 +76,7 @@ sutram/
     │   ├── tag.js                  # Semantic intent tag primitive with high-contrast theme overrides
     │   ├── toast.js                # Non-blocking toast notification alert container
     │   ├── toolbar.js              # Sticky header toolbar integrating search, filters, and action slots
+    │   ├── window.js               # [comment required]
     │   └── yenvui-base.js          # Base presentation class encapsulating theme mutation observation and lifecycle hooks
     └── tests/                      # Automated presentation chassis compliance tests and fitness functions
         ├── .gitkeep                # Folder preservation tracking marker
