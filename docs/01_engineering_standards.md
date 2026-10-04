@@ -7,9 +7,10 @@
 
 ### Composition Over Inheritance
 Consuming applications and extension modules MUST NOT extend `yenVUI` UI primitive classes directly. Host applications extend `SutramElement` for Unidirectional Data Flow (UDF) state subscriptions and project templates into `sutram` containers using native HTML `<slot>` tags.
-
-### The Universal CSS Vacuum
-Host applications are forbidden from defining raw structural CSS or hardcoding hex colors in component templates. All visual styling MUST utilize semantic CSS intent variables (`var(--bg)`, `var(--pane-bg)`, `var(--intent-primary)`, `var(--border)`, `var(--rail-bg)`), ensuring instant theme re-skinning across Dark, Light, and E-Ink brutalist modes.
+### The Universal CSS Vacuum & Strict Shadow DOM Encapsulation
+The boundary between Sutram and yenVUI is a strict separation of State/Topology and Aesthetics/Dimensions:
+*   **Sutram (The Micro-Kernel):** `shared_styles.js` MUST remain a pure, microscopic structural reset (e.g., `box-sizing: border-box`, `scrollbar-width: thin`). It must never leak component-specific layout classes (like `.sub-tab` or `.spinner`).
+*   **yenVUI (The Presentation Chassis):** Host applications are forbidden from defining raw structural CSS or hardcoding hex colors. All visual styling MUST utilize semantic CSS intent variables (`var(--bg)`, `var(--intent-primary)`). Furthermore, component-specific layout rules (padding, margins, transition timings) MUST be strictly encapsulated within the isolated Shadow DOM of the specific component that renders them.
 
 ---
 

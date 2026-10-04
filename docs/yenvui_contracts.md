@@ -8,9 +8,11 @@ A compliant presentation chassis must not contain business logic.
 *   **No Store Access:** Components must not read from or write to Zustand, Redux, or local storage.
 *   **No External Polling:** Components must not query APIs or Extension Registries.
 *   **Pure DOM Emissions:** All user interactions must result in isolated, bubbling `CustomEvent` emissions (prefixed with `yenvui-` or `yv-`).
+## II. The Strict Encapsulation Contract
 
-## II. CSS Intent Tokens
+A compliant chassis must isolate aesthetic details from the micro-kernel. The kernel's `shared_styles.js` provides only basic structural resets (e.g., `box-sizing: border-box`). The chassis must completely encapsulate its own component-specific layout rules (padding, margins, transition timings) inside its isolated Shadow DOM CSS.
 
+### CSS Intent Tokens
 A compliant chassis must consume and respect the following CSS custom properties to maintain structural parity with the host application's color logic:
 
 *   **Backgrounds:** `--bg`, `--bg-deep`, `--pane-bg`, `--input-bg`, `--bg-hover`

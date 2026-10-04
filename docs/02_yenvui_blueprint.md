@@ -23,9 +23,10 @@ To separate visual paint from multi-tenant state management, applications must u
 *   **The Paint (`yenVUI`):** Components like `<yenvui-card>` extend `LitElement` locally within the `yenvui` repo. They handle Shadow DOM styling, theme observation, and pure UI physics.
 *   **The State (`inSetu` / `Axoneme`):** Components extend `InSetuElement` (for local OS workspace routing) or `AxonemeElement` (for remote `AxonemeAuth` JWT token injection and `brandId` scoping).
 *   **The Handshake:** The ecosystems interact strictly through declarative HTML projection. Applications use yenVUI elements exactly like native HTML tags, injecting stateful logic via `<slot>` tags and altering visuals via CSS intent variables.
-
-### The Universal CSS Vacuum
-Consuming applications (like inSetu) must strip their global `style.css` down to the absolute minimum boilerplate (e.g., `body` margins, `padding`, and font imports). All heavy CSS lifting—theme definitions (Dark/Light/E-Ink), scrollbars, standard inputs, and semantic intent tokens (`--bg`, `--intent-primary`)—is permanently vacuumed out of the host application and centralized inside yenVUI.
+### The Universal CSS Vacuum & Strict Component Encapsulation
+Consuming applications (like inSetu) must strip their global `style.css` down to the absolute minimum boilerplate (e.g., `body` margins, `padding`, and font imports). The division of presentation logic must strictly adhere to the encapsulation contract:
+*   **Global Theme Tokens:** Theme definitions (Dark/Light/E-Ink), scrollbars, standard inputs, and semantic intent tokens (`--bg`, `--intent-primary`) are permanently vacuumed out of the host application and centralized inside yenVUI's `theme-tokens.css`.
+*   **Shadow DOM Encapsulation:** Component-specific layout classes (e.g., `.sub-tab`, `.system-action-btn`, `.spinner`) MUST NOT sit in kernel-level shared stylesheets (`shared_styles.js`). They must be strictly encapsulated inside the Shadow DOM of the atomic component that renders them.
 ### The "Dumb Component" Rule & Content Projection
 Components within yenVUI must never know *why* they are rendering data, nor should they handle data persistence or query application registries. yenVUI is strictly limited to **atomic primitives** (cards, modals, buttons, inputs).
 *   **Forbidden:** A card component querying `window.ExtensionRegistry` to determine its own buttons.
@@ -115,7 +116,7 @@ To avoid catastrophic layout collapses in live applications, all migrations must
     *   **The Legacy Modal Framework:** Convert `.fullscreen-modal`, `.dynamic-modal`, `.modal-panel`, `.modal-content`, `.modal-header`, `.modal-body`, and `.modal-footer` into `<yenvui-modal>`.
     *   **Navigation Tabs & Screens:** Convert `.tabs`, `.tab`, `.sub-tabs-bar`, `.sub-tabs`, `.sub-tab`, `.screen`, and `.tab-content` into `<yenvui-tabs>`.
     *   **Editor & CodeMirror Overrides:** Convert `.cm-editor`, `.cm-scroller`, `.CodeMirror-dialog`, `.EasyMDEContainer`, and `.cm-header-X` into `<yenvui-editor>`.
-    *   **Base Form Controls:** Vacuum `textarea`, `input[type="text"]`, `button`, `pre`, `.btn-sm`, `.system-action-btn`, and `.spinner` styling directly into `theme-tokens.css` or convert to `<yenvui-async-btn>`.
+    *   **Base Form Controls:** Vacuum `textarea`, `input[type="text"]`, `button`, and `pre` into `theme-tokens.css`. Convert `.btn-sm`, `.system-action-btn`, and `.spinner` styling directly into their respective encapsulated components (`<yenvui-async-btn>`, `<yenvui-spinner>`).
     *   **Task Badges & Typography:** Convert `.task-bug`, `.task-todo`, `.task-queue`, `.task-tag`, `.folder-label`, and `.yaml-frontmatter` into semantic theme tokens or `<yenvui-pill>` elements.
     *   **Application Shell Chrome:** Convert `.top-bar`, `.bottom-bar`, and `#status-box` into `<yenvui-toolbar>` and `<yenvui-status-bar>`.
     *   **Floating Overlays:** Convert `.wiki-link-popup` and custom absolute containers to native `#top-layer` implementations using the popover API.
