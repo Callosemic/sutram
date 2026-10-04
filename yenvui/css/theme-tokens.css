@@ -156,11 +156,14 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="light"] h6 { 
    color: var(--text) !important; 
 }
-
 /* ==========================================================================
    UNIVERSAL BASE PRIMITIVES
    ========================================================================== */
-textarea, input[type="text"], select { 
+textarea:focus, input:focus, select:focus {
+   border-color: var(--btn);
+}
+
+textarea, input[type="text"], select {  
    width: 100%; 
    background: var(--input-bg); 
    color: var(--text); 
@@ -213,6 +216,12 @@ button:hover {
    margin-top: 20px; 
    font-style: italic; 
    color: var(--text-muted); 
+}
+.folder-label {
+   font-weight: bold;
+   font-family: var(--font-mono);
+   color: var(--intent-warning);
+   font-size: 1.1rem;
 }
 
 /* E-Ink High Contrast Element Overrides */

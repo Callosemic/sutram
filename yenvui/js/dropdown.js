@@ -1,11 +1,11 @@
 import { html, css } from 'lit';
 import { YenvuiBase } from './yenvui-base.js';
-
 export class YenvuiDropdown extends YenvuiBase {
     static properties = {
         items: { type: Array },
         open: { type: Boolean, reflect: true },
-        align: { type: String }
+        align: { type: String },
+        _loadingItemId: { type: String, state: true }
     };
     static styles = css`
         :host { display: block; height: 100%; }
@@ -34,14 +34,25 @@ export class YenvuiDropdown extends YenvuiBase {
             font-size: 0.9rem; font-weight: bold; margin: 0; display: flex; 
             align-items: center; gap: 8px; width: 100%; box-sizing: border-box;
         }
-        .menu-item:hover { background: var(--input-bg, #2d2d2d); }
-        .icon { font-size: 1.1rem; line-height: 1; }
+        .menu-item:hover:not(:disabled) { background: var(--input-bg, #2d2d2d); }
+        .menu-item:disabled { opacity: 0.7; cursor: not-allowed; }
+        .icon { font-size: 1.1rem; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+
+        .menu-spinner {
+            width: 14px; height: 14px;
+            border: 2px solid var(--border, #444);
+            border-top: 2px solid var(--intent-primary, #3b82f6);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     `;
     constructor() {
         super();
         this.items = [];
         this.open = false;
         this.align = 'right';
+        this._loadingItemId = null;
     }
 
     connectedCallback() {
@@ -52,14 +63,27 @@ export class YenvuiDropdown extends YenvuiBase {
             });
         }
     }
-
     _toggle(e) {
-        this.open = !this.open;
+        if (!this._loadingItemId) this.open = !this.open;
     }
 
-    _executeItem(item, e) {
-        this.open = false;
-        if (item.onClick) item.onClick(e);
+    async _executeItem(item, e) {
+        if (this._loadingItemId) return;
+
+        if (item.asyncAction) {
+            this._loadingItemId = item.id || item.label;
+            try {
+                await item.asyncAction(e);
+            } catch (err) {
+                console.error(err);
+            } finally {
+                this._loadingItemId = null;
+                this.open = false;
+            }
+        } else {
+            this.open = false;
+            if (item.onClick) item.onClick(e);
+        }
     }
     render() {
         return html`
@@ -69,12 +93,16 @@ export class YenvuiDropdown extends YenvuiBase {
                 </div>
                 ${this.open && this.items && this.items.length > 0 ? html`
                     <div class="dropdown-menu">
-                        ${this.items.map(item => item.divider ? html`<div class="divider"></div>` : html`
-                            <button class="menu-item" @click=${(e) => this._executeItem(item, e)}>
-                                ${item.icon ? html`<span class="icon">${item.icon}</span>` : ''}
-                                <span>${item.label}</span>
-                            </button>
-                        `)}
+                        ${this.items.map(item => {
+                            if (item.divider) return html`<div class="divider"></div>`;
+                            const isLoading = this._loadingItemId === (item.id || item.label);
+                            return html`
+                                <button class="menu-item" ?disabled=${!!this._loadingItemId} @click=${(e) => this._executeItem(item, e)}>
+                                    <span class="icon">${isLoading ? html`<div class="menu-spinner"></div>` : (item.icon || '')}</span>
+                                    <span>${isLoading ? 'Processing...' : item.label}</span>
+                                </button>
+                            `;
+                        })}
                     </div>
                 ` : ''}
             </div>

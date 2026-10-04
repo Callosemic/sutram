@@ -56,32 +56,36 @@ export class YenvuiGestureController {
         if (this.active) {
             this._handlePointerUp(e);
         }
-
         this.active = true;
+        this._pointerId = e.pointerId;
 
         // Globally disable text selection while a gesture is active
         document.body.style.userSelect = 'none';
         document.body.style.webkitUserSelect = 'none';
-
         this.startX = e.clientX || (e.touches && e.touches[0].clientX);
         this.startY = e.clientY || (e.touches && e.touches[0].clientY);
         this.currentX = this.startX;
         this.currentY = this.startY;
         this.swipeAxis = null;
-        window.addEventListener('pointermove', this._boundPointerMove);
-        window.addEventListener('pointerup', this._boundPointerUp);
-        window.addEventListener('pointercancel', this._boundPointerUp);
+
+        // Bind via the capture phase so shadow-DOM children (like CodeMirror) cannot swallow pointermove
+        window.addEventListener('pointermove', this._boundPointerMove, { capture: true });
+        window.addEventListener('pointerup', this._boundPointerUp, { capture: true });
+        window.addEventListener('pointercancel', this._boundPointerUp, { capture: true });
 
         // Safari edge-swipe defeater (passive: false required to intercept)
-        this.host.addEventListener('touchmove', this._boundTouchMove, { passive: false });
+        this.host.addEventListener('touchmove', this._boundTouchMove, { passive: false, capture: true });
 
         this.onPanStart(this.startX, this.startY, e);
-
         if (this.longPressDelay > 0) {
             this._dragTimer = setTimeout(() => {
                 this.onLongPress(this.currentX, this.currentY, e);
             }, this.longPressDelay);
         }
+    }
+
+    abort() {
+        if (this.active) this._handlePointerUp(new Event('pointercancel'));
     }
 
     _handlePointerMove(e) {
@@ -99,10 +103,13 @@ export class YenvuiGestureController {
                     this._handlePointerUp(e);
                     return;
                 }
-
                 if (this._dragTimer) {
                     clearTimeout(this._dragTimer);
                     this._dragTimer = null;
+                }
+
+                if (this._pointerId && this.host && typeof this.host.setPointerCapture === 'function') {
+                    try { this.host.setPointerCapture(this._pointerId); } catch(err) {}
                 }
             }
         }
@@ -113,6 +120,11 @@ export class YenvuiGestureController {
         if (!this.active) return;
         this.active = false;
 
+        if (this._pointerId && this.host && typeof this.host.releasePointerCapture === 'function') {
+            try { this.host.releasePointerCapture(this._pointerId); } catch(err) {}
+            this._pointerId = null;
+        }
+
         // Restore text selection
         document.body.style.userSelect = '';
         document.body.style.webkitUserSelect = '';
@@ -122,10 +134,10 @@ export class YenvuiGestureController {
             this._dragTimer = null;
         }
 
-        window.removeEventListener('pointermove', this._boundPointerMove);
-        window.removeEventListener('pointerup', this._boundPointerUp);
-        window.removeEventListener('pointercancel', this._boundPointerUp);
-        this.host.removeEventListener('touchmove', this._boundTouchMove);
+        window.removeEventListener('pointermove', this._boundPointerMove, { capture: true });
+        window.removeEventListener('pointerup', this._boundPointerUp, { capture: true });
+        window.removeEventListener('pointercancel', this._boundPointerUp, { capture: true });
+        this.host.removeEventListener('touchmove', this._boundTouchMove, { capture: true });
 
         this.onPanEnd(this.currentX, this.currentY, this.swipeAxis, e);
     }

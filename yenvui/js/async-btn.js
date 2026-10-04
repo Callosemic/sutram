@@ -1,5 +1,109 @@
 import { html, css } from 'lit';
 import { YenvuiBase } from './yenvui-base.js';
+export class YenvuiBtn extends YenvuiBase {
+    static properties = {
+        label: { type: String },
+        intent: { type: String },
+        variant: { type: String },
+        emphasis: { type: Boolean },
+        btntype: { type: String },
+        disabled: { type: Boolean },
+        active: { type: Boolean }
+    };
+    static styles = css`
+        :host { 
+            display: inline-flex; 
+            vertical-align: middle;
+            min-width: max-content;
+            flex-shrink: 0;
+        }
+        button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: var(--btn-padding, 8px 14px);
+            font-size: var(--btn-font-size, 0.85rem);
+            font-family: inherit;
+            font-weight: var(--btn-font-weight, bold);
+            border-radius: var(--btn-border-radius, 8px);
+            border: 1px solid transparent;
+            cursor: pointer;
+            white-space: nowrap;
+            width: 100%;
+            min-width: max-content;
+            box-sizing: border-box;
+            transition: all 0.2s ease;
+        }
+        button:active:not(:disabled) { transform: scale(0.98); }
+        button:disabled { opacity: 0.7; cursor: not-allowed; }
+
+        /* E-Ink High Contrast Overrides */
+        :host([data-theme="e-ink"]) button {
+            background: #ffffff !important;
+            color: #000000 !important;
+            font-weight: 900 !important;
+            border: 2px solid #ec4899 !important;
+            box-shadow: 3px 3px 0 #eab308 !important;
+        }
+        :host([data-theme="e-ink"]) button:hover:not(:disabled) { background: #f1f5f9 !important; }
+        :host([data-theme="e-ink"]) button.active { background: #000000 !important; color: #ffffff !important; }
+
+        /* Base Colors */
+        .intent-primary { --btn-color: var(--intent-primary, #3b82f6); }
+        .intent-success { --btn-color: var(--intent-success, #10b981); }
+        .intent-danger { --btn-color: var(--intent-danger, #ef4444); }
+        .intent-warning { --btn-color: var(--intent-warning, #f59e0b); }
+        .intent-highlight { --btn-color: var(--intent-highlight, #8b5cf6); }
+        .intent-neutral { --btn-color: var(--intent-neutral, #64748b); }
+
+        /* Solid Variant */
+        button.variant-solid { background: var(--btn-color); color: #ffffff; }
+        button.variant-solid.intent-warning { color: #000000; }
+        button.variant-solid:hover:not(:disabled) { filter: brightness(1.1); }
+        button.variant-solid.active { box-shadow: inset 0 0 0 2px #ffffff; filter: brightness(1.15); }
+
+        /* Tinted Variant */
+        button.variant-tinted {
+            background: color-mix(in srgb, var(--btn-color) 15%, transparent);
+            color: var(--btn-color);
+            border-color: color-mix(in srgb, var(--btn-color) 40%, transparent);
+        }
+        button.variant-tinted:hover:not(:disabled) { background: color-mix(in srgb, var(--btn-color) 25%, transparent); }
+        button.variant-tinted.active { border-color: var(--btn-color); background: color-mix(in srgb, var(--btn-color) 35%, transparent); }
+
+        /* Emphasis Glow */
+        button.emphasis { box-shadow: 0 0 14px color-mix(in srgb, var(--btn-color) 50%, transparent); }
+    `;
+
+    constructor() {
+        super();
+        this.label = 'Submit';
+        this.intent = 'primary';
+        this.variant = 'tinted';
+        this.emphasis = false;
+        this.btntype = 'button';
+        this.disabled = false;
+        this.active = false;
+    }
+
+    render() {
+        return html`
+            <button 
+                type="${this.btntype}"
+                class="intent-${this.intent} variant-${this.variant} ${this.emphasis ? 'emphasis' : ''} ${this.active ? 'active' : ''}" 
+                ?disabled=${this.disabled}
+                @click=${(e) => {
+                    if (!this.disabled) {
+                        this.dispatchEvent(new CustomEvent('yv-click', { bubbles: true, composed: true, detail: { originalEvent: e } }));
+                    }
+                }}>
+                <slot>${this.label}</slot>
+            </button>
+        `;
+    }
+}
+customElements.define('yenvui-btn', YenvuiBtn);
 
 export class YenvuiAsyncBtn extends YenvuiBase {
     static properties = {
@@ -8,6 +112,8 @@ export class YenvuiAsyncBtn extends YenvuiBase {
         successLabel: { type: String },
         errorLabel: { type: String },
         intent: { type: String },
+        variant: { type: String },
+        emphasis: { type: Boolean },
         status: { type: String },
         btntype: { type: String },
         onClick: { type: Object },
@@ -29,22 +135,17 @@ export class YenvuiAsyncBtn extends YenvuiBase {
             padding: var(--btn-padding, 8px 14px);
             font-size: var(--btn-font-size, 0.85rem);
             font-family: inherit;
-            font-weight: var(--btn-font-weight, normal);
-            border-radius: var(--btn-border-radius, 4px);
-            border: none;
+            font-weight: var(--btn-font-weight, bold);
+            border-radius: var(--btn-border-radius, 8px);
+            border: 1px solid transparent;
             cursor: pointer;
             white-space: nowrap;
             width: 100%;
             min-width: max-content;
             box-sizing: border-box;
-            transition: filter 0.2s ease, transform 0.1s ease;
-            color: #ffffff;
+            transition: all 0.2s ease;
         }
 
-        button:hover:not(:disabled) {
-            filter: brightness(1.1);
-        }
-        
         button:active:not(:disabled) {
             transform: scale(0.98);
         }
@@ -52,10 +153,7 @@ export class YenvuiAsyncBtn extends YenvuiBase {
             opacity: 0.7;
             cursor: not-allowed;
         }
-        button.active {
-            box-shadow: inset 0 0 0 2px var(--text, #ffffff);
-            filter: brightness(1.15);
-        }
+
         /* E-Ink High Contrast Overrides */
         :host([data-theme="e-ink"]) button {
             background: #ffffff !important;
@@ -72,13 +170,48 @@ export class YenvuiAsyncBtn extends YenvuiBase {
             color: #ffffff !important;
         }
 
-        /* Semantic Intent Mapping */
-        .intent-primary { background: var(--intent-primary, #3b82f6); }
-        .intent-success { background: var(--intent-success, #10b981); }
-        .intent-danger { background: var(--intent-danger, #ef4444); }
-        .intent-warning { background: var(--intent-warning, #f59e0b); color: #000000; } /* Amber needs dark text */
-        .intent-highlight { background: var(--intent-highlight, #8b5cf6); }
-        .intent-neutral { background: var(--intent-neutral, #64748b); }
+        /* Base Colors */
+        .intent-primary { --btn-color: var(--intent-primary, #3b82f6); }
+        .intent-success { --btn-color: var(--intent-success, #10b981); }
+        .intent-danger { --btn-color: var(--intent-danger, #ef4444); }
+        .intent-warning { --btn-color: var(--intent-warning, #f59e0b); }
+        .intent-highlight { --btn-color: var(--intent-highlight, #8b5cf6); }
+        .intent-neutral { --btn-color: var(--intent-neutral, #64748b); }
+
+        /* Solid Variant (Default) */
+        button.variant-solid {
+            background: var(--btn-color);
+            color: #ffffff;
+        }
+        button.variant-solid.intent-warning {
+            color: #000000;
+        }
+        button.variant-solid:hover:not(:disabled) {
+            filter: brightness(1.1);
+        }
+        button.variant-solid.active {
+            box-shadow: inset 0 0 0 2px #ffffff;
+            filter: brightness(1.15);
+        }
+
+        /* Tinted Variant */
+        button.variant-tinted {
+            background: color-mix(in srgb, var(--btn-color) 15%, transparent);
+            color: var(--btn-color);
+            border-color: color-mix(in srgb, var(--btn-color) 40%, transparent);
+        }
+        button.variant-tinted:hover:not(:disabled) {
+            background: color-mix(in srgb, var(--btn-color) 25%, transparent);
+        }
+        button.variant-tinted.active {
+            border-color: var(--btn-color);
+            background: color-mix(in srgb, var(--btn-color) 35%, transparent);
+        }
+
+        /* Emphasis Glow */
+        button.emphasis {
+            box-shadow: 0 0 14px color-mix(in srgb, var(--btn-color) 50%, transparent);
+        }
     `;
     constructor() {
         super();
@@ -87,6 +220,8 @@ export class YenvuiAsyncBtn extends YenvuiBase {
         this.successLabel = '✅';
         this.errorLabel = '❌';
         this.intent = 'primary';
+        this.variant = 'tinted';
+        this.emphasis = false;
         this.status = 'idle';
         this.btntype = 'button';
         this.disabled = false;
@@ -135,7 +270,7 @@ export class YenvuiAsyncBtn extends YenvuiBase {
         return html`
             <button 
                 type="${this.btntype}"
-                class="intent-${activeIntent} ${this.active ? 'active' : ''}" 
+                class="intent-${activeIntent} variant-${this.variant} ${this.emphasis ? 'emphasis' : ''} ${this.active ? 'active' : ''}" 
                 ?disabled=${this.disabled || this.status === 'loading'}
                 @click=${this._handleClick}>
                 ${text}

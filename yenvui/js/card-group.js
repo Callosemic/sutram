@@ -125,6 +125,9 @@ export class YenvuiCardGroup extends LitElement {
         super.disconnectedCallback();
         this.removeEventListener('click', this._handleStackClick, { capture: true });
         if (this._resizeObserver) this._resizeObserver.disconnect();
+        if (this._gestureController && typeof this._gestureController.abort === 'function') {
+            this._gestureController.abort();
+        }
     }
     firstUpdated() {
         if (this.stacked) {

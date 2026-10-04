@@ -25,7 +25,6 @@ export class YenvuiEditor extends LitElement {
         writingMode: { type: Boolean },
         customExtensions: { type: Array } // Accepts an array of CodeMirror extensions from the host
     };
-
     static styles = css`
         :host { 
             display: flex; 
@@ -42,6 +41,50 @@ export class YenvuiEditor extends LitElement {
             overflow: auto; 
             font-family: var(--font-mono, monospace); 
         }
+
+        /* Legacy CodeMirror & Dialog Fallbacks */
+        .CodeMirror-dialog {
+            background: var(--input-bg) !important;
+            color: var(--text) !important;
+            border-bottom: 1px solid var(--border) !important;
+            padding: 8px 10px !important;
+        }
+        .CodeMirror-dialog input {
+            background: var(--bg) !important;
+            color: var(--text) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 4px;
+            padding: 4px 8px !important;
+            font-family: var(--font-mono, monospace);
+            outline: none;
+        }
+        .CodeMirror-dialog input:focus {
+            border-color: var(--intent-primary) !important;
+        }
+        .CodeMirror-search-match { background: #f59e0b; color: #000; }
+        .CodeMirror-search-hint { color: #888; font-style: italic; }
+
+        .EasyMDEContainer { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+        .EasyMDEContainer .CodeMirror {
+            background: var(--input-bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-family: var(--font-mono, monospace) !important;
+            font-size: 13px;
+            line-height: 1.5;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .EasyMDEContainer .CodeMirror-scroll { flex: 1; min-height: 100%; }
+        .EasyMDEContainer .CodeMirror .cm-header-1 { font-size: 1.25em; line-height: 1.3; }
+        .EasyMDEContainer .CodeMirror .cm-header-2 { font-size: 1.15em; line-height: 1.3; }
+        .EasyMDEContainer .CodeMirror .cm-header-3 { font-size: 1.05em; line-height: 1.3; }
+        .EasyMDEContainer .CodeMirror .cm-header-4,
+        .EasyMDEContainer .CodeMirror .cm-header-5,
+        .EasyMDEContainer .CodeMirror .cm-header-6 { font-size: 1em; line-height: 1.3; }
+        .editor-preview { background: var(--input-bg); color: var(--text); }
     `;
 
     constructor() {

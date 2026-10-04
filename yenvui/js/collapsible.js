@@ -23,7 +23,7 @@ export class YenvuiCollapsible extends YenvuiBase {
             user-select: none;
             transition: background 0.2s ease, border-color 0.2s ease;
             border: 1px solid var(--border);
-            border-left: 3px solid var(--intent-color, var(--intent-primary));
+            border-left: 4px solid var(--intent-color, var(--intent-primary));
             border-radius: 6px;
             margin: 0 12px;
             box-sizing: border-box;
@@ -35,12 +35,16 @@ export class YenvuiCollapsible extends YenvuiBase {
             background: color-mix(in srgb, var(--intent-color, var(--intent-primary)) var(--header-bg-mix, 10%), var(--input-bg));
             border-color: var(--border);
             border-left-color: var(--intent-color, var(--intent-primary));
+            margin-bottom: 12px;
         }
         :host([flush]) .header {
             border-radius: 0;
             border-left: none;
             border-right: none;
             margin: 0;
+        }
+        :host([flush][open]) .header {
+            margin-bottom: 12px;
         }
         .title {
             font-weight: var(--title-weight, 700);
@@ -84,16 +88,18 @@ export class YenvuiCollapsible extends YenvuiBase {
         :host([flush]) .content {
             padding: 0;
         }
-
         @container (max-width: 480px) {
             :host { margin-bottom: 0; }
             .header {
                 margin: 0;
                 border-radius: 0;
-                border-left: 3px solid var(--intent-color, var(--intent-primary));
+                border-left: 4px solid var(--intent-color, var(--intent-primary));
                 border-right: none;
                 border-top: none;
                 border-bottom: 1px solid var(--border);
+            }
+            :host([open]) .header, :host([flush][open]) .header {
+                margin-bottom: 12px;
             }
             .content { padding: 0; }
         }

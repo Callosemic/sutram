@@ -170,7 +170,6 @@ def test_set_interval_ban_compliance():
                     violations.append(f"{filepath}:{idx} -> Raw setInterval detected; use registerTick() or registerInterval()")
 
         assert not violations, f"Raw setInterval usage detected in yenVUI components:\n" + "\n".join(violations)
-
 def test_domain_isolation_compliance():
         """Ensure Sutram and yenVUI frameworks do not hardcode consuming application global domains."""
         domain_leak_pattern = re.compile(r'window\.inSetu\b')
@@ -183,3 +182,18 @@ def test_domain_isolation_compliance():
                         violations.append(f"{filepath}:{idx} -> Hardcoded domain global (window.inSetu) detected. Framework must remain agnostic.")
 
         assert not violations, f"Domain isolation violations detected:\n" + "\n".join(violations)
+
+def test_store_persistence_schema_compliance():
+    """Ensure createExtensionStore/createSutramStore do not use the legacy array format for persistKeys."""
+    legacy_pattern = re.compile(r"create(?:Extension|Sutram)Store\s*\([\s\S]*?,\s*\[\s*['\"]")
+    violations = []
+
+    for filepath in glob.glob('js/**/*.js', recursive=True):
+        with open(filepath, 'r') as f:
+            content = f.read()
+            if legacy_pattern.search(content):
+                for idx, line in enumerate(content.splitlines(), start=1):
+                    if legacy_pattern.search(line):
+                        violations.append(f"{filepath}:{idx} -> Legacy array persistKeys used. Migrate to Tri-Level persistenceSchema object.")
+
+    assert not violations, f"Legacy persistKeys arrays detected. Use Tri-Level persistenceSchema objects:\n" + "\n".join(violations)

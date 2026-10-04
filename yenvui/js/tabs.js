@@ -57,7 +57,7 @@ export class YenvuiTabs extends YenvuiBase {
         }
         /* Sub-tab variant styles */
         :host([variant="sub"]) .tabs-container {
-            padding: 0 15px 0 3px;
+            padding: 0 15px;
         }
         :host([variant="sub"]) .tab-btn {
             height: 100%;
@@ -66,9 +66,13 @@ export class YenvuiTabs extends YenvuiBase {
             color: var(--text-muted);
             border: none;
             border-bottom: 2px solid transparent;
-            padding: 0 12px;
+            padding: 0 3px;
+            margin-right: 12px;
             display: flex;
             align-items: center;
+        }
+        :host([variant="sub"]) .tab-btn:last-child {
+            margin-right: 0;
         }
         :host([variant="sub"]) .tab-btn:hover {
             color: var(--text);

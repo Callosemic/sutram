@@ -19,7 +19,6 @@ export class YenvuiToolbar extends YenvuiBase {
             position: relative;
             flex-shrink: 0;
             padding: 0;
-            margin-bottom: 12px;
             background: var(--bg, #121212);
             z-index: 10;
             display: flex;
