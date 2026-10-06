@@ -196,7 +196,7 @@ export class YenvuiEditor extends LitElement {
                     lineHeight: "1.8",
                     maxWidth: "720px",
                     margin: "0 auto",
-                    padding: "100px 10px 80px 10px"
+                    padding: "30px 10px 80px 10px"
                 },
                 ".cm-scroller .cm-line": { maxWidth: "720px" },
                 ".cm-gutters": { display: "none" }

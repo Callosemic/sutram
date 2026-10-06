@@ -79,7 +79,7 @@ export class YenvuiDropTarget extends YenvuiBase {
             align-items: center;
             justify-content: center;
             height: 120px;
-            border: 2px dashed var(--border);
+            border: 2px dashed var(--drop-target-border, var(--border));
             border-radius: 8px;
             color: var(--text-muted);
             font-size: 1.2rem;
@@ -118,11 +118,9 @@ export class YenvuiDropTarget extends YenvuiBase {
         this.intent = 'primary';
         this.zone = '';
     }
-
     render() {
-        const intentClass = this.hovered || this.intent === 'danger' ? `intent-${this.intent}` : '';
         return html`
-            <div class="${intentClass}" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; border-radius:inherit; flex-direction: column;">
+            <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; border-radius:inherit; flex-direction: column; background: transparent;">
                 <slot></slot>
             </div>
         `;

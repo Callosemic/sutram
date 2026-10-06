@@ -74,7 +74,6 @@ export class YenvuiCollapsible extends YenvuiBase {
             transform: rotate(180deg);
             color: var(--text);
         }
-
         .content {
             display: none;
             background: transparent;
@@ -83,6 +82,7 @@ export class YenvuiCollapsible extends YenvuiBase {
         :host([open]) .content {
             display: flex;
             flex-direction: column;
+            padding: 0 12px 12px 12px;
         }
 
         :host([flush]) .content {
@@ -101,7 +101,7 @@ export class YenvuiCollapsible extends YenvuiBase {
             :host([open]) .header, :host([flush][open]) .header {
                 margin-bottom: 12px;
             }
-            .content { padding: 0; }
+            :host([open]) .content { padding: 0 0 12px 0; }
         }
 
         /* High Contrast Theme Hooks */

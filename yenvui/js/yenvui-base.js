@@ -60,6 +60,7 @@ export class YenvuiScrubTrack extends YenvuiBase {
             display: flex;
             align-items: center;
             width: 100%;
+            height: 100%;
             overflow-x: auto;
             overflow-y: hidden;
             overscroll-behavior: none;

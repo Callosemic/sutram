@@ -5,6 +5,7 @@ export class YenvuiBtn extends YenvuiBase {
         label: { type: String },
         intent: { type: String },
         variant: { type: String },
+        size: { type: String },
         emphasis: { type: Boolean },
         btntype: { type: String },
         disabled: { type: Boolean },
@@ -12,7 +13,7 @@ export class YenvuiBtn extends YenvuiBase {
     };
     static styles = css`
         :host { 
-            display: inline-flex; 
+            display: inline-flex;  
             vertical-align: middle;
             min-width: max-content;
             flex-shrink: 0;
@@ -71,9 +72,11 @@ export class YenvuiBtn extends YenvuiBase {
         }
         button.variant-tinted:hover:not(:disabled) { background: color-mix(in srgb, var(--btn-color) 25%, transparent); }
         button.variant-tinted.active { border-color: var(--btn-color); background: color-mix(in srgb, var(--btn-color) 35%, transparent); }
-
         /* Emphasis Glow */
         button.emphasis { box-shadow: 0 0 14px color-mix(in srgb, var(--btn-color) 50%, transparent); }
+
+        /* Sizing */
+        button.size-sm { --btn-padding: 4px 10px; --btn-font-size: 0.75rem; }
     `;
 
     constructor() {
@@ -86,12 +89,11 @@ export class YenvuiBtn extends YenvuiBase {
         this.disabled = false;
         this.active = false;
     }
-
     render() {
         return html`
             <button 
                 type="${this.btntype}"
-                class="intent-${this.intent} variant-${this.variant} ${this.emphasis ? 'emphasis' : ''} ${this.active ? 'active' : ''}" 
+                class="intent-${this.intent} variant-${this.variant} size-${this.size || 'md'} ${this.emphasis ? 'emphasis' : ''} ${this.active ? 'active' : ''}" 
                 ?disabled=${this.disabled}
                 @click=${(e) => {
                     if (!this.disabled) {
@@ -113,6 +115,7 @@ export class YenvuiAsyncBtn extends YenvuiBase {
         errorLabel: { type: String },
         intent: { type: String },
         variant: { type: String },
+        size: { type: String },
         emphasis: { type: Boolean },
         status: { type: String },
         btntype: { type: String },
@@ -207,11 +210,13 @@ export class YenvuiAsyncBtn extends YenvuiBase {
             border-color: var(--btn-color);
             background: color-mix(in srgb, var(--btn-color) 35%, transparent);
         }
-
         /* Emphasis Glow */
         button.emphasis {
             box-shadow: 0 0 14px color-mix(in srgb, var(--btn-color) 50%, transparent);
         }
+
+        /* Sizing */
+        button.size-sm { --btn-padding: 4px 10px; --btn-font-size: 0.75rem; }
     `;
     constructor() {
         super();
@@ -270,7 +275,7 @@ export class YenvuiAsyncBtn extends YenvuiBase {
         return html`
             <button 
                 type="${this.btntype}"
-                class="intent-${activeIntent} variant-${this.variant} ${this.emphasis ? 'emphasis' : ''} ${this.active ? 'active' : ''}" 
+                class="intent-${activeIntent} variant-${this.variant} size-${this.size || 'md'} ${this.emphasis ? 'emphasis' : ''} ${this.active ? 'active' : ''}" 
                 ?disabled=${this.disabled || this.status === 'loading'}
                 @click=${this._handleClick}>
                 ${text}

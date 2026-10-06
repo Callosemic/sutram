@@ -9,8 +9,10 @@ export class YenvuiCard extends YenvuiBase {
         detailPrefix: { type: String },
         detailSuffix: { type: String },
         descriptionText: { type: String },
+        statusText: { type: String },
         icon: { type: String },
         intentColor: { type: String },
+        intent: { type: String },
         selected: { type: Boolean, reflect: true },
         disableSelection: { type: Boolean },
         _overlayActive: { type: Boolean, reflect: true },
@@ -90,12 +92,12 @@ export class YenvuiCard extends YenvuiBase {
             border-left-color: var(--card-intent, var(--intent-primary)) !important;
             box-shadow: 2px 0 10px rgba(99, 102, 241, 0.45);
         }
-
         :host([stale]) .card-wrapper {
-            opacity: 0.65;
+            opacity: 0.6;
+            pointer-events: none;
             filter: grayscale(0.3);
             border-style: dashed;
-            transition: opacity 0.3s ease, filter 0.3s ease;
+            transition: opacity 0.2s ease, filter 0.2s ease;
         }
         .content-col {
             flex: 1;
@@ -208,6 +210,8 @@ export class YenvuiCard extends YenvuiBase {
             transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
             z-index: 10;
             overflow: hidden;
+            border-top-left-radius: var(--card-border-top-left-radius, var(--card-border-radius, 8px));
+            border-bottom-left-radius: var(--card-border-bottom-left-radius, var(--card-border-radius, 8px));
             border-top-right-radius: var(--card-border-top-right-radius, var(--card-border-radius, 8px));
             border-bottom-right-radius: var(--card-border-bottom-right-radius, var(--card-border-radius, 8px));
         }
@@ -518,8 +522,11 @@ export class YenvuiCard extends YenvuiBase {
         this._checkActions();
     }
     render() {
+        const isSingleRow = !this.descriptionText && !this.detailText;
+        const resolvedIntent = this.intent ? `var(--intent-${this.intent})` : (this.intentColor || 'var(--intent-neutral)');
+
         return html`
-            <div class="card-wrapper" style="--card-intent: ${this.intentColor || 'var(--intent-neutral)'}"
+            <div class="card-wrapper" style="--card-intent: ${resolvedIntent}"
                 @mouseleave=${() => { if (window.matchMedia('(hover: hover)').matches && !this._gestureController.active) this._overlayActive = false; }}
                 @pointerdown=${(e) => this._gestureController.start(e)}>
 
@@ -533,12 +540,13 @@ export class YenvuiCard extends YenvuiBase {
                 }} style="cursor: pointer; padding: 12px; min-width: 0;">
                     <div class="card-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; gap: 8px;">
                         <div class="card-title" style="display: flex; align-items: center; gap: 6px; font-weight: bold; color: var(--text); font-size: 0.85rem; min-width: 0; overflow: hidden;">
-                            ${this.icon && this.icon.startsWith('<i') ? html`<div style="flex-shrink: 0;" .innerHTML=${this.icon}></div>` : (this.icon ? html`<span style="flex-shrink: 0;">${this.icon}</span>` : '')}
+                            ${this.icon && this.icon.startsWith('<i') ? html`<div style="flex-shrink: 0;" .innerHTML=${this.icon}></div>` : (this.icon ? (/^[a-zA-Z0-9-]+$/.test(this.icon) ? html`<i data-lucide="${this.icon}" style="width: 14px; height: 14px; color: var(--card-intent, var(--intent-primary)); flex-shrink: 0;"></i>` : html`<span style="flex-shrink: 0;">${this.icon}</span>`) : '')}
                             <yenvui-scrub-track style="flex: 1; min-width: 0;">
                                 ${this.titleText}
                             </yenvui-scrub-track>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                            ${this.statusText ? html`<span style="font-size: 0.85rem; color: var(--text-muted); font-style: italic; margin-right: 4px;">${this.statusText}</span>` : ''}
                             <slot name="header-actions"></slot>
                             ${this.detailSuffix ? html`
                                 <div class="card-detail-suffix" style="font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); opacity: 0.8; flex-shrink: 0; margin-left: 8px;">
@@ -591,7 +599,7 @@ export class YenvuiCard extends YenvuiBase {
 
                     if (isActionable) this._overlayActive = false; 
                 }, capture: true}}>
-                    <span class="tray-caption">${this.titleText}</span>
+                    ${!isSingleRow ? html`<span class="tray-caption">${this.titleText}</span>` : ''}
                     <div class="actions-wrapper">
                         <slot name="actions" @slotchange=${this._handleSlotChange}></slot>
                     </div>
