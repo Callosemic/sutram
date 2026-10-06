@@ -2,6 +2,67 @@
 
 <!-- version list -->
 
+## v2.0.0 (2026-10-06)
+
+### Chores
+
+- Code index
+  ([`7c2f760`](https://github.com/Callosemic/sutram/commit/7c2f76055d00cd4ffd9577e59d4e5dd345a7715b))
+
+- Docs
+  ([`eb087e7`](https://github.com/Callosemic/sutram/commit/eb087e7eaa6d60e6801f453aebf5894199f02b88))
+
+- Docs
+  ([`34a5b8a`](https://github.com/Callosemic/sutram/commit/34a5b8a593119efbec7d0a38497ea9b89f6dba2b))
+
+- Global workspace sweep
+  ([`80c81e9`](https://github.com/Callosemic/sutram/commit/80c81e98888ddb7a3de51c8a0b20914a7ed1958c))
+
+- Global workspace sweep
+  ([`0e26143`](https://github.com/Callosemic/sutram/commit/0e26143e16cf921f7581c0538994b284ad0f4442))
+
+- Global workspace sweep
+  ([`25eb29f`](https://github.com/Callosemic/sutram/commit/25eb29fba09f66ce989a23be6a5fe54ae221a687))
+
+- Global workspace sweep
+  ([`272ee3f`](https://github.com/Callosemic/sutram/commit/272ee3f19c6185a7ee2aef7d717700f0bb2286f2))
+
+- Global workspace sweep
+  ([`652b550`](https://github.com/Callosemic/sutram/commit/652b550099a8592e44c6891533abda4155edf41d))
+
+### Features
+
+- Floating window projection layer, tri-level persistence schema, and action middleware
+  ([`5f29fcd`](https://github.com/Callosemic/sutram/commit/5f29fcdf43ee98252b886ed8f6a79ba464eca92d))
+
+- Floating window projection layer, tri-level persistence schema, and action middleware
+  ([`5615321`](https://github.com/Callosemic/sutram/commit/5615321660c745d4df4fd659039aca9d4203076b))
+
+- **kernel**: Add native file sharing utility and support synchronous selection batch actions
+  ([`5092b2a`](https://github.com/Callosemic/sutram/commit/5092b2a35a32ad2d151a154c1826d6981a00cf1e))
+
+- **sutram**: Introduce 3-column spatial layout engine, DOM projection pool, and unified gesture
+  physics
+  ([`fe07df7`](https://github.com/Callosemic/sutram/commit/fe07df7bbbb37afc6c1952cc84c7d7cd39e6952e))
+
+- **sutram**: Introduce 3-column spatial layout engine, DOM projection pool, and unified gesture
+  physics
+  ([`aeb4c7b`](https://github.com/Callosemic/sutram/commit/aeb4c7b4d01573e6cab9356f0cca028dafba52c9))
+
+### Refactoring
+
+- Introduce SutramContextMixin, direct primitive inheritance, and grid-constrained window
+  projections
+  ([`35f5f8f`](https://github.com/Callosemic/sutram/commit/35f5f8ff992379ebf4ee41d3aab8d0b6559b5994))
+
+- Introduce SutramContextMixin, direct primitive inheritance, and grid-constrained window
+  projections
+  ([`1a515da`](https://github.com/Callosemic/sutram/commit/1a515da0c4679481018b59ddb8fd862bb7d7a9e2))
+
+- **yenvui**: Centralize theme mutation observer into YenvuiBase and add offline sync states
+  ([`4314677`](https://github.com/Callosemic/sutram/commit/43146770cab83acb3d0d13562ca23d8ac9a044c2))
+
+
 ## v1.0.0 (2026-09-24)
 
 ### Bug Fixes
