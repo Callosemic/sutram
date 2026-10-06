@@ -119,65 +119,12 @@ function subscribeSutramToTheme(element) {
         globalSutramThemeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
     }
 }
-
-export class SutramElement extends LitElement {
+export const SutramContextMixin = (SuperClass) => class extends SuperClass {
     constructor() {
         super();
         this._storeUnsubs = [];
         this._managedIntervals = [];
         this._managedListeners = [];
-
-        // Class-Level Error Boundary: Safely isolate subclass connectedCallback & render exceptions
-        const proto = Object.getPrototypeOf(this);
-        if (proto && proto.connectedCallback && !proto._isSafeConnected) {
-            const origConnected = proto.connectedCallback;
-            proto.connectedCallback = function(...args) {
-                try {
-                    origConnected.apply(this, args);
-                } catch (e) {
-                    console.error(`⚠️ [Component Error Boundary] <${this.tagName ? this.tagName.toLowerCase() : 'element'}> failed in connectedCallback:`, e);
-                    if (window.Sutram?.stores?.Toast?.getState) {
-                        window.Sutram.stores.Toast.getState().addToast(
-                            `Component <${this.tagName ? this.tagName.toLowerCase() : 'element'}> error: ${e.message}`,
-                            'danger'
-                        );
-                    }
-                }
-            };
-            proto._isSafeConnected = true;
-        }
-
-        if (proto && proto.render && !proto._isSafeRender) {
-            const origRender = proto.render;
-            proto.render = function(...args) {
-                try {
-                    return origRender.apply(this, args);
-                } catch (e) {
-                    console.error(`⚠️ [Component Render Boundary] <${this.tagName ? this.tagName.toLowerCase() : 'element'}> failed in render:`, e);
-                    return html`<div style="padding: 10px; color: var(--intent-danger); background: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; font-family: var(--font-mono); font-size: 0.8rem;">⚠️ Element &lt;${this.tagName ? this.tagName.toLowerCase() : 'element'}&gt; render error: ${e.message}</div>`;
-                }
-            };
-            proto._isSafeRender = true;
-        }
-    }
-    observeTheme() {
-        subscribeSutramToTheme(this);
-    }
-
-    updated(changedProperties) {
-        super.updated(changedProperties);
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
-            window.lucide.createIcons({ root: this.shadowRoot });
-        }
-    }
-
-    registerOutsideClick(callback) {
-        const listener = (e) => {
-            if (!e.composedPath().includes(this)) {
-                callback(e);
-            }
-        };
-        this.registerGlobalListener('click', document, listener);
     }
 
     subscribe(storeOrName, selectorOrListener, listener = undefined) {
@@ -235,11 +182,10 @@ export class SutramElement extends LitElement {
             composed: true 
         }));
     }
-    disconnectedCallback() {
-        super.disconnectedCallback();
-        sutramThemeSubscribers.delete(this);
 
-        // Memory safety: automated teardown of all subscriptions and listeners
+    disconnectedCallback() {
+        if (super.disconnectedCallback) super.disconnectedCallback();
+
         this._storeUnsubs.forEach(unsub => unsub());
         this._storeUnsubs = [];
 
@@ -250,6 +196,68 @@ export class SutramElement extends LitElement {
             targetNode.removeEventListener(eventType, callback, options);
         });
         this._managedListeners = [];
+    }
+};
+
+export class SutramElement extends SutramContextMixin(LitElement) {
+    constructor() {
+        super();
+
+        // Class-Level Error Boundary: Safely isolate subclass connectedCallback & render exceptions
+        const proto = Object.getPrototypeOf(this);
+        if (proto && proto.connectedCallback && !proto._isSafeConnected) {
+            const origConnected = proto.connectedCallback;
+            proto.connectedCallback = function(...args) {
+                try {
+                    origConnected.apply(this, args);
+                } catch (e) {
+                    console.error(`⚠️ [Component Error Boundary] <${this.tagName ? this.tagName.toLowerCase() : 'element'}> failed in connectedCallback:`, e);
+                    if (window.Sutram?.stores?.Toast?.getState) {
+                        window.Sutram.stores.Toast.getState().addToast(
+                            `Component <${this.tagName ? this.tagName.toLowerCase() : 'element'}> error: ${e.message}`,
+                            'danger'
+                        );
+                    }
+                }
+            };
+            proto._isSafeConnected = true;
+        }
+
+        if (proto && proto.render && !proto._isSafeRender) {
+            const origRender = proto.render;
+            proto.render = function(...args) {
+                try {
+                    return origRender.apply(this, args);
+                } catch (e) {
+                    console.error(`⚠️ [Component Render Boundary] <${this.tagName ? this.tagName.toLowerCase() : 'element'}> failed in render:`, e);
+                    return html`<div style="padding: 10px; color: var(--intent-danger); background: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; font-family: var(--font-mono); font-size: 0.8rem;">⚠️ Element &lt;${this.tagName ? this.tagName.toLowerCase() : 'element'}&gt; render error: ${e.message}</div>`;
+                }
+            };
+            proto._isSafeRender = true;
+        }
+    }
+    observeTheme() {
+        subscribeSutramToTheme(this);
+    }
+
+    updated(changedProperties) {
+        super.updated(changedProperties);
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+            window.lucide.createIcons({ root: this.shadowRoot });
+        }
+    }
+    registerOutsideClick(callback) {
+        const listener = (e) => {
+            if (!e.composedPath().includes(this)) {
+                callback(e);
+            }
+        };
+        this.registerGlobalListener('click', document, listener);
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        sutramThemeSubscribers.delete(this);
     }
 }
 export const ExtensionRegistry = {
@@ -578,18 +586,67 @@ export const LayoutStore = createSutramStore('Layout', {
     mobileViewportIndex: 1, // 0 = left, 1 = center, 2 = right
     capacity: 3, // 1, 2, or 3 columns
     windows: [],
-    openWindow: (entity, x = 100, y = 100) => LayoutStore.setState((state) => ({
-        windows: [...state.windows.filter(w => w.id !== entity.id), { ...entity, x, y, z: Date.now() }]
-    })),
+    openWindow: (entity, anchorCol = 'center', span = 1) => LayoutStore.setState((state) => {
+        const { capacity, focusedColumn, mobileViewportIndex } = state;
+        let visibleCols = ['left', 'center', 'right'];
+        if (capacity === 1) {
+            const colMap = ['left', 'center', 'right'];
+            visibleCols = [colMap[mobileViewportIndex] || focusedColumn || 'center'];
+        } else if (capacity === 2) {
+            visibleCols = ['left', 'center'];
+        }
+
+        let safeAnchor = anchorCol;
+        let safeSpan = Math.min(span, capacity);
+        if (!visibleCols.includes(safeAnchor)) {
+            safeAnchor = visibleCols[0];
+        }
+        if (capacity === 2 && safeSpan === 2 && safeAnchor === 'right') {
+            safeAnchor = 'left';
+        }
+
+        return {
+            windows: [...state.windows.filter(w => w.id !== entity.id), { ...entity, anchorCol: safeAnchor, span: safeSpan, z: Date.now() }]
+        };
+    }),
     closeWindow: (id) => {
         LayoutStore.setState((state) => ({
             windows: state.windows.filter(w => w.id !== id)
         }));
         LayoutStore.getState().evictProjection(id);
     },
-    updateWindowPosition: (id, x, y) => LayoutStore.setState((state) => ({
-        windows: state.windows.map(w => w.id === id ? { ...w, x, y, z: Date.now() } : w)
+    updateWindowConstraints: (id, anchorCol, span) => LayoutStore.setState((state) => ({
+        windows: state.windows.map(w => w.id === id ? { ...w, anchorCol, span, z: Date.now() } : w)
     })),
+    enforceWindowBounds: () => LayoutStore.setState((state) => {
+        const { capacity, focusedColumn, mobileViewportIndex } = state;
+        let visibleCols = ['left', 'center', 'right'];
+        if (capacity === 1) {
+            const colMap = ['left', 'center', 'right'];
+            visibleCols = [colMap[mobileViewportIndex] || focusedColumn || 'center'];
+        } else if (capacity === 2) {
+            visibleCols = ['left', 'center'];
+        }
+
+        const newWindows = state.windows.map(w => {
+            let newAnchor = w.anchorCol || 'center';
+            let newSpan = Math.min(w.span || 1, capacity);
+
+            if (!visibleCols.includes(newAnchor)) {
+                if (newAnchor === 'left' && !visibleCols.includes('left')) newAnchor = visibleCols[0];
+                if (newAnchor === 'right' && !visibleCols.includes('right')) newAnchor = visibleCols[visibleCols.length - 1];
+                if (newAnchor === 'center') newAnchor = visibleCols[0];
+            }
+
+            if (capacity === 2 && newSpan === 2 && newAnchor === 'right') {
+                newAnchor = 'left';
+            }
+
+            return { ...w, anchorCol: newAnchor, span: newSpan };
+        });
+
+        return { windows: newWindows };
+    }),
     focusWindow: (id) => LayoutStore.setState((state) => ({
         windows: state.windows.map(w => w.id === id ? { ...w, z: Date.now() } : w)
     })),
@@ -600,17 +657,50 @@ export const LayoutStore = createSutramStore('Layout', {
             [column]: { ...state.columns[column], pinned: [...state.columns[column].pinned, entity] } 
         }
     })),
-
     unpinFromColumn: (column, entityId) => LayoutStore.setState((state) => ({
         columns: { 
             ...state.columns, 
-            [column]: { ...state.columns[column], pinned: state.columns[column].pinned.filter(e => e.id !== entityId) } 
+            [column]: { 
+                ...state.columns[column], 
+                pinned: state.columns[column].pinned.filter(e => e.id !== entityId),
+                active: state.columns[column].active === entityId ? null : state.columns[column].active
+            } 
         }
     })),
+    setActiveProjection: (col, id) => LayoutStore.setState((state) => ({
+        columns: {
+            ...state.columns,
+            [col]: { ...state.columns[col], active: id }
+        }
+    })),
+    setFocusedColumn: (col) => {
+        LayoutStore.setState(state => {
+            // Guard: Prevent navigating into empty spatial columns
+            if (state.columns[col] && (!state.columns[col].pinned || state.columns[col].pinned.length === 0)) {
+                return {};
+            }
 
-    setFocusedColumn: (col) => LayoutStore.setState({ focusedColumn: col }),
-    setMobileViewport: (index) => LayoutStore.setState({ mobileViewportIndex: index }),
-    setCapacity: (cap) => LayoutStore.setState({ capacity: cap }),
+            const colMap = { 'left': 0, 'center': 1, 'right': 2 };
+            const targetIdx = colMap[col] !== undefined ? colMap[col] : 1;
+            let newViewport = state.mobileViewportIndex;
+            if (state.capacity === 1) {
+                newViewport = targetIdx;
+            } else if (state.capacity === 2) {
+                newViewport = 1;
+            }
+
+            return { focusedColumn: col, mobileViewportIndex: newViewport };
+        });
+        LayoutStore.getState().enforceWindowBounds();
+    },
+    setMobileViewport: (index) => {
+        LayoutStore.setState({ mobileViewportIndex: index });
+        LayoutStore.getState().enforceWindowBounds();
+    },
+    setCapacity: (cap) => {
+        LayoutStore.setState({ capacity: cap });
+        LayoutStore.getState().enforceWindowBounds();
+    },
     evictProjection: (id) => {
         // Dispatch a global intent so the shell and domain stores can perform surgical garbage collection
         if (typeof window !== 'undefined') {

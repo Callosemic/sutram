@@ -1,6 +1,6 @@
 // sutram/js/app_shell.js (Compiled Vendor Artifact)
 import { html, css } from 'lit';
-import { SutramElement, ExtensionRegistry, LayoutStore } from './sdk.js';
+import { SutramElement, ExtensionRegistry, LayoutStore } from './sutram_sdk.js';
 import { sharedStyles } from './shared_styles.js';
 import { debounce } from './utils.js';
 import { SutramProjectionCompiler, SutramDOMPool } from './projection_engine.js';
@@ -10,8 +10,6 @@ import { YenvuiGestureController, getDeepElementFromPoint } from '../../yenvui/j
 
 export class SutramAppShell extends SutramElement {
     static properties = {
-        activeTab: { type: String },
-        activeSubTabs: { type: Object },
         _layoutConfig: { type: Array },
         _spatialState: { type: Object }
     };
@@ -42,7 +40,10 @@ export class SutramAppShell extends SutramElement {
         }
         /* Primary Tab Buttons */
         .tab-btn {
-            padding: 6px 10px;
+            padding: 0 10px;
+            height: 100%;
+            display: flex;
+            align-items: center;
             cursor: pointer;
             font-weight: 500;
             color: var(--text-muted);
@@ -182,7 +183,6 @@ export class SutramAppShell extends SutramElement {
         .col-header {
             padding-top: 0 !important;
             padding-bottom: 0 !important;
-            padding-right: 0 !important;
             height: 44px;
             align-items: stretch !important;
         }
@@ -225,8 +225,7 @@ export class SutramAppShell extends SutramElement {
             height: 36px;
             background: var(--bg-deep);
             border-bottom: 1px solid var(--border);
-            padding-left: 2px;
-            padding-right: 0;
+            padding: 0 12px;
             flex-shrink: 0;
             position: relative;
         }
@@ -331,7 +330,7 @@ export class SutramAppShell extends SutramElement {
         /* Draggable Tab Enhancements */
         .sub-tab {
             touch-action: none; user-select: none; display: flex; align-items: center;
-            cursor: pointer; padding: 0 3px; margin-right: 12px; font-size: 0.9rem; font-weight: 500; 
+            cursor: pointer; padding: 0; margin-right: 16px; font-size: 0.9rem; font-weight: 500; 
             color: var(--text-muted); white-space: nowrap; transition: all 0.2s; height: 100%; 
             border-bottom: 2px solid transparent; box-sizing: border-box; outline: none;
         }
@@ -364,19 +363,25 @@ export class SutramAppShell extends SutramElement {
     `];
     constructor() {
         super();
-        this.activeTab = '';
-        this.activeSubTabs = {};
         this._layoutConfig = [];
         this._domPool = new SutramDOMPool();
         this._spatialState = { capacity: 3, focusedColumn: 'center', mobileViewportIndex: 1, columns: { left: { pinned: [] }, center: { pinned: [] }, right: { pinned: [] } } };
         // PointerEvent Drag State
-        this._dragState = { active: false, entity: null, sourceCol: null, currentZone: null, startX: 0, startY: 0, currentX: 0, currentY: 0 };
-
-        this._colActiveTabs = { left: null, center: null, right: null };
 
         // Custom Overlay State for Launcher Folders
         this._launcherDropdown = null;
     }
+
+    _safeEvict(id, executeEvict) {
+        const buffer = window.inSetu?.stores?.Fs?.getState()?.activeBuffers?.[id];
+        if (buffer && buffer.isFS && buffer.content !== buffer.originalContent) {
+            if (!confirm(`You have unsaved changes in ${id.split('/').pop()}.\n\nClick OK to discard changes and close, or Cancel to abort.`)) {
+                return;
+            }
+        }
+        executeEvict();
+    }
+
     // --- PointerEvent Drag & Drop Mechanics ---
     _activateDrag() {
         if (this._dragController && this._dragController._dragTimer) { 
@@ -387,9 +392,24 @@ export class SutramAppShell extends SutramElement {
         this.requestUpdate();
         if (navigator.vibrate) navigator.vibrate(50);
     }
-
     _handlePointerDown(e, entity, sourceCol, originType = 'subtab') {
-        this._dragState = { active: false, entity, sourceCol, currentZone: null, startX: e.clientX, startY: e.clientY, currentX: e.clientX, currentY: e.clientY, originType };
+        let sourceRect = null;
+        if (sourceCol === 'window') {
+            const path = e.composedPath();
+            const winNode = path.find(n => n.tagName && n.tagName.toLowerCase() === 'sutram-window');
+            if (winNode && winNode.parentElement) {
+                const r = winNode.parentElement.getBoundingClientRect();
+                sourceRect = { left: r.left, top: r.top, width: r.width, height: r.height };
+            }
+        } else if (sourceCol) {
+            const colNode = this.shadowRoot.querySelector(`.spatial-col[data-col-id="${sourceCol}"]`);
+            if (colNode) {
+                const r = colNode.getBoundingClientRect();
+                sourceRect = { left: r.left, top: r.top, width: r.width, height: r.height };
+            }
+        }
+
+        this._dragState = { active: false, entity, sourceCol, currentZone: null, startX: e.clientX, startY: e.clientY, currentX: e.clientX, currentY: e.clientY, originType, sourceRect };
 
         if (!this._dragController) {
             this._dragController = new YenvuiGestureController(this, {
@@ -406,7 +426,7 @@ export class SutramAppShell extends SutramElement {
                     }
                     this._dragState.currentX = x;
                     this._dragState.currentY = y;
-
+                    let zoneChanged = false;
                     // Throttle the heavy DOM piercing to ~20fps (50ms) for drop zone detection
                     const now = Date.now();
                     if (!this._lastDropCheck || now - this._lastDropCheck > 50) {
@@ -415,6 +435,7 @@ export class SutramAppShell extends SutramElement {
                         const newZone = dropTarget ? dropTarget.zone : null;
                         if (this._dragState.currentZone !== newZone) {
                             this._dragState.currentZone = newZone;
+                            zoneChanged = true;
                         }
                     }
 
@@ -422,7 +443,13 @@ export class SutramAppShell extends SutramElement {
                     // and write coordinates directly to the isolated DragCoordinator component at 60fps.
                     const coordinator = this.shadowRoot.querySelector('sutram-drag-coordinator');
                     if (coordinator) {
-                        coordinator.dragState = { ...this._dragState };
+                        if (zoneChanged) {
+                            // Only trigger a full Lit reconciliation if the drop zones actually need to visually shuffle
+                            coordinator.dragState = { ...this._dragState };
+                        } else if (typeof coordinator.updatePointer === 'function') {
+                            // Hardware-accelerated GPU translation for buttery smooth 60fps tracking
+                            coordinator.updatePointer(x, y);
+                        }
                     }
                 },
                 onPanEnd: (endX, endY) => {
@@ -433,13 +460,26 @@ export class SutramAppShell extends SutramElement {
                         if (targetZone && window.Sutram?.stores?.Layout) {
                             const layout = window.Sutram.stores.Layout.getState();
                             if (targetZone === 'close') {
-                                if (sourceCol === 'window') layout.closeWindow(entity.id);
-                                else if (sourceCol) layout.unpinFromColumn(sourceCol, entity.id);
-                                layout.evictProjection(entity.id);
+                                this._safeEvict(entity.id, () => {
+                                    if (sourceCol === 'window') layout.closeWindow(entity.id);
+                                    else if (sourceCol) layout.unpinFromColumn(sourceCol, entity.id);
+                                    layout.evictProjection(entity.id);
+                                });
                             } else if (targetZone === 'window') {
                                 if (sourceCol === 'window') layout.closeWindow(entity.id);
                                 else if (sourceCol) layout.unpinFromColumn(sourceCol, entity.id);
-                                layout.openWindow(entity, endX - 300, endY - 200);
+                                layout.openWindow(entity, layout.focusedColumn || 'center', 1);
+                            } else if (targetZone.startsWith('span-')) {
+                                const parts = targetZone.split('-');
+                                const span = parseInt(parts[1], 10);
+                                const anchorCol = parts[2];
+
+                                if (sourceCol === 'window') {
+                                    layout.updateWindowConstraints(entity.id, anchorCol, span);
+                                } else {
+                                    if (sourceCol) layout.unpinFromColumn(sourceCol, entity.id);
+                                    layout.openWindow(entity, anchorCol, span);
+                                }
                             } else if (targetZone.startsWith('reorder-')) {
                                 if (sourceCol) {
                                     const targetIdx = parseInt(targetZone.replace('reorder-', ''), 10);
@@ -458,20 +498,14 @@ export class SutramAppShell extends SutramElement {
                                 const destCol = targetZone;
                                 if (sourceCol === 'window') layout.closeWindow(entity.id);
                                 else if (sourceCol) layout.unpinFromColumn(sourceCol, entity.id);
-
                                 layout.pinToColumn(destCol, entity);
                                 layout.setFocusedColumn(destCol);
-                                this._colActiveTabs[destCol] = entity.id;
+                                layout.setActiveProjection(destCol, entity.id);
 
                                 const colIndexes = { 'left': 0, 'center': 1, 'right': 2 };
                                 if (this._spatialState?.capacity === 1) {
                                     this._setViewportIndex(colIndexes[destCol]);
                                 }
-
-                                window.dispatchEvent(new CustomEvent('shell-subtab-changed', {
-                                    detail: { tabId: destCol, subId: entity.id, isAlreadyActive: false },
-                                    bubbles: true, composed: true
-                                }));
                             }
                         }
                     }
@@ -544,11 +578,29 @@ export class SutramAppShell extends SutramElement {
                     const currentCap = storeState.capacity || 3;
                     if (currentCap !== maxCapacity && typeof storeState.setCapacity === 'function') {
                         storeState.setCapacity(maxCapacity);
-
                         if (maxCapacity === 1 && storeState.focusedColumn) {
                             const colMap = { 'left': 0, 'center': 1, 'right': 2 };
                             storeState.setMobileViewport(colMap[storeState.focusedColumn] || 1);
                         }
+
+                        // Enforce window visibility bounds on resize
+                        const windows = storeState.windows || [];
+                        windows.forEach(win => {
+                            let newSpan = Math.min(win.span || 1, maxCapacity);
+                            let newAnchor = win.anchorCol || 'center';
+                            if (maxCapacity === 1) {
+                                newSpan = 1;
+                                newAnchor = storeState.focusedColumn || 'center';
+                            } else if (maxCapacity === 2) {
+                                if (newAnchor === 'right') {
+                                    newAnchor = newSpan === 2 ? 'left' : 'center';
+                                }
+                            }
+
+                            if (newSpan !== win.span || newAnchor !== win.anchorCol) {
+                                storeState.updateWindowConstraints(win.id, newAnchor, newSpan);
+                            }
+                        });
                     }
                 }
             }, 100);
@@ -558,26 +610,6 @@ export class SutramAppShell extends SutramElement {
         // Break synchronous infinite loops by debouncing the layout compilation listener
         this._debouncedCompile = debounce(() => this._compileLayout(), 50);
         this.registerGlobalListener('sutram-layout-recompile', window, this._debouncedCompile);
-        this.registerGlobalListener('sutram-route-changed', window, (e) => {
-            this.activeTab = e.detail?.tab || '';
-            this.activeSubTabs = e.detail?.subTabs || {};
-        });
-
-        // Catch external file-open events (like clicking cards in Gather) and pull them to the foreground
-        this.registerGlobalListener('shell-subtab-changed', window, (e) => {
-            const { subId, background } = e.detail || {};
-            // Respect intentional background opening (Ctrl-Click), otherwise force foreground
-            if (subId && !background && window.Sutram?.stores?.Layout) {
-                const layout = window.Sutram.stores.Layout.getState();
-                for (const col of ['left', 'center', 'right']) {
-                    if (layout.columns[col]?.pinned.some(p => p.id === subId)) {
-                        this._colActiveTabs[col] = subId;
-                        this.requestUpdate();
-                        break;
-                    }
-                }
-            }
-        });
 
         this._compileLayout();
         } catch(err) { console.error("[Telemetry] AppShell connectedCallback error:", err); }
@@ -633,6 +665,31 @@ export class SutramAppShell extends SutramElement {
     _compileLayout() {
         try {
             this._layoutConfig = SutramProjectionCompiler.getCompiledLayout();
+
+            // Ghost Projection Cleanup: Purge orphaned layout states for deactivated extensions
+            const layoutStore = window.Sutram?.stores?.Layout;
+            if (layoutStore) {
+                const state = layoutStore.getState();
+                let changed = false;
+                const newCols = { ...state.columns };
+
+                const isExtActive = (extName) => window.inSetu?.isCore?.(extName) || window.ACTIVE_EXTENSIONS?.includes(extName);
+
+                ['left', 'center', 'right'].forEach(col => {
+                    if (!newCols[col] || !newCols[col].pinned) return;
+                    const validPins = newCols[col].pinned.filter(p => !p.extName || isExtActive(p.extName));
+                    if (validPins.length !== newCols[col].pinned.length) {
+                        newCols[col] = { ...newCols[col], pinned: validPins };
+                        if (newCols[col].active && !validPins.some(p => p.id === newCols[col].active)) {
+                            newCols[col].active = validPins.length > 0 ? validPins[0].id : null;
+                        }
+                        changed = true;
+                    }
+                });
+
+                if (changed) layoutStore.setState({ columns: newCols });
+            }
+
             this.requestUpdate();
         } catch(err) { console.error("[Telemetry] AppShell _compileLayout error:", err); }
     }
@@ -687,11 +744,7 @@ export class SutramAppShell extends SutramElement {
                             const colMap = ['left', 'center', 'right'];
                             visibleCols = [colMap[mobileViewportIndex] || focusedColumn || 'center'];
                         } else if (capacity === 2) {
-                            if (focusedColumn === 'right' || mobileViewportIndex === 2) {
-                                visibleCols = ['center', 'right'];
-                            } else {
-                                visibleCols = ['left', 'center'];
-                            }
+                            visibleCols = ['left', 'center'];
                         }
 
                         if (!visibleCols.includes(targetCol)) {
@@ -701,14 +754,13 @@ export class SutramAppShell extends SutramElement {
                     }
                     if (layoutState) {
                         layoutState.setFocusedColumn(targetCol);
+                        layoutState.setActiveProjection(targetCol, child.id);
                         if (capacity === 1) {
                             const colIndexes = { 'left': 0, 'center': 1, 'right': 2 };
                             this._setViewportIndex(colIndexes[targetCol]);
                         }
                     }
-                    this._colActiveTabs[targetCol] = child.id;
-                    this._handleTabClick(child.targetParent);
-                    this._handleSubTabClick(child.targetParent, child.id);
+                    this._handleSubTabClick(child.id);
                     this._launcherDropdown = null;
                     this.requestUpdate();
                 }}>
@@ -719,29 +771,24 @@ export class SutramAppShell extends SutramElement {
             </button>
         `;
     }
-
     _getCachedComponent(componentTag, subId = null) {
         return this._domPool.get(componentTag, subId);
     }
-
-    _handleTabClick(tabId) {
-        const isAlreadyActive = this.activeTab === tabId;
-        this.dispatchEvent(new CustomEvent('shell-tab-changed', { detail: { tabId, isAlreadyActive }, bubbles: true, composed: true }));
-    }
     _updateUrlHash(colId, subId) {
         const activeWs = window.inSetu?.utils?.getActiveWorkspace ? window.inSetu.utils.getActiveWorkspace() : 'default';
-        const hash = `#/${activeWs}/${colId}/${subId}`;
+        const deepPath = window.inSetu?.stores?.App?.getState()?.tabBrowsePaths?.[subId];
+        const deepStr = deepPath && deepPath.length > 0 ? '/' + deepPath.map(encodeURIComponent).join('/') : '';
+        const hash = `#/${activeWs}/${colId}/${subId}${deepStr}`;
         if (window.location.hash !== hash) {
             window.history.replaceState(null, '', hash);
         }
     }
-    _handleSubTabClick(tabId, subId) {
-        const isAlreadyActive = this.activeSubTabs[tabId] === subId;
-        this.activeSubTabs = { ...this.activeSubTabs, [tabId]: subId };
+    _handleSubTabClick(subId) {
+        let targetCol = null;
+        let isAlreadyActive = false;
 
         if (window.Sutram?.stores?.Layout) {
             const layout = window.Sutram.stores.Layout.getState();
-            let targetCol = null;
             for (const col of ['left', 'center', 'right']) {
                 if (layout.columns[col]?.pinned.some(p => p.id === subId)) {
                     targetCol = col;
@@ -749,7 +796,8 @@ export class SutramAppShell extends SutramElement {
                 }
             }
             if (targetCol) {
-                this._colActiveTabs[targetCol] = subId;
+                isAlreadyActive = layout.columns[targetCol].active === subId;
+                layout.setActiveProjection(targetCol, subId);
                 layout.setFocusedColumn(targetCol);
                 const colIndexes = { 'left': 0, 'center': 1, 'right': 2 };
                 if (this._spatialState?.capacity === 1) {
@@ -758,9 +806,8 @@ export class SutramAppShell extends SutramElement {
             }
         }
 
-        this.dispatchEvent(new CustomEvent('shell-subtab-changed', { detail: { tabId, subId, isAlreadyActive }, bubbles: true, composed: true }));
         this.requestUpdate();
-        this._updateUrlHash(tabId, subId);
+        if (targetCol) this._updateUrlHash(targetCol, subId);
     }
     _handleFolderDragStart(e) {
         // Only hijack mouse events; touch devices can use their native momentum scrolling
@@ -903,12 +950,7 @@ export class SutramAppShell extends SutramElement {
             translateX = `translateX(${baseOffset}vw)`;
             gridWidth = '300%';
         } else if (capacity === 2) {
-            // Right-flank affinity memory: Shift left if the right column has focus or was explicitly navigated to
-            if (focusedColumn === 'right' || mobileViewportIndex === 2) {
-                translateX = 'translateX(-50vw)';
-            } else {
-                translateX = 'translateX(0vw)';
-            }
+            translateX = 'translateX(0vw)';
             gridWidth = '150%';
         }
 
@@ -919,13 +961,13 @@ export class SutramAppShell extends SutramElement {
                 <!-- Persistent Global Launcher Row -->
                 <div class="top-utility-row" style="position: relative; display: flex; justify-content: space-between; width: 100%; background: var(--bg-deep); flex-shrink: 0; height: 38px; border-bottom: 1px solid var(--border); z-index: 50; padding-left: 2px; padding-right: 0;">
                     ${viewportMode === 'mobile' ? html`
-                        <div class="mobile-only-tools flex items-center" style="display: flex; align-items: center;">
+                        <div class="mobile-only-tools flex items-center" style="display: flex; align-items: center; height: 100%;">
                             <button class="tab-btn ${this._launcherDropdown?.isMobileTools ? 'active' : ''}" style="display: flex; align-items: center;" @click=${(e) => {
                                 e.stopPropagation();
                                 if (this._launcherDropdown?.isMobileTools) {
                                     this._launcherDropdown = null;
                                 } else {
-                                    const activeFolder = this.activeTab || (primarySlots[0] ? primarySlots[0].id : 'context');
+                                    const activeFolder = primarySlots[0] ? primarySlots[0].id : 'context';
                                     this._launcherDropdown = { isMobileTools: true, selectedFolder: activeFolder };
                                 }
                                 this.requestUpdate();
@@ -1042,11 +1084,7 @@ export class SutramAppShell extends SutramElement {
                                                                 const colMap = ['left', 'center', 'right'];
                                                                 visibleCols = [colMap[mobileViewportIndex] || focusedColumn || 'center'];
                                                             } else if (capacity === 2) {
-                                                                if (focusedColumn === 'right' || mobileViewportIndex === 2) {
-                                                                    visibleCols = ['center', 'right'];
-                                                                } else {
-                                                                    visibleCols = ['left', 'center'];
-                                                                }
+                                                                visibleCols = ['left', 'center'];
                                                             }
 
                                                             if (!visibleCols.includes(targetCol)) {
@@ -1061,9 +1099,7 @@ export class SutramAppShell extends SutramElement {
                                                                 this._setViewportIndex(colIndexes[targetCol]);
                                                             }
                                                         }
-                                                        this._colActiveTabs[targetCol] = child.id;
-                                                        this._handleTabClick(child.targetParent);
-                                                        this._handleSubTabClick(child.targetParent, child.id);
+                                                        this._handleSubTabClick(child.id);
                                                         this._launcherDropdown = null;
                                                         this.requestUpdate();
                                                     }}>
@@ -1085,18 +1121,15 @@ export class SutramAppShell extends SutramElement {
                     `}
                 ` : ''}
                 <!-- Adaptive Spatial Track -->
-                <div class="spatial-track capacity-${capacity}" style="width: ${gridWidth}; transform:${translateX};">
+                <div class="spatial-track capacity-${capacity}" style="width: ${gridWidth}; transform:${translateX}; position: relative;">
                     ${colDefinitions.map((col, idx) => {
                         // Micro-Apps only appear in the spatial grid when explicitly launched/pinned
                         let colSubSlots = [];
                         let sourceCols = [col.id];
-                        // Flank Affinity Memory: In 2-column mode, collapse the off-screen flank into the visible flank
+                        // Flank Affinity Memory: In 2-column mode, collapse the right flank into the left flank permanently
                         if (capacity === 2) {
-                            const isShiftedLeft = focusedColumn === 'right' || mobileViewportIndex === 2;
-                            if (col.id === 'left' && !isShiftedLeft) sourceCols = ['left', 'right'];
-                            else if (col.id === 'right' && !isShiftedLeft) sourceCols = []; // Prevent DOM stealing by the hidden column
-                            else if (col.id === 'right' && isShiftedLeft) sourceCols = ['right', 'left'];
-                            else if (col.id === 'left' && isShiftedLeft) sourceCols = [];
+                            if (col.id === 'left') sourceCols = ['left', 'right'];
+                            else if (col.id === 'right') sourceCols = []; // Prevent DOM stealing by the hidden column
                         }
                         // Hydrate the column purely from the LayoutStore's pinned arrays
                         sourceCols.forEach(sourceColId => {
@@ -1110,7 +1143,8 @@ export class SutramAppShell extends SutramElement {
                                     targetParent: pin.targetParent || sourceColId,
                                     preferredColumn: pin.preferredColumn || sourceColId,
                                     icon: pin.icon,
-                                    intent: pin.intent
+                                    intent: pin.intent,
+                                    actualSourceCol: sourceColId
                                 });
                             });
                         });
@@ -1121,22 +1155,30 @@ export class SutramAppShell extends SutramElement {
                                 return (subManifest?.offline_mode || 'none') !== 'none';
                             });
                         }
-
-                        // Determine the active projection for this column. 
-                        let activeSubInCol = colSubSlots.find(s => s.id === this._colActiveTabs[col.id]);
+                        // Determine the active projection for this column via UDF spatial state. 
+                        let activeSubInCol = null;
+                        if (sourceCols.includes(this._spatialState.focusedColumn)) {
+                            activeSubInCol = colSubSlots.find(s => s.id === this._spatialState.columns[this._spatialState.focusedColumn]?.active);
+                        }
                         if (!activeSubInCol) {
-                            const safeSubTabs = this.activeSubTabs || {};
-                            activeSubInCol = colSubSlots.find(s => safeSubTabs[s.targetParent] === s.id) || colSubSlots[0];
+                            for (const sCol of sourceCols) {
+                                activeSubInCol = colSubSlots.find(s => s.id === this._spatialState.columns[sCol]?.active);
+                                if (activeSubInCol) break;
+                            }
+                        }
+                        if (!activeSubInCol) {
+                            activeSubInCol = colSubSlots[0];
                         }
                         return html`
                         <div class="spatial-col ${focusedColumn === col.id && capacity > 1 ? 'is-focused' : ''}" data-col-id="${col.id}" @click=${() => {
-                            if (window.Sutram?.stores?.Layout) window.Sutram.stores.Layout.getState().setFocusedColumn(col.id);
-                            const subId = this._colActiveTabs[col.id];
-                            if (subId) this._updateUrlHash(col.id, subId);
+                            const activeId = activeSubInCol ? activeSubInCol.id : (colSubSlots[0] ? colSubSlots[0].id : null);
+                            const targetFocusCol = activeSubInCol ? (activeSubInCol.actualSourceCol || col.id) : col.id;
+                            if (window.Sutram?.stores?.Layout) window.Sutram.stores.Layout.getState().setFocusedColumn(targetFocusCol);
+                            if (activeId) this._updateUrlHash(targetFocusCol, activeId);
                         }}>
                             <!-- Local Column Header (Projection Stack) -->
-                            <div class="col-header" style="justify-content: space-between; padding-left: 2px; --active-sub-intent: ${activeSubInCol && activeSubInCol.intent ? `var(--intent-${activeSubInCol.intent})` : 'var(--intent-primary)'};">
-                                <yenvui-scrub-track class="sub-tabs" style="flex: 1; padding-left: 7px;">
+                            <div class="col-header" style="justify-content: space-between; padding: 0 12px; --active-sub-intent: ${activeSubInCol && activeSubInCol.intent ? `var(--intent-${activeSubInCol.intent})` : 'var(--intent-primary)'};">
+                                <yenvui-scrub-track class="sub-tabs" style="flex: 1; padding: 0; height: 100%;">
                                     ${colSubSlots.map(sub => {
                                         const isActive = activeSubInCol && activeSubInCol.id === sub.id;
                                         const intentColor = sub.intent ? `var(--intent-${sub.intent})` : 'var(--intent-primary)';
@@ -1144,19 +1186,43 @@ export class SutramAppShell extends SutramElement {
                                         return html`
                                         <div class="sub-tab ${isActive ? 'active' : ''}"
                                                 style="${isActive ? `border-bottom-color: ${intentColor}; color: var(--text);` : ''}"
-                                                @pointerdown=${(e) => this._handlePointerDown(e, sub, col.id, 'subtab')}
+                                                @pointerdown=${(e) => {
+                                                    const now = Date.now();
+                                                    if (this._lastTapId === sub.id && now - (this._lastTapTime || 0) < 300) {
+                                                        e.stopPropagation();
+                                                        const layout = window.Sutram?.stores?.Layout?.getState();
+                                                        if (layout) {
+                                                            layout.unpinFromColumn(sub.actualSourceCol || col.id, sub.id);
+                                                            layout.openWindow(sub, col.id, 1);
+                                                        }
+                                                        this._lastTapTime = 0;
+                                                        return;
+                                                    }
+                                                    this._lastTapId = sub.id;
+                                                    this._lastTapTime = now;
+                                                    this._handlePointerDown(e, sub, sub.actualSourceCol || col.id, 'subtab');
+                                                }}
+                                                @dblclick=${(e) => {
+                                                    e.stopPropagation();
+                                                    const layout = window.Sutram?.stores?.Layout?.getState();
+                                                    if (layout) {
+                                                        layout.unpinFromColumn(sub.actualSourceCol || col.id, sub.id);
+                                                        layout.openWindow(sub, col.id, 1);
+                                                    }
+                                                }}
                                                 @click=${() => {
                                                     if (this._dragState.active) return; // Ignore click if it was a drag
-                                                    if (window.Sutram?.stores?.Layout) window.Sutram.stores.Layout.getState().setFocusedColumn(col.id);
-                                                    this._colActiveTabs[col.id] = sub.id;
-                                                    this._handleSubTabClick(sub.targetParent, sub.id);
+                                                    if (window.Sutram?.stores?.Layout) window.Sutram.stores.Layout.getState().setFocusedColumn(sub.actualSourceCol || col.id);
+                                                    this._handleSubTabClick(sub.id);
                                                 }}>
                                             <div class="sub-tab-icon-wrapper" @pointerdown=${(e) => e.stopPropagation()} @click=${(e) => {
                                                 e.stopPropagation();
                                                 const layout = window.Sutram?.stores?.Layout?.getState();
                                                 if (layout) {
-                                                    layout.unpinFromColumn(col.id, sub.id);
-                                                    layout.evictProjection(sub.id);
+                                                    this._safeEvict(sub.id, () => {
+                                                        layout.unpinFromColumn(sub.actualSourceCol || col.id, sub.id);
+                                                        layout.evictProjection(sub.id);
+                                                    });
                                                 }
                                             }}>
                                                 <div class="default-icon-container" style="color: ${intentColor}; opacity: ${isActive ? '1' : '0.5'};">
@@ -1164,7 +1230,7 @@ export class SutramAppShell extends SutramElement {
                                                 </div>
                                                 <i data-lucide="x" class="close-icon" stroke-width="2.5" style="width: 14px; height: 14px; color: var(--intent-danger);"></i>
                                             </div>
-                                            ${sub.label}
+                                            ${sub.label}${window.inSetu?.stores?.Fs?.getState()?.activeBuffers?.[sub.id]?.content !== window.inSetu?.stores?.Fs?.getState()?.activeBuffers?.[sub.id]?.originalContent ? '*' : ''}
                                         </div>
                                     `})}
                                 </yenvui-scrub-track>
@@ -1197,6 +1263,55 @@ export class SutramAppShell extends SutramElement {
                         </div>
                         `;
                     })}
+                    <!-- Grid-Constrained Window Surfaces -->
+                    <div class="windowed-surfaces" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 500;">
+                        ${(this._spatialState.windows || []).map(win => {
+                            const colIdxMap = { left: 0, center: 1, right: 2 };
+                            const colIdx = colIdxMap[win.anchorCol || 'center'] ?? 1;
+                            let safeSpan = Math.min(win.span || 1, 3 - colIdx);
+                            safeSpan = Math.min(safeSpan, capacity);
+                            const leftPct = (colIdx / 3) * 100;
+                            const widthPct = (safeSpan / 3) * 100;
+
+                            return html`
+                            <div style="position: absolute; left: ${leftPct}%; width: ${widthPct}\%; top: 0; bottom: 0; pointer-events: auto; z-index:${win.z || 1000}; transition: left 0.3s cubic-bezier(0.2, 0.9, 0.2, 1), width 0.3s cubic-bezier(0.2, 0.9, 0.2, 1);">
+                                <sutram-window
+                                    .titleText=${win.label || win.id}
+                                    .anchorCol=${win.anchorCol || 'center'}
+                                    .span=${safeSpan}
+                                    .z=${win.z}
+                                    .icon=${win.icon || 'component'}
+                                    .intent=${win.intent || 'neutral'}
+                                    @sutram-window-closed=${() => {
+                                        this._safeEvict(win.id, () => {
+                                            window.Sutram?.stores?.Layout?.getState().closeWindow(win.id);
+                                        });
+                                    }}
+                                    @sutram-window-span=${(e) => window.Sutram?.stores?.Layout?.getState().updateWindowConstraints(win.id, win.anchorCol || 'center', e.detail.span)}
+                                    @sutram-window-focused=${() => window.Sutram?.stores?.Layout?.getState().focusWindow(win.id)}
+                                    @sutram-window-drag-start=${(e) => this._handlePointerDown(e.detail.originalEvent, win, 'window', 'window-header')}
+                                    @sutram-window-dock=${() => {
+                                const layout = window.Sutram?.stores?.Layout?.getState();
+                                if (layout) {
+                                    const destCol = win.preferredColumn || 'center';
+                                    layout.closeWindow(win.id);
+                                    layout.pinToColumn(destCol, win);
+                                    layout.setFocusedColumn(destCol);
+                                    layout.setActiveProjection(destCol, win.id);
+
+                                    const colIndexes = { 'left': 0, 'center': 1, 'right': 2 };
+                                    if (this._spatialState?.capacity === 1) {
+                                        this._setViewportIndex(colIndexes[win.preferredColumn || 'center']);
+                                    }
+
+                                    this.requestUpdate();
+                                }
+                            }}>
+                            ${this._getCachedComponent(win.component, win.id)}
+                        </sutram-window>
+                            </div>
+                        `;})}
+                    </div>
                 </div>
             </div>
 
@@ -1204,48 +1319,9 @@ export class SutramAppShell extends SutramElement {
             <div style="display: contents;">
                 ${globalSlots.map(s => this._getCachedComponent(s.component))}
             </div>
-            <!-- Spatial Drop-Zone Overlay -->
-            <!-- Floating Window Projection Layer -->
-            <div class="windowed-surfaces" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 500;">
-                ${(this._spatialState.windows || []).map(win => html`
-                    <div style="pointer-events: auto;">
-                        <sutram-window
-                            .titleText=${win.label || win.id}
-                            .x=${win.x} .y=${win.y} .z=${win.z}
-                            .icon=${win.icon || 'component'}
-                            .intent=${win.intent || 'neutral'}
-                            @sutram-window-closed=${() => window.Sutram?.stores?.Layout?.getState().closeWindow(win.id)}
-                            @sutram-window-moved=${(e) => window.Sutram?.stores?.Layout?.getState().updateWindowPosition(win.id, e.detail.x, e.detail.y)}
-                            @sutram-window-focused=${() => window.Sutram?.stores?.Layout?.getState().focusWindow(win.id)}
-                            @sutram-window-drag-start=${(e) => this._handlePointerDown(e.detail.originalEvent, win, 'window', 'window-header')}
-                            @sutram-window-dock=${() => {
-                                const layout = window.Sutram?.stores?.Layout?.getState();
-                                if (layout) {
-                                    layout.closeWindow(win.id);
-                                    layout.pinToColumn(win.preferredColumn || 'center', win);
-                                    layout.setFocusedColumn(win.preferredColumn || 'center');
-                                    this._colActiveTabs[win.preferredColumn || 'center'] = win.id;
-
-                                    const colIndexes = { 'left': 0, 'center': 1, 'right': 2 };
-                                    if (this._spatialState?.capacity === 1) {
-                                        this._setViewportIndex(colIndexes[win.preferredColumn || 'center']);
-                                    }
-
-                                    window.dispatchEvent(new CustomEvent('shell-subtab-changed', {
-                                        detail: { tabId: win.preferredColumn || 'center', subId: win.id, isAlreadyActive: false },
-                                        bubbles: true, composed: true
-                                    }));
-                                    this.requestUpdate();
-                                }
-                            }}>
-                            ${this._getCachedComponent(win.component, win.id)}
-                        </sutram-window>
-                    </div>
-                `)}
-            </div>
 
             <!-- Spatial Drop-Zone Overlay -->
-            <sutram-drag-coordinator 
+            <sutram-drag-coordinator  
                 .dragState=${{...this._dragState}}  
                 .spatialState=${this._spatialState}
                 @click=${() => { this._dragState.active = false; this.requestUpdate(); }}>

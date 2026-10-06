@@ -1,7 +1,29 @@
 // sutram/js/primitives.js
 // Pure Agnostic Presentation Primitives
 import { LitElement, html, css } from 'lit';
-import { SutramElement, SelectionStore, ToastStore, EnvironmentStore } from './sdk.js';
+import { SutramElement, SutramContextMixin, SelectionStore, ToastStore, EnvironmentStore } from './sutram_sdk.js';
+import { YenvuiBtn, YenvuiAsyncBtn } from '../../yenvui/js/async-btn.js';
+import { YenvuiStatusBar } from '../../yenvui/js/status-bar.js';
+import { YenvuiToastContainer } from '../../yenvui/js/toast.js';
+import { YenvuiModal } from '../../yenvui/js/modal.js';
+import { YenvuiWindow } from '../../yenvui/js/window.js';
+import { YenvuiCategorySection } from '../../yenvui/js/category-section.js';
+import { YenvuiCard } from '../../yenvui/js/card.js';
+import { YenvuiCardGroup } from '../../yenvui/js/card-group.js';
+import { YenvuiEditor } from '../../yenvui/js/editor.js';
+import { YenvuiToolbar } from '../../yenvui/js/toolbar.js';
+import { YenvuiCollapsible } from '../../yenvui/js/collapsible.js';
+import { YenvuiPill } from '../../yenvui/js/pill.js';
+import { YenvuiFilterGroup } from '../../yenvui/js/filter-group.js';
+import { YenvuiSelectionTray } from '../../yenvui/js/selection-tray.js';
+import { YenvuiSearchBar } from '../../yenvui/js/search-bar.js';
+import { YenvuiSpinner } from '../../yenvui/js/spinner.js';
+import { YenvuiEmptyState } from '../../yenvui/js/empty-state.js';
+import { YenvuiBoard, YenvuiColumn } from '../../yenvui/js/board.js';
+import { YenvuiTag } from '../../yenvui/js/tag.js';
+import { YenvuiLabel } from '../../yenvui/js/label.js';
+import { YenvuiDropdown } from '../../yenvui/js/dropdown.js';
+import { YenvuiScrubTrack } from '../../yenvui/js/yenvui-base.js';
 import { sharedStyles } from './shared_styles.js';
 import { buildFileTree } from './utils.js';
 
@@ -26,84 +48,32 @@ import '../../yenvui/js/empty-state.js';
 import '../../yenvui/js/board.js';
 import '../../yenvui/js/tag.js';
 import '../../yenvui/js/label.js';
+import { YenvuiScrollView } from '../../yenvui/js/scroll-view.js';
+import '../../yenvui/js/scroll-view.js';
+
 // 1. Synchronous Action Button
-export class SutramBtn extends SutramElement {
-    static properties = {
-        label: { type: String },
-        intent: { type: String },
-        variant: { type: String },
-        emphasis: { type: Boolean },
-        disabled: { type: Boolean },
-        active: { type: Boolean }
-    };
-    static styles = [sharedStyles, css`
-        :host { display: inline-flex; flex-shrink: 0; vertical-align: middle; min-width: max-content; }
-        yenvui-btn { display: inline-flex; width: 100%; min-width: max-content; }
-    `];
-    constructor() {
-        super();
-        this.label = 'Submit';
-        this.intent = 'primary';
-        this.variant = 'tinted';
-        this.emphasis = false;
-        this.disabled = false;
-        this.active = false;
-    }
-    render() {
-        return html`
-            <yenvui-btn
-                .label=${this.label}
-                .intent=${this.intent}
-                .variant=${this.variant}
-                ?emphasis=${this.emphasis}
-                ?disabled=${this.disabled}
-                ?active=${this.active}>
-                <slot></slot>
-            </yenvui-btn>
-        `;
-    }
-}
+export class SutramBtn extends YenvuiBtn {}
 customElements.define('sutram-btn', SutramBtn);
 
 // 1.5 Async Action Button
-export class SutramAsyncBtn extends SutramElement {
+export class SutramAsyncBtn extends SutramContextMixin(YenvuiAsyncBtn) {
     static properties = {
-        label: { type: String },
-        loadingLabel: { type: String },
-        successLabel: { type: String },
-        errorLabel: { type: String },
-        intent: { type: String },
-        variant: { type: String },
-        emphasis: { type: Boolean },
-        onClick: { type: Object },
-        disabled: { type: Boolean },
-        active: { type: Boolean },
-        _status: { type: String },
-        _isOfflineReadOnly: { type: Boolean }
+        ...YenvuiAsyncBtn.properties,
+        _isOfflineReadOnly: { type: Boolean },
+        _originalLabel: { type: String }
     };
-    static styles = [sharedStyles, css`
-        :host { display: inline-flex; flex-shrink: 0; vertical-align: middle; min-width: max-content; }
-        yenvui-async-btn { display: inline-flex; width: 100%; min-width: max-content; }
-    `];
+
     constructor() {
         super();
-        this.label = 'Submit';
-        this.loadingLabel = '⏳...';
-        this.successLabel = '✅';
-        this.errorLabel = '❌';
-        this.intent = 'primary';
-        this.variant = 'tinted';
-        this.emphasis = false;
-        this.disabled = false;
-        this.active = false;
-        this._status = 'idle';
         this._isOfflineReadOnly = false;
+        this._originalLabel = '';
     }
+
     connectedCallback() {
         super.connectedCallback();
+        this._originalLabel = this.label;
         this.subscribe(EnvironmentStore, state => {
             if (state.isOffline) {
-                // Pierce Shadow DOM boundaries to securely resolve the host extension
                 let current = this;
                 let extName = null;
                 while (current) {
@@ -118,73 +88,43 @@ export class SutramAsyncBtn extends SutramElement {
             } else {
                 this._isOfflineReadOnly = false;
             }
+            this._updateState();
         });
     }
 
     updated(changedProperties) {
         super.updated(changedProperties);
-        // Self-Healing Wrapper: Reset success/error states if Lit recycles the DOM node for a new action/identity
-        if (changedProperties.has('onClick') || changedProperties.has('label')) {
-            if (this._status !== 'loading' && this._status !== 'idle') {
-                this._status = 'idle';
-            }
+        if (changedProperties.has('label') && this.label !== '🚫 Offline' && !this._isOfflineReadOnly) {
+            this._originalLabel = this.label;
         }
     }
-    async _handleClick(e) {
-        if (e) e.stopPropagation();
-        if (this.disabled || this._status === 'loading' || !this.onClick) return;
-        this._status = 'loading';
-        try {
-            await this.onClick(e?.detail?.originalEvent || e);
-            this._status = 'success';
-        } catch (err) {
-            console.error(err);
-            this._status = 'error';
-        } finally {
-            setTimeout(() => { if (this._status !== 'loading') this._status = 'idle'; }, 2000);
+
+    _updateState() {
+        if (this._isOfflineReadOnly) {
+            if (this.label !== '🚫 Offline') this._originalLabel = this.label;
+            this.label = '🚫 Offline';
+            this.disabled = true;
+        } else {
+            this.label = this._originalLabel || this.label;
+            this.disabled = false;
         }
-    }
-    render() {
-        const isDisabled = this.disabled || this._isOfflineReadOnly;
-        const displayLabel = this._isOfflineReadOnly ? '🚫 Offline' : this.label;
-        return html`
-            <yenvui-async-btn
-                .label=${displayLabel}
-                .loadingLabel=${this.loadingLabel}
-                .successLabel=${this.successLabel}
-                .errorLabel=${this.errorLabel}
-                .intent=${this.intent}
-                .variant=${this.variant}
-                ?emphasis=${this.emphasis}
-                .status=${this._status}
-                ?disabled=${isDisabled}
-                ?active=${this.active}
-                @yv-click=${this._handleClick}>
-            </yenvui-async-btn>
-        `;
     }
 }
 customElements.define('sutram-async-btn', SutramAsyncBtn);
-
 // 2. Status Bar Component
-export class SutramStatusBar extends SutramElement {
+export class SutramStatusBar extends SutramContextMixin(YenvuiStatusBar) {
     static properties = {
+        ...YenvuiStatusBar.properties,
         baseTitle: { type: String },
         statusString: { type: String },
-        tempMessage: { type: String },
-        isError: { type: Boolean },
-        syncState: { type: String }
+        tempMessage: { type: String }
     };
-    static styles = css`
-        :host { display: block; width: 100%; flex-shrink: 0; z-index: 1000; }
-    `;
+
     constructor() {
         super();
         this.baseTitle = 'System Online';
         this.statusString = '';
         this.tempMessage = '';
-        this.isError = false;
-        this.syncState = 'synced';
         this._statusListener = this._handleStatusUpdate.bind(this);
         this._syncListener = (e) => { this.syncState = e.detail.state; };
     }
@@ -192,6 +132,13 @@ export class SutramStatusBar extends SutramElement {
         super.connectedCallback();
         this.registerGlobalListener('sutram-status-update', window, this._statusListener);
         this.registerGlobalListener('sutram-sync-status', window, this._syncListener);
+        this._updateDisplayedText();
+    }
+    updated(changedProperties) {
+        super.updated(changedProperties);
+        if (changedProperties.has('baseTitle') || changedProperties.has('statusString') || changedProperties.has('tempMessage')) {
+            this._updateDisplayedText();
+        }
     }
     _handleStatusUpdate(e) {
         this.tempMessage = e.detail.msg;
@@ -201,46 +148,31 @@ export class SutramStatusBar extends SutramElement {
             this._timeout = setTimeout(() => {
                 this.tempMessage = '';
                 this.isError = false;
+                this._updateDisplayedText();
             }, e.detail.timeout);
         }
+        this._updateDisplayedText();
     }
-    render() {
+    _updateDisplayedText() {
         if (this.tempMessage) {
-            return html`<yenvui-status-bar .text=${this.tempMessage} ?isError=${this.isError} .syncState=${this.syncState}></yenvui-status-bar>`;
+            this.text = this.tempMessage;
+        } else {
+            this.text = this.statusString ? `${this.baseTitle} | ${this.statusString}` : this.baseTitle;
         }
-        let text = this.baseTitle;
-        if (this.statusString) {
-            text = `${text} | ${this.statusString}`;
-        }
-        return html`<yenvui-status-bar .text=${text} ?isError=${false} .syncState=${this.syncState}></yenvui-status-bar>`;
     }
 }
 customElements.define('sutram-status-bar', SutramStatusBar);
 
 // 3. Toast Notification Container
-export class SutramToastContainer extends SutramElement {
-    static properties = { toasts: { type: Array } };
-    static styles = css`:host { display: contents; pointer-events: none; }`;
-
-    constructor() {
-        super();
-        this.toasts = [];
-    }
+export class SutramToastContainer extends SutramContextMixin(YenvuiToastContainer) {
     connectedCallback() {
         super.connectedCallback();
         this.subscribe(ToastStore, state => {
             this.toasts = state.toasts;
         });
-    }
-    render() {
-        return html`
-            <yenvui-toast-container 
-                .toasts=${this.toasts} 
-                @yenvui-toast-dismissed=${(e) => {
-                    ToastStore.getState().removeToast(e.detail.id);
-                }}>
-            </yenvui-toast-container>
-        `;
+        this.addEventListener('yenvui-toast-dismissed', (e) => {
+            ToastStore.getState().removeToast(e.detail.id);
+        });
     }
 }
 customElements.define('sutram-toast-container', SutramToastContainer);
@@ -284,7 +216,7 @@ export class SutramSelectionTray extends SutramElement {
             justify-content: center;
             font-size: 0.75rem;
         }
-        @media (max-width: 768px) {
+        @container (max-width: 480px) {
             .cart-text { display: none; }
             .cart-badge.mobile-only { display: flex; }
             .cart-btn { padding: 0 8px; }
@@ -558,72 +490,23 @@ export class SutramFolderBrowser extends LitElement {
 }
 customElements.define('sutram-folder-browser', SutramFolderBrowser);
 // 7. Native Dialog Modal
-export class SutramModal extends SutramElement {
-    static properties = {
-        open: { type: Boolean, reflect: true },
-        titleText: { type: String },
-        fullscreen: { type: Boolean, reflect: true },
-        flush: { type: Boolean, reflect: true },
-        maxWidth: { type: String }
-    };
-
-    static styles = [sharedStyles, css`
-        :host { display: contents; }
-    `];
-
-    constructor() {
-        super();
-        this.open = false;
-        this.titleText = '';
-        this.maxWidth = '';
-        this.fullscreen = false;
-        this.flush = false;
-    }
-
-    _handleClose(e) {
-        this.open = false;
-        this.dispatchEvent(new CustomEvent('sutram-modal-closed', { bubbles: true, composed: true }));
-    }
-
-    render() {
-        return html`
-            <yenvui-modal 
-                ?open=${this.open}
-                .titleText=${this.titleText}
-                .maxWidth=${this.maxWidth}
-                ?fullscreen=${this.fullscreen}
-                ?flush=${this.flush}
-                @yenvui-modal-closed=${this._handleClose}>
-                <slot name="body" slot="body"></slot>
-                <slot></slot>
-                <slot name="footer" slot="footer"></slot>
-            </yenvui-modal>
-        `;
+export class SutramModal extends SutramContextMixin(YenvuiModal) {
+    connectedCallback() {
+        super.connectedCallback();
+        this.addEventListener('yenvui-modal-closed', e => {
+            this.dispatchEvent(new CustomEvent('sutram-modal-closed', { bubbles: true, composed: true }));
+        });
     }
 }
 customElements.define('sutram-modal', SutramModal);
-
-export class SutramWindow extends SutramElement {
-    static properties = {
-        titleText: { type: String },
-        x: { type: Number },
-        y: { type: Number },
-        z: { type: Number },
-        icon: { type: String },
-        intent: { type: String }
-    };
-    static styles = css`:host { display: contents; }`;
-    render() {
-        return html`
-            <yenvui-window .titleText=${this.titleText} .x=${this.x} .y=${this.y} .z=${this.z} .icon=${this.icon} .intent=${this.intent}
-                @yenvui-window-close=${() => this.dispatchEvent(new CustomEvent('sutram-window-closed', { bubbles: true, composed: true }))}
-                @yenvui-window-move=${(e) => this.dispatchEvent(new CustomEvent('sutram-window-moved', { detail: e.detail, bubbles: true, composed: true }))}
-                @yenvui-window-focus=${() => this.dispatchEvent(new CustomEvent('sutram-window-focused', { bubbles: true, composed: true }))}
-                @yenvui-window-drag-start=${(e) => this.dispatchEvent(new CustomEvent('sutram-window-drag-start', { detail: e.detail, bubbles: true, composed: true }))}
-                @yenvui-window-dock=${() => this.dispatchEvent(new CustomEvent('sutram-window-dock', { bubbles: true, composed: true }))}>
-                <slot></slot>
-            </yenvui-window>
-        `;
+export class SutramWindow extends SutramContextMixin(YenvuiWindow) {
+    connectedCallback() {
+        super.connectedCallback();
+        this.addEventListener('yenvui-window-close', e => this.dispatchEvent(new CustomEvent('sutram-window-closed', { bubbles: true, composed: true })));
+        this.addEventListener('yenvui-window-span', e => this.dispatchEvent(new CustomEvent('sutram-window-span', { detail: e.detail, bubbles: true, composed: true })));
+        this.addEventListener('yenvui-window-focused', e => this.dispatchEvent(new CustomEvent('sutram-window-focused', { bubbles: true, composed: true })));
+        this.addEventListener('yenvui-window-drag-start', e => this.dispatchEvent(new CustomEvent('sutram-window-drag-start', { detail: e.detail, bubbles: true, composed: true })));
+        this.addEventListener('yenvui-window-dock', e => this.dispatchEvent(new CustomEvent('sutram-window-dock', { bubbles: true, composed: true })));
     }
 }
 customElements.define('sutram-window', SutramWindow);
@@ -682,8 +565,7 @@ export class SutramGenericSettingsModal extends SutramElement {
                 ?transparent=${true}
                 style="--modal-backdrop: transparent; --modal-backdrop-filter: none;"
                 @yenvui-modal-closed=${() => this.open = false}>
-                <div slot="body" style="display: flex; flex-direction: column; gap: 15px; flex: 1; min-height: 0; overflow-y: auto;">
-                    ${settingsActions.filter(act => !act.id.endsWith('_generic_settings')).map(act => html`
+                ${settingsActions.filter(act => !act.id.endsWith('_generic_settings')).map(act => html`
                         <div style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; padding: 15px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px;">
                             <label style="font-size: 0.95rem; color: var(--text); font-weight: bold;">${act.icon || ''} ${act.label}</label>
                             <span style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px;">Click to open the dedicated configuration panel.</span>
@@ -745,7 +627,6 @@ export class SutramGenericSettingsModal extends SutramElement {
                             </div>
                         `;
                     })}
-                </div>
                 <button slot="footer" style="background: var(--intent-primary); color: white;" @click=${this.saveSettings}>
                     💾 Save Settings
                 </button>
@@ -1062,72 +943,19 @@ export class SutramEntityActions extends SutramElement {
 }
 customElements.define('sutram-entity-actions', SutramEntityActions);
 // 9. Polymorphic Card Primitive (IoC Action Broker & Selection Binding)
-export class SutramCard extends SutramElement {
+export class SutramCard extends SutramContextMixin(YenvuiCard) {
     static properties = {
-        filename: { type: String },
-        titleText: { type: String },
-        descriptionText: { type: String },
-        detailText: { type: String },
-        detailPrefix: { type: String },
-        detailSuffix: { type: String },
-        icon: { type: String },
-        intentColor: { type: String },
+        ...YenvuiCard.properties,
         entityType: { type: String },
         entityData: { type: Object },
-        selected: { type: Boolean, reflect: true },
-        disableSelection: { type: Boolean },
-        selectionStoreKey: { type: String },
-        compact: { type: Boolean, reflect: true },
-        flush: { type: Boolean, reflect: true },
-        stale: { type: Boolean, reflect: true },
-        hasActions: { type: Boolean, attribute: 'has-actions' }
+        selectionStoreKey: { type: String }
     };
-    static styles = [sharedStyles, css`
-        :host { display: block; }
-        ::slotted(p), ::slotted(h1), ::slotted(h2), ::slotted(h3), ::slotted(h4), ::slotted(h5), ::slotted(h6) {
-            margin-block-start: 0;
-            margin-block-end: 0;
-        }
-    `];
+
     constructor() {
         super();
-        this.filename = '';
-        this.titleText = '';
-        this.descriptionText = '';
-        this.detailText = '';
-        this.icon = '<i data-lucide="file-text" style="width: 16px; height: 16px;"></i>';
-        this.intentColor = '';
         this.entityType = '';
         this.entityData = {};
-        this.selected = false;
-        this.disableSelection = false;
         this.selectionStoreKey = 'Selection';
-        this.compact = false;
-        this.flush = false;
-        this.stale = false;
-        this.hasActions = false;
-    }
-
-    _isStale() {
-        return (
-            this.stale ||
-            !!this.entityData?.stale ||
-            !!this.entityData?.needs_recompile ||
-            !!this.entityData?.is_dirty ||
-            !!this.entityData?.outdated
-        );
-    }
-
-    _hasResolvedActions() {
-        if (this.hasActions) return true;
-        if (this.entityType && window.ExtensionRegistry?.getEntityActions) {
-            const actions = window.ExtensionRegistry.getEntityActions(this.entityType, this.entityData || {});
-            if (actions && actions.length > 0) return true;
-        }
-        const slot = this.shadowRoot?.querySelector('slot[name="actions"]');
-        if (slot && slot.assignedElements({ flatten: true }).length > 0) return true;
-        if (this.querySelector('[slot="actions"]')) return true;
-        return false;
     }
 
     _getId() {
@@ -1153,7 +981,42 @@ export class SutramCard extends SutramElement {
                 this.selected = store.getState().selectedItems.has(id);
             }
         }
+
+        this.addEventListener('yenvui-overlay-opened', (e) => {
+            if (!this.entityType || !this.entityData) return;
+            const actions = window.ExtensionRegistry?.getEntityActions?.(this.entityType, this.entityData) || [];
+            actions.forEach(act => {
+                if (typeof act.onReveal === 'function') {
+                    act.onReveal(this.entityData);
+                }
+            });
+        });
+
+        this.addEventListener('yenvui-card-select-toggled', (e) => {
+            e.stopPropagation();
+            const id = this._getId();
+            if (id && this.selectionStoreKey && this.selectionStoreKey !== 'none') {
+                const store = this._getStore();
+                if (store && store.getState().toggleSelection) {
+                    store.getState().toggleSelection(id, this.entityType, this.entityData);
+                }
+            }
+            this.dispatchEvent(new CustomEvent('sutram-card-select-toggled', {
+                detail: { id, selected: this.selected, entityType: this.entityType, entityData: this.entityData },
+                bubbles: true,
+                composed: true
+            }));
+        });
+
+        this.addEventListener('yenvui-card-clicked', (e) => {
+            this.dispatchEvent(new CustomEvent('card-clicked', {
+                detail: { filename: this.filename, isSource: true },
+                bubbles: true,
+                composed: true
+            }));
+        });
     }
+
     updated(changedProperties) {
         super.updated(changedProperties);
         if (changedProperties.has('entityData') || changedProperties.has('filename')) {
@@ -1165,326 +1028,185 @@ export class SutramCard extends SutramElement {
                 }
             }
         }
+
+        // Keep the dynamic actions injection in sync
+        if (changedProperties.has('entityType') || changedProperties.has('entityData')) {
+            this._injectEntityActions();
+        }
     }
 
-    _handleOverlayOpened(e) {
-        if (!this.entityType || !this.entityData) return;
-        const actions = window.ExtensionRegistry?.getEntityActions?.(this.entityType, this.entityData) || [];
-        actions.forEach(act => {
-            if (typeof act.onReveal === 'function') {
-                act.onReveal(this.entityData);
+    firstUpdated() {
+        if (super.firstUpdated) super.firstUpdated();
+        this._injectEntityActions();
+    }
+
+    _injectEntityActions() {
+        if (!this.entityType || !window.ExtensionRegistry?.getEntityActions) return;
+        const actions = window.ExtensionRegistry.getEntityActions(this.entityType, this.entityData || {});
+        if (actions.length > 0) {
+            let actionsContainer = this.querySelector('.sutram-injected-actions');
+            if (!actionsContainer) {
+                actionsContainer = document.createElement('div');
+                actionsContainer.className = 'sutram-injected-actions';
+                actionsContainer.slot = 'actions';
+                actionsContainer.style.display = 'flex';
+                actionsContainer.style.flexWrap = 'nowrap';
+                actionsContainer.style.gap = '8px';
+                actionsContainer.style.alignItems = 'center';
+                actionsContainer.style.width = 'max-content';
+
+                // We must stop propagation so clicking actions doesn't trigger card click
+                actionsContainer.addEventListener('click', e => e.stopPropagation());
+                const actionsNode = document.createElement('sutram-entity-actions');
+                actionsNode.entityType = this.entityType;
+                actionsNode.entityData = this.entityData;
+                actionsNode.scrollable = true;
+                actionsContainer.appendChild(actionsNode);
+                this.appendChild(actionsContainer);
+                this._hasActions = true;
+            } else {
+                const actionsNode = actionsContainer.querySelector('sutram-entity-actions');
+                if (actionsNode) {
+                    actionsNode.entityType = this.entityType;
+                    actionsNode.entityData = this.entityData;
+                }
             }
-        });
+        }
     }
 
-    render() {
-        return html`
-            <yenvui-card
-                @yenvui-overlay-opened=${this._handleOverlayOpened}
-                .filename=${this.filename}
-                .titleText=${this.titleText}
-                .descriptionText=${this.descriptionText}
-                .detailText=${this.detailText}
-                .detailPrefix=${this.detailPrefix}
-                .detailSuffix=${this.detailSuffix}
-                .icon=${this.icon}
-                .intentColor=${this.intentColor}
-                ?selected=${this.selected}
-                ?disableSelection=${this.disableSelection}
-                ?compact=${this.compact}
-                ?flush=${this.flush}
-                ?stale=${this._isStale()}
-                @yenvui-card-select-toggled=${(e) => {
-                    e.stopPropagation();
-                    const id = this._getId();
-                    if (id && this.selectionStoreKey && this.selectionStoreKey !== 'none') {
-                        const store = this._getStore();
-                        if (store && store.getState().toggleSelection) {
-                            store.getState().toggleSelection(id, this.entityType, this.entityData);
-                        }
-                    }
-                    // Emitting a custom event so host components can react when bypassing the global store
-                    this.dispatchEvent(new CustomEvent('sutram-card-select-toggled', {
-                        detail: { id, selected: this.selected, entityType: this.entityType, entityData: this.entityData },
-                        bubbles: true,
-                        composed: true
-                    }));
-                }}
-                @yenvui-card-clicked=${(e) => {
-                    this.dispatchEvent(new CustomEvent('card-clicked', {
-                        detail: { filename: this.filename, isSource: true },
-                        bubbles: true,
-                        composed: true
-                    }));
-                }}>
-                <slot name="header-actions" slot="header-actions"></slot>
-                <slot name="header-tags" slot="header-tags"></slot>
-                <slot name="detail" slot="detail"></slot>
-                <slot name="inline-actions" slot="inline-actions"></slot>
-                <slot></slot>
-                ${this._hasResolvedActions() ? html`
-                    <div slot="actions" style="display: flex; flex-wrap: nowrap; gap: 8px; align-items: center; width: max-content;" @click=${e => e.stopPropagation()}>
-                        <sutram-entity-actions .entityType=${this.entityType} .entityData=${this.entityData} style="flex-wrap: nowrap;"></sutram-entity-actions>
-                        <slot name="actions" @slotchange=${() => this.requestUpdate()}></slot>
-                    </div>
-                ` : html`
-                    <slot name="actions" slot="actions" @slotchange=${() => this.requestUpdate()}></slot>
-                `}
-            </yenvui-card>
-        `;
+    _isStale() {
+        return (
+            this.stale ||
+            !!this.entityData?.stale ||
+            !!this.entityData?.needs_recompile ||
+            !!this.entityData?.is_dirty ||
+            !!this.entityData?.outdated
+        );
     }
 }
 customElements.define('sutram-card', SutramCard);
 // 10. Card Group Container
-export class SutramCardGroup extends LitElement {
-    static properties = {
-        enableEdgeSelection: { type: Boolean },
-        stacked: { type: Boolean, reflect: true },
-        accordion: { type: Boolean, reflect: true }
-    };
-
-    constructor() {
-        super();
-        this.enableEdgeSelection = true;
-        this.stacked = false;
-        this.accordion = false;
-    }
-
-    render() {
-        return html`
-            <yenvui-card-group ?enableEdgeSelection=${this.enableEdgeSelection} ?stacked=${this.stacked} ?accordion=${this.accordion}>
-                <slot></slot>
-            </yenvui-card-group>
-        `;
-    }
-}
+export class SutramCardGroup extends YenvuiCardGroup {}
 customElements.define('sutram-card-group', SutramCardGroup);
 
 // 11. Search Bar & Toolbar
-export class SutramSearchBar extends LitElement {
-    static properties = { placeholder: { type: String }, value: { type: String } };
-    static styles = [sharedStyles];
-    render() {
-        return html`
-            <yenvui-search-bar 
-                .placeholder=${this.placeholder || 'Search...'} 
-                .value=${this.value || ''} 
-                @yenvui-search-changed=${e => this.dispatchEvent(new CustomEvent('search-changed', { detail: e.detail, bubbles: true, composed: true }))}>
-            </yenvui-search-bar>
-        `;
+export class SutramSearchBar extends YenvuiSearchBar {
+    connectedCallback() {
+        super.connectedCallback();
+        this.addEventListener('yenvui-search-changed', e => {
+            this.dispatchEvent(new CustomEvent('search-changed', { detail: e.detail, bubbles: true, composed: true }));
+        });
     }
 }
 customElements.define('sutram-search-bar', SutramSearchBar);
-export class SutramSpinner extends LitElement {
-    static properties = { text: { type: String } };
-    render() { return html`<yenvui-spinner .text=${this.text}><slot></slot></yenvui-spinner>`; }
-}
+
+export class SutramSpinner extends YenvuiSpinner {}
 customElements.define('sutram-spinner', SutramSpinner);
-export class SutramEmptyState extends LitElement {
-    static properties = { icon: { type: String }, text: { type: String } };
-    render() { return html`<yenvui-empty-state .icon=${this.icon} .text=${this.text}><slot></slot></yenvui-empty-state>`; }
-}
+
+export class SutramEmptyState extends YenvuiEmptyState {}
 customElements.define('sutram-empty-state', SutramEmptyState);
 
-export class SutramBoard extends LitElement {
-    static styles = [css`:host { display: contents; }`];
-    render() { return html`<yenvui-board><slot></slot></yenvui-board>`; }
-}
+export class SutramBoard extends YenvuiBoard {}
 customElements.define('sutram-board', SutramBoard);
-export class SutramColumn extends LitElement {
-    static properties = { titleText: { type: String }, intentColor: { type: String } };
-    static styles = [css`:host { display: contents; }`];
-    render() { return html`<yenvui-column .titleText=${this.titleText} .intentColor=${this.intentColor}><slot></slot></yenvui-column>`; }
-}
+
+export class SutramColumn extends YenvuiColumn {}
 customElements.define('sutram-column', SutramColumn);
 
-export class SutramTag extends LitElement {
-    static properties = { text: { type: String }, intent: { type: String } };
-    static styles = [css`:host { display: contents; }`];
-    render() { return html`<yenvui-tag .text=${this.text} .intent=${this.intent}><slot></slot></yenvui-tag>`; }
-}
+export class SutramTag extends YenvuiTag {}
 customElements.define('sutram-tag', SutramTag);
-export class SutramLabel extends LitElement {
-    static properties = { text: { type: String } };
-    static styles = [css`:host { display: contents; }`];
-    render() { return html`<yenvui-label .text=${this.text}><slot></slot></yenvui-label>`; }
-}
-customElements.define('sutram-label', SutramLabel);
 
-export class SutramScrubTrack extends LitElement {
-    static styles = [css`:host { display: block; width: 100%; overflow: hidden; }`];
-    render() { return html`<yenvui-scrub-track><slot></slot></yenvui-scrub-track>`; }
-}
+export class SutramLabel extends YenvuiLabel {}
+customElements.define('sutram-label', SutramLabel);
+export class SutramScrubTrack extends YenvuiScrubTrack {}
 customElements.define('sutram-scrub-track', SutramScrubTrack);
 
-export class SutramToolbar extends LitElement {
-    static properties = {
-        searchQuery: { type: String },
-        searchPlaceholder: { type: String },
-        enableFilterDropdown: { type: Boolean },
-        filterText: { type: String },
-        activeFilters: { type: Array },
-        hasFiltersOverride: { type: Boolean },
-        bottomBorder: { type: Boolean }
-    };
-    static styles = [sharedStyles];
-    render() {
-        return html`
-            <yenvui-toolbar
-                .searchQuery=${this.searchQuery || ''}
-                .searchPlaceholder=${this.searchPlaceholder || 'Search...'}
-                ?enableFilterDropdown=${this.enableFilterDropdown}
-                .filterText=${this.filterText || ''}
-                .activeFilters=${this.activeFilters || []}
-                ?hasFiltersOverride=${this.hasFiltersOverride}
-                ?bottomBorder=${this.bottomBorder}
-                @yenvui-search-changed=${e => this.dispatchEvent(new CustomEvent('search-changed', { detail: e.detail, bubbles: true, composed: true }))}>
-                <slot name="filters" slot="filters"></slot>
-                <slot name="bottom-row" slot="bottom-row"></slot>
-            </yenvui-toolbar>
-        `;
+export class SutramScrollView extends YenvuiScrollView {}
+customElements.define('sutram-scroll-view', SutramScrollView);
+
+export class SutramToolbar extends YenvuiToolbar {
+    connectedCallback() {
+        super.connectedCallback();
+        this.addEventListener('yenvui-search-changed', e => {
+            this.dispatchEvent(new CustomEvent('search-changed', { detail: e.detail, bubbles: true, composed: true }));
+        });
     }
 }
 customElements.define('sutram-toolbar', SutramToolbar);
 
 // 12. Dropdown & Collapsible
-export class SutramDropdown extends LitElement {
-    static properties = { items: { type: Array }, open: { type: Boolean, reflect: true }, align: { type: String } };
-    static styles = [sharedStyles];
-    render() {
-        return html`
-            <yenvui-dropdown .items=${this.items || []} ?open=${this.open} align=${this.align || 'right'}>
-                <slot name="trigger" slot="trigger"></slot>
-            </yenvui-dropdown>
-        `;
-    }
-}
+export class SutramDropdown extends YenvuiDropdown {}
 customElements.define('sutram-dropdown', SutramDropdown);
+
 export class SutramFilterDropdown extends YenvuiFilterDropdown {}
 if (!customElements.get('sutram-filter-dropdown')) {
     customElements.define('sutram-filter-dropdown', SutramFilterDropdown);
 }
-export class SutramCollapsible extends LitElement {
-    static properties = { titleText: { type: String }, open: { type: Boolean, reflect: true }, intent: { type: String }, flush: { type: Boolean, reflect: true } };
-    static styles = [sharedStyles];
-    render() {
-        return html`
-            <yenvui-collapsible 
-                .titleText=${this.titleText} 
-                ?open=${this.open} 
-                intent=${this.intent || 'neutral'} 
-                ?flush=${this.flush}
-                @yenvui-collapsible-toggled=${e => {
-                    if (e.target !== e.currentTarget) return;
-                    this.dispatchEvent(new CustomEvent('sutram-collapsible-toggled', { detail: e.detail, bubbles: true, composed: true }));
-                }}>
-                <slot name="actions" slot="actions"></slot>
-                <slot></slot>
-            </yenvui-collapsible>
-        `;
+
+export class SutramCollapsible extends YenvuiCollapsible {
+    connectedCallback() {
+        super.connectedCallback();
+        this.addEventListener('yenvui-collapsible-toggled', e => {
+            this.dispatchEvent(new CustomEvent('sutram-collapsible-toggled', { detail: e.detail, bubbles: true, composed: true }));
+        });
     }
 }
 customElements.define('sutram-collapsible', SutramCollapsible);
 
-export class SutramCategorySection extends LitElement {
-    static properties = { titleText: { type: String } };
-    static styles = [sharedStyles];
-    render() {
-        return html`
-            <yenvui-category-section .titleText=${this.titleText || ''}>
-                <slot name="header-actions" slot="header-actions"></slot>
-                <slot></slot>
-            </yenvui-category-section>
-        `;
-    }
-}
+export class SutramCategorySection extends YenvuiCategorySection {}
 customElements.define('sutram-category-section', SutramCategorySection);
 
 // 13. Pills & Filter Groups
-export class SutramPill extends LitElement {
-    static properties = { pillId: { type: String }, labelText: { type: String }, active: { type: Boolean }, small: { type: Boolean }, variant: { type: String } };
-    static styles = [sharedStyles];
-    render() {
-        return html`
-            <yenvui-pill 
-                .pillId=${this.pillId} 
-                .labelText=${this.labelText} 
-                ?active=${this.active} 
-                ?small=${this.small} 
-                .variant=${this.variant || 'standard'}
-                @yenvui-pill-toggled=${e => this.dispatchEvent(new CustomEvent('sutram-pill-toggled', { detail: e.detail, bubbles: true, composed: true }))}>
-            </yenvui-pill>
-        `;
+export class SutramPill extends YenvuiPill {
+    connectedCallback() {
+        super.connectedCallback();
+        this.addEventListener('yenvui-pill-toggled', e => {
+            this.dispatchEvent(new CustomEvent('sutram-pill-toggled', { detail: e.detail, bubbles: true, composed: true }));
+        });
     }
 }
 customElements.define('sutram-pill', SutramPill);
 
-export class SutramFilterGroup extends LitElement {
-    static properties = { label: { type: String }, items: { type: Array }, activeItems: { type: Array }, allowAll: { type: Boolean } };
-    static styles = [sharedStyles];
-    render() {
-        return html`
-            <yenvui-filter-group 
-                .label=${this.label || ''} 
-                .items=${this.items || []} 
-                .activeItems=${this.activeItems || []} 
-                ?allowAll=${this.allowAll}
-                @yenvui-filter-changed=${e => this.dispatchEvent(new CustomEvent('sutram-filter-changed', { detail: e.detail, bubbles: true, composed: true }))}>
-            </yenvui-filter-group>
-        `;
+export class SutramFilterGroup extends YenvuiFilterGroup {
+    connectedCallback() {
+        super.connectedCallback();
+        this.addEventListener('yenvui-filter-changed', e => {
+            this.dispatchEvent(new CustomEvent('sutram-filter-changed', { detail: e.detail, bubbles: true, composed: true }));
+        });
     }
 }
 customElements.define('sutram-filter-group', SutramFilterGroup);
+
 // 14. Code & Text Editor Primitive
 import { wordCountPlugin } from './wordcount.js';
 
 const _EMPTY_EXTENSIONS = [];
-export class SutramEditor extends SutramElement {
+export class SutramEditor extends SutramContextMixin(YenvuiEditor) {
     static properties = { 
-        value: { type: String }, 
-        readOnly: { type: Boolean }, 
-        language: { type: String }, 
-        writingMode: { type: Boolean }, 
-        customExtensions: { type: Array },
+        ...YenvuiEditor.properties,
         enableWordcount: { type: Boolean },
-        _memoizedExtensions: { type: Array, state: true }
     };
-    static styles = [sharedStyles, css`
-        :host { display: flex; flex-direction: column; flex: 1; min-height: 0; height: 100%; }
-        yenvui-editor { flex: 1; min-height: 0; height: 100%; }
-    `];
 
     constructor() {
         super();
         this.enableWordcount = true;
-        this._memoizedExtensions = _EMPTY_EXTENSIONS;
     }
 
     willUpdate(changedProperties) {
+        super.willUpdate(changedProperties);
         if (changedProperties.has('customExtensions') || changedProperties.has('enableWordcount')) {
             const extensions = [...(this.customExtensions || _EMPTY_EXTENSIONS)];
             if (this.enableWordcount) {
                 extensions.push(wordCountPlugin);
             }
-            this._memoizedExtensions = extensions;
+            this.customExtensions = extensions; // Inject directly into base property
         }
     }
 
-    insertAtCursor(text) {
-        const editor = this.shadowRoot.querySelector('yenvui-editor');
-        if (editor && editor.insertAtCursor) editor.insertAtCursor(text);
-    }
-    render() {
-        return html`
-            <yenvui-editor
-                .value=${this.value || ''}
-                .language=${this.language || 'markdown'}
-                ?readOnly=${this.readOnly}
-                ?writingMode=${this.writingMode}
-                .customExtensions=${this._memoizedExtensions}
-                @yenvui-editor-changed=${e => this.dispatchEvent(new CustomEvent('editor-changed', { detail: e.detail, bubbles: true, composed: true }))}>
-            </yenvui-editor>
-        `;
+    connectedCallback() {
+        super.connectedCallback();
+        this.addEventListener('yenvui-editor-changed', e => {
+            this.dispatchEvent(new CustomEvent('editor-changed', { detail: e.detail, bubbles: true, composed: true }));
+        });
     }
 }
 customElements.define('sutram-editor', SutramEditor);
