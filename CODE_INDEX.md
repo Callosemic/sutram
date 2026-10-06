@@ -26,7 +26,8 @@ sutram/
 │   │   ├── 0007_sutram_offline_microkernel_and_metronome_backoff.md # ADR-0007: Offline micro-kernel architecture and metronome visibility backoff
 │   │   ├── 0008_yenvui_duck_typed_selection_contracts.md # ADR-0008: Duck-typed selection contracts for gesture targets
 │   │   ├── 0009_sutram_spatial_layout_and_projection_engine.md # ADR-0009: Spatial 3-column layout engine and DOM projection pooling
-│   │   └── 0010_sutram_floating_window_projection.md # ADR-0010: Floating window projection layer and z-index management
+│   │   ├── 0010_sutram_floating_window_projection.md # ADR-0010: Floating window projection layer and z-index management
+│   │   └── 0011_sutram_context_mixin_and_grid_constrained_windows.md # [comment required]
 │   └── yenvui_contracts.md         # Interface contract specification and CSS intent tokens for yenVUI presentation chassis
 ├── pyproject.toml                  # Python project metadata and semantic release configuration
 ├── readme.md                       # Master repository architecture map and component reference
@@ -40,10 +41,10 @@ sutram/
 │       ├── poller.js               # Background job status polling factory with tier-0 API integration
 │       ├── primitives.js           # Presentation primitives (buttons, modals, toast, selection, status)
 │       ├── projection_engine.js    # DOM node caching pool (SutramDOMPool) and layout projection compiler
-│       ├── sdk.js                  # IoC Micro-Kernel, SutramElement base class, and ExtensionRegistry
 │       ├── shared_styles.js        # Lit CSS intent tokens, presentation primitives, and theme styles
 │       ├── shortcuts.js            # Centralized context-aware keydown shortcut router
 │       ├── sutram-boot.js          # Stage 1 bootloader for importmap synthesis, SemVer parsing, and guardrails
+│       ├── sutram_sdk.js           # IoC Micro-Kernel, SutramElement base class, SutramContextMixin, and ExtensionRegistry
 │       ├── sw-core.js              # Abstracted Service Worker core runtime for offline caching and navigation fallbacks
 │       ├── utils.js                # Pure algorithmic utility helpers (fuzzy filter, debounce, coalescedAsync, slugify, time formatting, nativeShareFiles)
 │       └── wordcount.js            # Ephemeral word count widget decoration plugin for CodeMirror 6
@@ -68,6 +69,7 @@ sutram/
     │   ├── modal.js                # Native HTML5 top-layer dialog modal overlay with backdrop handling
     │   ├── physics.js              # Universal gesture physics controller and Shadow DOM point resolution
     │   ├── pill.js                 # Toggleable tag/badge primitive supporting standard and text variants
+    │   ├── scroll-view.js          # Container-query responsive scrollable view container with adaptive edge padding
     │   ├── search-bar.js           # Standardized text search input with instant clear action
     │   ├── selection-tray.js       # Floating action tray for batch selection operations
     │   ├── spinner.js              # Asynchronous CSS loading indicator component with custom text label
@@ -76,7 +78,7 @@ sutram/
     │   ├── tag.js                  # Semantic intent tag primitive with high-contrast theme overrides
     │   ├── toast.js                # Non-blocking toast notification alert container
     │   ├── toolbar.js              # Sticky header toolbar integrating search, filters, and action slots
-    │   ├── window.js               # [comment required]
+    │   ├── window.js               # Grid-constrained floating workspace dialog surface with column anchor and span layout control
     │   └── yenvui-base.js          # Base presentation class encapsulating theme mutation observation and lifecycle hooks
     └── tests/                      # Automated presentation chassis compliance tests and fitness functions
         ├── .gitkeep                # Folder preservation tracking marker
