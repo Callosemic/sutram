@@ -61,7 +61,6 @@ export class YenvuiWindow extends YenvuiBase {
         this.icon = 'component';
         this.intent = 'primary';
     }
-
     updated(changedProperties) {
         super.updated(changedProperties);
         const dialog = this.shadowRoot.querySelector('dialog');
@@ -71,9 +70,6 @@ export class YenvuiWindow extends YenvuiBase {
 
             const intentColor = `var(--intent-${this.intent})`;
             dialog.style.setProperty('--intent-color', intentColor);
-        }
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
-            window.lucide.createIcons({ root: this.shadowRoot });
         }
     }
     render() {
@@ -93,12 +89,12 @@ export class YenvuiWindow extends YenvuiBase {
                         this.dispatchEvent(new CustomEvent('yenvui-window-drag-start', { detail: { originalEvent: e }, bubbles: true, composed: true })); 
                     }}>
                     <div class="title-area">
-                        <i data-lucide="${this.icon}" style="width: 14px; height: 14px; color: var(--intent-color, var(--intent-primary));"></i>
+                        <yv-icon name="${this.icon}" style="width: 14px; height: 14px; color: var(--intent-color, var(--intent-primary));"></yv-icon>
                         ${this.titleText}
                     </div>
                     <div style="display: flex; align-items: center; gap: 4px;">
                         <button class="window-btn close-btn" title="Close" @pointerdown=${(e) => e.stopPropagation()} @click=${() => this.dispatchEvent(new CustomEvent('yenvui-window-close', { bubbles: true, composed: true }))}>
-                            <i data-lucide="x" style="width: 16px; height: 16px;"></i>
+                            <yv-icon name="x" style="width: 16px; height: 16px;"></yv-icon>
                         </button>
                     </div>
                 </div>

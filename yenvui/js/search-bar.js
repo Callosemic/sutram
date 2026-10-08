@@ -97,18 +97,11 @@ export class YenvuiSearchBar extends YenvuiBase {
     render() {
         return html`
             <div class="fuzzy-search-wrapper">
-                <i data-lucide="search" stroke-width="2.5" style="width: 14px; height: 14px; color: var(--text-muted); margin-right: 8px; flex-shrink: 0;"></i>
+                <yv-icon name="search" stroke-width="2.5" style="width: 14px; height: 14px; color: var(--text-muted); margin-right: 8px; flex-shrink: 0;"></yv-icon>
                 <input type="text" .placeholder=${this.placeholder} .value=${this.value} @input=${this._handleInput}>
                 ${this.value ? html`<button class="fuzzy-search-clear" @click=${this._handleClear}>Clear</button>` : ''}
             </div>
         `;
-    }
-
-    updated(changedProperties) {
-        super.updated(changedProperties);
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
-            window.lucide.createIcons({ root: this.shadowRoot });
-        }
     }
 }
 customElements.define('yenvui-search-bar', YenvuiSearchBar);

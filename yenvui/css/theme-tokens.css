@@ -223,6 +223,19 @@ button:hover {
    color: var(--intent-warning);
    font-size: 1.1rem;
 }
+/* Declarative Interactive Row Hover Mechanics */
+.yv-interactive-row {
+   transition: background 0.2s ease, border-color 0.2s ease;
+}
+.yv-interactive-row:hover {
+   background: var(--input-bg) !important;
+}
+[data-theme="light"] .yv-interactive-row:hover {
+   background: var(--bg-hover) !important;
+}
+[data-theme="e-ink"] .yv-interactive-row:hover {
+   background: var(--bg-hover) !important;
+}
 
 /* E-Ink High Contrast Element Overrides */
 [data-theme="e-ink"] textarea, 

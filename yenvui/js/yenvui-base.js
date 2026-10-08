@@ -34,9 +34,6 @@ export class YenvuiBase extends LitElement {
     }
     updated(changedProperties) {
         super.updated(changedProperties);
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
-            window.lucide.createIcons({ root: this.shadowRoot });
-        }
     }
 
     registerOutsideClick(callback) {

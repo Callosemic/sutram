@@ -540,7 +540,7 @@ export class YenvuiCard extends YenvuiBase {
                 }} style="cursor: pointer; padding: 12px; min-width: 0;">
                     <div class="card-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; gap: 8px;">
                         <div class="card-title" style="display: flex; align-items: center; gap: 6px; font-weight: bold; color: var(--text); font-size: 0.85rem; min-width: 0; overflow: hidden;">
-                            ${this.icon && this.icon.startsWith('<i') ? html`<div style="flex-shrink: 0;" .innerHTML=${this.icon}></div>` : (this.icon ? (/^[a-zA-Z0-9-]+$/.test(this.icon) ? html`<i data-lucide="${this.icon}" style="width: 14px; height: 14px; color: var(--card-intent, var(--intent-primary)); flex-shrink: 0;"></i>` : html`<span style="flex-shrink: 0;">${this.icon}</span>`) : '')}
+                            ${this.icon && this.icon.startsWith('<i') ? html`<div style="flex-shrink: 0;" .innerHTML=${this.icon}></div>` : (this.icon ? (/^[a-zA-Z0-9-]+$/.test(this.icon) ? html`<yv-icon name="${this.icon}" style="width: 14px; height: 14px; color: var(--card-intent, var(--intent-primary)); flex-shrink: 0;"></yv-icon>` : html`<span style="flex-shrink: 0;">${this.icon}</span>`) : '')}
                             <yenvui-scrub-track style="flex: 1; min-width: 0;">
                                 ${this.titleText}
                             </yenvui-scrub-track>
@@ -577,7 +577,7 @@ export class YenvuiCard extends YenvuiBase {
                 <div class="action-grip-rail"  
                     @pointerenter=${(e) => { if (e.pointerType === 'mouse') this._overlayActive = true; }}
                     @click=${(e) => { e.stopPropagation(); e.preventDefault(); this._overlayActive = !this._overlayActive; }}>
-                    <i data-lucide="chevron-left" style="width: 14px; height: 14px;"></i>
+                    <yv-icon name="chevron-left" style="width: 14px; height: 14px;"></yv-icon>
                 </div>
                 <div class="actions-tray" @click=${{handleEvent: (e) => { 
                     if (this._isPanning) { e.stopPropagation(); e.preventDefault(); return; }
@@ -606,29 +606,6 @@ export class YenvuiCard extends YenvuiBase {
                 </div>
             </div>
         `;
-    }
-
-    updated(changedProperties) {
-        super.updated(changedProperties);
-        if (changedProperties.has('_overlayActive') && this._overlayActive) {
-            this.dispatchEvent(new CustomEvent('yenvui-overlay-opened', {
-                bubbles: true,
-                composed: true,
-                detail: { source: this }
-            }));
-        }
-
-        // Initialize Lucide icons if they exist in the rendered shadow dom
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
-            window.lucide.createIcons({ root: this.shadowRoot });
-        }
-
-        // Self-Healing Wrapper: Reset transient overlay state if Lit recycles the DOM node for a new item
-        if (changedProperties.has('entityData') || changedProperties.has('filename') || changedProperties.has('titleText')) {
-            if (this._overlayActive) {
-                this._overlayActive = false;
-            }
-        }
     }
 }
 customElements.define('yenvui-card', YenvuiCard);

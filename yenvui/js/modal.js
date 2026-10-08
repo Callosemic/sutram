@@ -217,15 +217,16 @@ export class YenvuiModal extends LitElement {
         e.preventDefault(); 
         this._dispatchClose();
     }
-
     _handleBackdropClick(e) {
         // Native <dialog> spans the screen, but its bounding box is just the content panel.
         // If the click falls outside the bounding box, it hit the ::backdrop.
-        const dialog = this.shadowRoot.querySelector('dialog');
+        const dialog = this.shadowRoot.querySelector('dialog') || e.currentTarget;
+        if (!dialog) return;
+
         const rect = dialog.getBoundingClientRect();
         const isInDialog = (rect.top <= e.clientY && e.clientY <= rect.top + rect.height
             && rect.left <= e.clientX && e.clientX <= rect.left + rect.width);
-        
+
         if (!isInDialog) {
             this._dispatchClose();
         }

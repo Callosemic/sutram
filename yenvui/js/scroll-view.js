@@ -5,7 +5,6 @@ export class YenvuiScrollView extends YenvuiBase {
     static properties = {
         padding: { type: String }
     };
-
     static styles = css`
         :host {
             display: flex;
@@ -14,10 +13,9 @@ export class YenvuiScrollView extends YenvuiBase {
             min-height: 0;
             overflow-y: auto;
             box-sizing: border-box;
-            padding: var(--scroll-padding, 20px);
-            container-type: inline-size;
+            padding: var(--scroll-padding, 10px 12px 20px 12px);
             --mobile-edge-padding: 0px;
-            --content-padding-x: 20px;
+            --content-padding-x: 12px;
         }
         :host([padding="none"]) {
             padding: 0 !important;
@@ -32,10 +30,9 @@ export class YenvuiScrollView extends YenvuiBase {
             }
         }
     `;
-
     constructor() {
         super();
-        this.padding = '20px';
+        this.padding = '10px 12px 20px 12px';
     }
 
     updated(changedProperties) {

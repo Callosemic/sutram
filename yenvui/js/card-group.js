@@ -217,22 +217,18 @@ export class YenvuiCardGroup extends LitElement {
                 if (index <= maxVisibleIndexInCollapsed) {
                     const peekAmount = 26; // Tighter bottom framing
                     if (childHeight > 0) {
-                        const pullUp = childHeight - peekAmount;
+                        const pullUp = Math.max(0, childHeight - peekAmount);
                         child.style.marginTop = `-${pullUp}px`;
 
-                        const clipTop = Math.max(0, childHeight - parentHeight - peekAmount);
-                        if (clipTop > 0) {
-                            child.style.clipPath = `inset(${clipTop}px -20px -20px -20px)`;
-                        } else {
-                            child.style.clipPath = 'inset(0px -20px -20px -20px)';
-                        }
+                        const clipTop = pullUp;
+                        child.style.clipPath = clipTop > 0 ? `inset(${clipTop}px -20px -20px -20px)` : 'inset(0px -20px -20px -20px)';
                     }
-                    child.style.transform = 'scale(1)'; // No horizontal shrinking
-                    child.style.filter = 'brightness(0.7)'; // Stack depth darkening
+                    child.style.transform = 'scale(1)';
+                    child.style.filter = 'brightness(0.7)';
                     child.style.opacity = '1';
                     child.style.setProperty('--peek-rail-opacity', '0');
                     child.style.setProperty('--peek-content-y', '7px');
-                    child.style.pointerEvents = 'auto'; 
+                    child.style.pointerEvents = 'auto';
                     child.style.display = '';
                 } else {
                     child.style.display = 'none';
@@ -255,13 +251,16 @@ export class YenvuiCardGroup extends LitElement {
                 child.style.setProperty('--card-margin-bottom', '0px');
 
                 const lastVisibleIndex = (this.accordion && !this.expanded) 
-                    ? Math.min(maxVisibleIndexInCollapsed, total - 1) 
+                    ? Math.min(1, total - 1) 
                     : total - 1;
+
+                const hasMoreHandle = (this.accordion && !this.expanded && total > 2);
+
                 if (index === 0) {
                     child.style.setProperty('--card-border-top', '1px solid var(--border, #444)');
                     child.style.setProperty('--card-border-top-left-radius', '6px');
                     child.style.setProperty('--card-border-top-right-radius', '6px');
-                    const hasBottomRadius = total === 1 || (this.accordion && !this.expanded);
+                    const hasBottomRadius = (total === 1);
                     child.style.setProperty('--card-border-bottom-left-radius', hasBottomRadius ? '6px' : '0px');
                     child.style.setProperty('--card-border-bottom-right-radius', hasBottomRadius ? '6px' : '0px');
                     child.style.setProperty('--card-top-shadow', 'none');
@@ -274,16 +273,13 @@ export class YenvuiCardGroup extends LitElement {
                     const isLastVisible = (index === lastVisibleIndex);
 
                     if (isLastVisible) {
-                        child.style.setProperty('--card-border-bottom-left-radius', '6px');
-                        child.style.setProperty('--card-border-bottom-right-radius', '6px');
+                        const radius = (hasMoreHandle || (this.accordion && this.expanded)) ? '0px' : '6px';
+                        child.style.setProperty('--card-border-bottom-left-radius', radius);
+                        child.style.setProperty('--card-border-bottom-right-radius', radius);
                     } else {
                         child.style.setProperty('--card-border-bottom-left-radius', '0px');
                         child.style.setProperty('--card-border-bottom-right-radius', '0px');
                     }
-                }
-                if (total === 1) {
-                    child.style.setProperty('--card-border-bottom-left-radius', '6px');
-                    child.style.setProperty('--card-border-bottom-right-radius', '6px');
                 }
             } else {
                 child.style.removeProperty('--card-margin-bottom');
@@ -315,30 +311,28 @@ export class YenvuiCardGroup extends LitElement {
         }
     }
     render() {
-        const moreCount = this._childCount - 1;
+        const hiddenCount = this._childCount - 1;
         return html`
             <div @pointerdown=${(e) => this._gestureController.start(e)} style="display: contents;">
                 <slot @slotchange=${this._handleSlotChange}></slot>
             </div>
-            ${this.accordion && this.stacked && !this.expanded && this._childCount > 1 ? html`
+            ${this.accordion && this.stacked && !this.expanded && hiddenCount > 0 ? html`
                 <div class="more-handle" @click=${() => this.expanded = true}>
-                    <span>Expand ${moreCount} nested item${moreCount !== 1 ? 's' : ''}</span>
+                    <span>Expand ${hiddenCount} item${hiddenCount !== 1 ? 's' : ''}</span>
                     <span style="font-size: 0.65rem; margin-top: 1px; opacity: 0.8;">▼</span>
                 </div>
             ` : ''}
-            ${this.accordion && this.stacked && this.expanded ? html`
+            ${this.accordion && this.stacked && this.expanded && this._childCount > 1 ? html`
                 ${this._exceedsViewport ? html`
                     <div class="collapse-handle top" @click=${() => this.expanded = false}>
                         <span style="font-size: 0.65rem; margin-top: 1px; opacity: 0.8; transform: rotate(180deg);">▼</span>
                         <span>Collapse Stack</span>
                     </div>
                 ` : ''}
-                ${this._childCount > 1 ? html`
-                    <div class="collapse-handle bottom" @click=${() => this.expanded = false}>
-                        <span style="font-size: 0.65rem; margin-top: 1px; opacity: 0.8; transform: rotate(180deg);">▼</span>
-                        <span>Collapse Stack</span>
-                    </div>
-                ` : ''}
+                <div class="collapse-handle bottom" @click=${() => this.expanded = false}>
+                    <span style="font-size: 0.65rem; margin-top: 1px; opacity: 0.8; transform: rotate(180deg);">▼</span>
+                    <span>Collapse Stack</span>
+                </div>
             ` : ''}
         `;
     }

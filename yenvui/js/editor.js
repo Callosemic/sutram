@@ -290,6 +290,7 @@ export class YenvuiEditor extends LitElement {
                     baseTheme,
                     EditorView.lineWrapping,
                     EditorView.contentAttributes.of({ spellcheck: "false", autocorrect: "off", autocapitalize: "off" }),
+                    EditorView.exceptionSink.of((err) => console.warn("[CodeMirror] Suppressed internal plugin crash:", err)),
                     this.languageConf.of(initialLangExt),
                     this.writingModeConf.of([]),
                     this.themeConf.of(document.body.getAttribute('data-theme') !== 'light' ? syntaxHighlighting(oneDarkHighlightStyle) : []),
@@ -305,6 +306,22 @@ export class YenvuiEditor extends LitElement {
                                 composed: true
                             }));
                         }
+                        if (update.selectionSet) {
+                            this.dispatchEvent(new CustomEvent('yenvui-editor-selection', {
+                                detail: { cursor: update.state.selection.main.head },
+                                bubbles: true,
+                                composed: true
+                            }));
+                        }
+                    }),
+                    EditorView.domEventHandlers({
+                        scroll: (e, view) => {
+                            this.dispatchEvent(new CustomEvent('yenvui-editor-scroll', {
+                                detail: { top: view.scrollDOM.scrollTop },
+                                bubbles: true,
+                                composed: true
+                            }));
+                        }
                     })
                 ]
             }),
@@ -316,9 +333,26 @@ export class YenvuiEditor extends LitElement {
             this._updateWritingMode();
         }
     }
-
     getCursor() { return this._view ? this._view.state.selection.main.head : 0; }
-    
+
+    setCursor(pos) {
+        if (this._view && pos !== undefined) {
+            this._view.dispatch({ selection: { anchor: pos } });
+        }
+    }
+
+    getScrollInfo() {
+        return this._view ? this._view.scrollDOM.scrollTop : 0;
+    }
+
+    setScrollInfo(top) {
+        if (this._view && top !== undefined) {
+            requestAnimationFrame(() => {
+                this._view.scrollDOM.scrollTop = top;
+            });
+        }
+    }
+
     insertAtCursor(text) {
         if (this._view) {
             const pos = this.getCursor();

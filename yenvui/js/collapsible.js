@@ -25,7 +25,7 @@ export class YenvuiCollapsible extends YenvuiBase {
             border: 1px solid var(--border);
             border-left: 4px solid var(--intent-color, var(--intent-primary));
             border-radius: 6px;
-            margin: 0 12px;
+            margin: 0;
             box-sizing: border-box;
         }
         .header:hover {
@@ -78,11 +78,10 @@ export class YenvuiCollapsible extends YenvuiBase {
             display: none;
             background: transparent;
         }
-
         :host([open]) .content {
             display: flex;
             flex-direction: column;
-            padding: 0 12px 12px 12px;
+            padding: 0 0 12px 0;
         }
 
         :host([flush]) .content {
@@ -140,7 +139,7 @@ export class YenvuiCollapsible extends YenvuiBase {
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <slot name="actions" @click=${e => e.stopPropagation()}></slot>
                     <span class="chevron">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        <yv-icon name="chevron-down" style="width: 16px; height: 16px;"></yv-icon>
                     </span>
                 </div>
             </div>

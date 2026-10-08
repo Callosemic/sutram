@@ -66,7 +66,6 @@ export class YenvuiDropdown extends YenvuiBase {
     _toggle(e) {
         if (!this._loadingItemId) this.open = !this.open;
     }
-
     async _executeItem(item, e) {
         if (this._loadingItemId) return;
 
@@ -76,13 +75,27 @@ export class YenvuiDropdown extends YenvuiBase {
                 await item.asyncAction(e);
             } catch (err) {
                 console.error(err);
+                if (window.inSetu?.ui?.setGlobalStatus) window.inSetu.ui.setGlobalStatus(`Action Failed: ${err.message}`, 4000, true);
             } finally {
                 this._loadingItemId = null;
                 this.open = false;
             }
         } else {
             this.open = false;
-            if (item.onClick) item.onClick(e);
+            if (item.onClick) {
+                try {
+                    const result = item.onClick(e);
+                    if (result && typeof result.catch === 'function') {
+                        result.catch(err => {
+                            console.error(err);
+                            if (window.inSetu?.ui?.setGlobalStatus) window.inSetu.ui.setGlobalStatus(`Action Failed: ${err.message}`, 4000, true);
+                        });
+                    }
+                } catch (err) {
+                    console.error(err);
+                    if (window.inSetu?.ui?.setGlobalStatus) window.inSetu.ui.setGlobalStatus(`Action Failed: ${err.message}`, 4000, true);
+                }
+            }
         }
     }
     render() {
@@ -98,8 +111,8 @@ export class YenvuiDropdown extends YenvuiBase {
                             const isLoading = this._loadingItemId === (item.id || item.label);
                             return html`
                                 <button class="menu-item" ?disabled=${!!this._loadingItemId} @click=${(e) => this._executeItem(item, e)}>
-                                    <span class="icon">${isLoading ? html`<div class="menu-spinner"></div>` : (item.icon || '')}</span>
-                                    <span>${isLoading ? 'Processing...' : item.label}</span>
+                                    <span class="icon">${isLoading ? html`<div class="menu-spinner"></div>` : (item.icon ? (/^[a-zA-Z0-9-]+$/.test(item.icon) ? html`<yv-icon name="${item.icon}" style="width: 14px; height: 14px;"></yv-icon>` : item.icon) : '')}</span>
+                                    <span>${isLoading ? 'Processing...' : (item.label || item.id || 'Unknown Action')}</span>
                                 </button>
                             `;
                         })}
@@ -160,7 +173,7 @@ export class YenvuiFilterDropdown extends YenvuiBase {
         return html`
             <div class="container">
                 <button class="system-action-btn" title=${this.filterText} @click=${() => this.open = !this.open} style="opacity: ${this.hasFilters ? '1' : '0.5'};">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                    <yv-icon name="filter" style="width: 14px; height: 14px;"></yv-icon>
                 </button>
                 <div class="panel">
                     <slot></slot>
