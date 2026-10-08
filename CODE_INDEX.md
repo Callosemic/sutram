@@ -27,7 +27,8 @@ sutram/
 │   │   ├── 0008_yenvui_duck_typed_selection_contracts.md # ADR-0008: Duck-typed selection contracts for gesture targets
 │   │   ├── 0009_sutram_spatial_layout_and_projection_engine.md # ADR-0009: Spatial 3-column layout engine and DOM projection pooling
 │   │   ├── 0010_sutram_floating_window_projection.md # ADR-0010: Floating window projection layer and z-index management
-│   │   └── 0011_sutram_context_mixin_and_grid_constrained_windows.md # [comment required]
+│   │   ├── 0011_sutram_context_mixin_and_grid_constrained_windows.md # ADR-0011: SutramContextMixin and grid-constrained spatial window projections
+│   │   └── 0012_yv_icon_component_and_direct_node_retention.md # ADR-0012: Native yv-icon component and direct Lit element node retention
 │   └── yenvui_contracts.md         # Interface contract specification and CSS intent tokens for yenVUI presentation chassis
 ├── pyproject.toml                  # Python project metadata and semantic release configuration
 ├── readme.md                       # Master repository architecture map and component reference
@@ -40,7 +41,7 @@ sutram/
 │       ├── offline.js              # Offline IndexedDB persistence manager, outbox reconciler, and network hysteresis manager
 │       ├── poller.js               # Background job status polling factory with tier-0 API integration
 │       ├── primitives.js           # Presentation primitives (buttons, modals, toast, selection, status)
-│       ├── projection_engine.js    # DOM node caching pool (SutramDOMPool) and layout projection compiler
+│       ├── projection_engine.js    # Declarative layout projection compiler (SutramProjectionCompiler)
 │       ├── shared_styles.js        # Lit CSS intent tokens, presentation primitives, and theme styles
 │       ├── shortcuts.js            # Centralized context-aware keydown shortcut router
 │       ├── sutram-boot.js          # Stage 1 bootloader for importmap synthesis, SemVer parsing, and guardrails
