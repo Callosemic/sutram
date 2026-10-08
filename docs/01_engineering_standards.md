@@ -45,3 +45,42 @@ To prevent ghost memory leaks and dangling subscriptions, components extending `
 * **Timers & Metronomes:** Use `this.registerInterval(callback, delayMs)` or `ExtensionRegistry.registerTick()` instead of raw `setInterval`.
 * **Global DOM Listeners:** Use `this.registerGlobalListener(eventType, targetNode, callback)` and `this.registerOutsideClick(callback)`.
 * **Automatic Disconnection:** All registered subscriptions, intervals, and listeners are automatically torn down within `SutramElement.disconnectedCallback()`.
+
+---
+
+## 4. Iconography & Graphic Dictionary Standard
+
+### The ExtensionRegistry Icon Contract
+All core modules and extension components MUST use standard Lucide string identifiers (e.g., `icon: 'trash-2'`) rather than raw emoji strings across all registry schemas (`layoutSlots`, `entityActions`, `settingsActions`, `batchActions`)[cite: 10].
+
+### Shadow DOM Icon Hydration
+Web Components rendering Lucide icons MUST execute `window.lucide.createIcons({ root: this.shadowRoot })` within their `updated(changedProperties)` lifecycle hook to ensure SVGs hydrate cleanly inside isolated Shadow DOM roots[cite: 5, 6, 10].
+
+### Graphic Dictionary
+When building new features or declaring actions, semantic concepts MUST map directly to these canonical Lucide tokens[cite: 10]:
+
+| Semantic Concept | Lucide Token (`data-lucide`) |
+| --- | --- |
+| **Save / Persist / Disk** | `save` |
+| **Sync / Patch / Execute** | `zap` |
+| **Repository / Archive / Bundle** | `package` |
+| **Tools / Settings / Config** | `wrench` / `settings` |
+| **Delete / Remove / Clear** | `trash-2` |
+| **Edit / Rename / Modify** | `edit-3` |
+| **File / Document / Receipt** | `file-text` |
+| **Folder / Directory** | `folder` |
+| **Copy / Clipboard** | `clipboard` |
+| **Download / Pull** | `download` |
+| **Share / Upload / Export** | `share` / `upload` |
+| **Undo / Revert / Pre-State** | `rewind` |
+| **Restore / Target / Post-State** | `target` |
+| **Swap / Refresh / Retry** | `refresh-cw` |
+| **Warning / Alert / Poison** | `alert-triangle` |
+| **Success / Confirm / Check** | `check-circle` |
+| **Error / Cancel / Close** | `x-circle` / `x` |
+| **Search / Inspect** | `search` |
+| **Parts / Chunks / Components** | `puzzle` |
+| **Move / Transfer** | `truck` |
+| **History / Timeline** | `history` |
+| **Terminal / Console / Command** | `terminal` |
+| **Prose / Write / Essay** | `pen-tool` |
