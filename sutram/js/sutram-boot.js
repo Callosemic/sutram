@@ -126,9 +126,29 @@
         document.head.appendChild(script);
         console.log('[Sutram] Import map synthesized and injected.', finalImports);
     }
+    // =========================================================================
+    // 4. Define yv-icon Micro-Primitive
+    // =========================================================================
+    class YvIcon extends HTMLElement {
+        connectedCallback() {
+            this.style.display = 'inline-flex';
+            this.style.alignItems = 'center';
+            this.style.justifyContent = 'center';
+            this.style.flexShrink = '0';
+            if (!this.style.width && !this.style.height) {
+                this.style.width = '16px';
+                this.style.height = '16px';
+            }
+
+            const name = this.getAttribute('name');
+            const svgContent = window.INSETU_ICONS && window.INSETU_ICONS[name] ? window.INSETU_ICONS[name] : '';
+            this.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 100%; height: 100%; display: block;">${svgContent}</svg>`;
+        }
+    }
+    customElements.define('yv-icon', YvIcon);
 
     // =========================================================================
-    // 4. Trigger Stage 2
+    // 5. Trigger Stage 2
     // =========================================================================
     // Signal the host OS that it is safe to dynamically import the app modules
     window.dispatchEvent(new CustomEvent('sutram:boot-ready'));

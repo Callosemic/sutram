@@ -225,13 +225,6 @@ export class SutramDragCoordinator extends SutramElement {
             floater.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
         }
     }
-
-    updated(changedProperties) {
-        super.updated(changedProperties);
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
-            window.lucide.createIcons({ root: this.shadowRoot });
-        }
-    }
     render() {
         if (!this.dragState || !this.dragState.active) {
             return html`<yenvui-drop-overlay></yenvui-drop-overlay>`;
@@ -251,7 +244,7 @@ export class SutramDragCoordinator extends SutramElement {
                         <!-- Header -->
                         <div style="display: flex; flex-direction: column; margin-bottom: 20px;">
                             <div class="hud-header-subtitle">
-                                <i data-lucide="split" style="width: 14px; height: 14px;"></i> REPOSITION OR DOCK
+                                <yv-icon name="split" style="width: 14px; height: 14px;"></yv-icon> REPOSITION OR DOCK
                             </div>
                             <div class="hud-header-title">
                                 ${entity?.label || entity?.id || 'Projection'}
@@ -262,7 +255,7 @@ export class SutramDragCoordinator extends SutramElement {
                     <div class="section-box tab-pos">
                         <div class="section-header tab-pos">
                             <span style="display: flex; align-items: center; gap: 6px;">
-                                <i data-lucide="columns" style="width: 14px; height: 14px;"></i> TAB POSITION
+                                <yv-icon name="columns" style="width: 14px; height: 14px;"></yv-icon> TAB POSITION
                             </span>
                             <span style="opacity: 0.7;">Drop target column</span>
                         </div>
@@ -284,7 +277,7 @@ export class SutramDragCoordinator extends SutramElement {
                         <div class="section-box arrange-tabs">
                             <div class="section-header arrange-tabs">
                                 <span style="display: flex; align-items: center; gap: 6px;">
-                                    <i data-lucide="arrow-left-right" style="width: 14px; height: 14px;"></i> ARRANGE TABS
+                                    <yv-icon name="arrow-left-right" style="width: 14px; height: 14px;"></yv-icon> ARRANGE TABS
                                 </span>
                                 <span style="opacity: 0.7;">Drop between tabs to reorder</span>
                             </div>
@@ -310,7 +303,7 @@ export class SutramDragCoordinator extends SutramElement {
                                         return html`
                                             ${i > 0 ? html`<span style="color: var(--text-muted); font-size: 0.8rem;">•</span>` : ''}
                                             <yenvui-drop-target zone="reorder-${i}" class="drop-target-btn intent-highlight" .intent=${'highlight'} ?hovered=${isHovered}>
-                                                <i data-lucide="${vTab.icon || 'component'}" style="width: 14px; height: 14px;"></i>
+                                                <yv-icon name="${vTab.icon || 'component'}" style="width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"></yv-icon>
                                                 <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${vTab.label || vTab.id}</span>
                                             </yenvui-drop-target>
                                         `;
@@ -324,7 +317,7 @@ export class SutramDragCoordinator extends SutramElement {
                     <div class="section-box window-pos">
                         <div class="section-header window-pos">
                             <span style="display: flex; align-items: center; gap: 6px;">
-                                <i data-lucide="layout-grid" style="width: 14px; height: 14px;"></i> WINDOW POSITION
+                                <yv-icon name="layout-grid" style="width: 14px; height: 14px;"></yv-icon> WINDOW POSITION
                             </span>
                             <span style="opacity: 0.7;">Viewport capacity preset</span>
                         </div>
@@ -365,13 +358,13 @@ export class SutramDragCoordinator extends SutramElement {
                     </div>
                     <!-- Bottom Close Action -->
                     <yenvui-drop-target zone="close" class="drop-target-btn intent-danger" .intent=${'danger'} ?hovered=${currentZone === 'close'}>
-                        <i data-lucide="x" style="width: 18px; height: 18px;"></i> Close
+                        <yv-icon name="x" style="width: 18px; height: 18px;"></yv-icon> Close
                     </yenvui-drop-target>
 
                 </div>
                 <!-- Floating Cursor Node (Hardware Accelerated) -->
                 <div class="drag-floater">
-                    <i data-lucide="${entity?.icon || 'component'}" style="width: 16px; height: 16px;"></i> ${entity?.label || entity?.id || 'Dragging'}
+                    <yv-icon name="${entity?.icon || 'component'}" style="width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"></yv-icon> ${entity?.label || entity?.id || 'Dragging'}
                 </div>
             </yenvui-drop-overlay>
         `;

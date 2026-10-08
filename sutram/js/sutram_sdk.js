@@ -59,6 +59,7 @@ export function createSutramStore(name, initialState, persistenceSchema = {}, ge
             if (Object.keys(hydrated).length > 0) store.setState(hydrated);
         };
 
+        store.hydrateStore = hydrate;
         setTimeout(() => hydrate(getScopeId()), 0);
 
         store.subscribe((state, prevState) => {
@@ -239,12 +240,8 @@ export class SutramElement extends SutramContextMixin(LitElement) {
     observeTheme() {
         subscribeSutramToTheme(this);
     }
-
     updated(changedProperties) {
         super.updated(changedProperties);
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
-            window.lucide.createIcons({ root: this.shadowRoot });
-        }
     }
     registerOutsideClick(callback) {
         const listener = (e) => {
@@ -657,16 +654,22 @@ export const LayoutStore = createSutramStore('Layout', {
             [column]: { ...state.columns[column], pinned: [...state.columns[column].pinned, entity] } 
         }
     })),
-    unpinFromColumn: (column, entityId) => LayoutStore.setState((state) => ({
-        columns: { 
-            ...state.columns, 
-            [column]: { 
-                ...state.columns[column], 
-                pinned: state.columns[column].pinned.filter(e => e.id !== entityId),
-                active: state.columns[column].active === entityId ? null : state.columns[column].active
-            } 
-        }
-    })),
+    unpinFromColumn: (column, entityId) => LayoutStore.setState((state) => {
+        const newPinned = state.columns[column].pinned.filter(e => e.id !== entityId);
+        const newActive = state.columns[column].active === entityId 
+            ? (newPinned.length > 0 ? newPinned[newPinned.length - 1].id : null) 
+            : state.columns[column].active;
+        return {
+            columns: { 
+                ...state.columns, 
+                [column]: { 
+                    ...state.columns[column], 
+                    pinned: newPinned,
+                    active: newActive
+                } 
+            }
+        };
+    }),
     setActiveProjection: (col, id) => LayoutStore.setState((state) => ({
         columns: {
             ...state.columns,

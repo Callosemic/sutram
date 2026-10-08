@@ -3,7 +3,7 @@ import { html, css } from 'lit';
 import { SutramElement, ExtensionRegistry, LayoutStore } from './sutram_sdk.js';
 import { sharedStyles } from './shared_styles.js';
 import { debounce } from './utils.js';
-import { SutramProjectionCompiler, SutramDOMPool } from './projection_engine.js';
+import { SutramProjectionCompiler } from './projection_engine.js';
 import './drag-coordinator.js';
 import '../../yenvui/js/tabs.js';
 import { YenvuiGestureController, getDeepElementFromPoint } from '../../yenvui/js/physics.js';
@@ -225,7 +225,7 @@ export class SutramAppShell extends SutramElement {
             height: 36px;
             background: var(--bg-deep);
             border-bottom: 1px solid var(--border);
-            padding: 0 12px;
+            padding: 0 0 0 12px;
             flex-shrink: 0;
             position: relative;
         }
@@ -353,18 +353,18 @@ export class SutramAppShell extends SutramElement {
             border-radius: 4px;
             transition: background 0.2s;
         }
-        .sub-tab-icon-wrapper .default-icon-container { display: flex; transition: opacity 0.2s; }
-        .sub-tab-icon-wrapper .close-icon { display: none; position: absolute; }
+        .sub-tab-icon-wrapper .default-icon-container { display: flex !important; transition: opacity 0.2s; }
+        .sub-tab-icon-wrapper .close-icon { display: none !important; position: absolute; }
         .sub-tab-icon-wrapper:hover {
             background: color-mix(in srgb, var(--intent-danger) 15%, transparent);
         }
-        .sub-tab:hover .default-icon-container { display: none; }
-        .sub-tab:hover .close-icon { display: block; }
+        .sub-tab:hover .default-icon-container { display: none !important; }
+        .sub-tab:hover .close-icon { display: flex !important; }
     `];
     constructor() {
         super();
         this._layoutConfig = [];
-        this._domPool = new SutramDOMPool();
+        this._activeNodes = new Map();
         this._spatialState = { capacity: 3, focusedColumn: 'center', mobileViewportIndex: 1, columns: { left: { pinned: [] }, center: { pinned: [] }, right: { pinned: [] } } };
         // PointerEvent Drag State
 
@@ -566,7 +566,7 @@ export class SutramAppShell extends SutramElement {
                 };
                 this.requestUpdate();
             });
-            // Garbage Collection: SutramDOMPool handles node eviction; trigger shell re-render
+            // Garbage Collection: Handled natively by Lit conditional unmounting. Trigger re-render to reflect state.
             this.registerGlobalListener('sutram-evict-projection', window, () => {
                 this.requestUpdate();
             });
@@ -614,12 +614,6 @@ export class SutramAppShell extends SutramElement {
         this._compileLayout();
         } catch(err) { console.error("[Telemetry] AppShell connectedCallback error:", err); }
     }
-    updated(changedProperties) {
-        super.updated(changedProperties);
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
-            window.lucide.createIcons({ root: this.shadowRoot });
-        }
-    }
     _getPrimaryTabColor(tab) {
         if (tab && tab.intent) return `var(--intent-${tab.intent})`;
         const id = typeof tab === 'string' ? tab : tab?.id;
@@ -642,7 +636,7 @@ export class SutramAppShell extends SutramElement {
     _getPrimaryTabIcon(tab) {
         if (tab && tab.icon) {
             const color = this._getPrimaryTabColor(tab);
-            return html`<i data-lucide="${tab.icon}" stroke-width="2.5" style="width: 14px; height: 14px; margin-right: 8px; display: inline-block; vertical-align: text-bottom; color: ${color};"></i>`;
+            return html`<yv-icon name="${tab.icon}" stroke-width="2.5" style="width: 14px; height: 14px; margin-right: 8px; display: inline-block; vertical-align: text-bottom; color: ${color};"></yv-icon>`;
         }
         const id = typeof tab === 'string' ? tab : tab?.id;
         const map = {
@@ -660,7 +654,7 @@ export class SutramAppShell extends SutramElement {
         };
         const icon = map[id?.toLowerCase()] || 'folder';
         const color = this._getPrimaryTabColor(tab);
-        return html`<i data-lucide="${icon}" stroke-width="2.5" style="width: 14px; height: 14px; margin-right: 8px; display: inline-block; vertical-align: text-bottom; color: ${color};"></i>`;
+        return html`<yv-icon name="${icon}" stroke-width="2.5" style="width: 14px; height: 14px; margin-right: 8px; display: inline-block; vertical-align: text-bottom; color: ${color};"></yv-icon>`;
     }
     _compileLayout() {
         try {
@@ -672,13 +666,22 @@ export class SutramAppShell extends SutramElement {
                 const state = layoutStore.getState();
                 let changed = false;
                 const newCols = { ...state.columns };
-
                 const isExtActive = (extName) => window.inSetu?.isCore?.(extName) || window.ACTIVE_EXTENSIONS?.includes(extName);
-
+                const subSlots = this._layoutConfig.filter(s => s.slot === 'slots:sub-navigation');
                 ['left', 'center', 'right'].forEach(col => {
                     if (!newCols[col] || !newCols[col].pinned) return;
-                    const validPins = newCols[col].pinned.filter(p => !p.extName || isExtActive(p.extName));
-                    if (validPins.length !== newCols[col].pinned.length) {
+                    const validPins = newCols[col].pinned
+                        .filter(p => !p.extName || isExtActive(p.extName))
+                        .map(p => {
+                            const slotDef = subSlots.find(s => s.id === p.id);
+                            if (slotDef && (slotDef.icon !== p.icon || slotDef.label !== p.label || slotDef.intent !== p.intent)) {
+                                changed = true;
+                                return { ...p, icon: slotDef.icon, label: slotDef.label, intent: slotDef.intent };
+                            }
+                            return p;
+                        });
+
+                    if (validPins.length !== newCols[col].pinned.length || changed) {
                         newCols[col] = { ...newCols[col], pinned: validPins };
                         if (newCols[col].active && !validPins.some(p => p.id === newCols[col].active)) {
                             newCols[col].active = validPins.length > 0 ? validPins[0].id : null;
@@ -704,9 +707,7 @@ export class SutramAppShell extends SutramElement {
             }
         }
         return html`
-            <button style="background: var(--input-bg); color: var(--text); text-align: left; padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-family: var(--font-mono, monospace); font-weight: normal; margin: 0 !important; display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; box-sizing: border-box; touch-action: none; user-select: none; transition: background 0.2s, border-color 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"
-                onmouseover="this.style.background='var(--bg)'; this.style.borderColor='${this._getPrimaryTabColor({id: child.targetParent, intent: child.intent})}';"
-                onmouseout="this.style.background='var(--input-bg)'; this.style.borderColor='var(--border)';"
+            <button class="yv-interactive-row" style="background: var(--input-bg); color: var(--text); text-align: left; padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-family: var(--font-mono, monospace); font-weight: normal; margin: 0 !important; display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; box-sizing: border-box; touch-action: none; user-select: none; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"
                 @pointerdown=${(e) => {
                     const layoutState = window.Sutram?.stores?.Layout?.getState();
                     let existingColDown = null;
@@ -765,14 +766,11 @@ export class SutramAppShell extends SutramElement {
                     this.requestUpdate();
                 }}>
                 <div style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0;">
-                    ${child.icon ? html`<i data-lucide="${child.icon}" style="width: 14px; height: 14px; color: ${existingCol ? this._getPrimaryTabColor({id: child.targetParent, intent: child.intent}) : 'var(--text-muted)'};"></i>` : html`<i data-lucide="puzzle" style="width: 14px; height: 14px; color: ${existingCol ? this._getPrimaryTabColor({id: child.targetParent, intent: child.intent}) : 'var(--text-muted)'};"></i>`}
+                    ${child.icon ? html`<yv-icon name="${child.icon}" style="width: 14px; height: 14px; color: ${existingCol ? this._getPrimaryTabColor({id: child.targetParent, intent: child.intent}) : 'var(--text-muted)'};"></yv-icon>` : html`<yv-icon name="puzzle" style="width: 14px; height: 14px; color: ${existingCol ? this._getPrimaryTabColor({id: child.targetParent, intent: child.intent}) : 'var(--text-muted)'};"></yv-icon>`}
                 </div>
                 <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;">${child.label}</span>
             </button>
         `;
-    }
-    _getCachedComponent(componentTag, subId = null) {
-        return this._domPool.get(componentTag, subId);
     }
     _updateUrlHash(colId, subId) {
         const activeWs = window.inSetu?.utils?.getActiveWorkspace ? window.inSetu.utils.getActiveWorkspace() : 'default';
@@ -803,6 +801,13 @@ export class SutramAppShell extends SutramElement {
                 if (this._spatialState?.capacity === 1) {
                     this._setViewportIndex(colIndexes[targetCol]);
                 }
+            }
+        }
+
+        if (isAlreadyActive) {
+            const node = this.shadowRoot.querySelector(`[data-sub-id="${subId}"]`);
+            if (node && typeof node.onForceRefresh === 'function') {
+                node.onForceRefresh();
             }
         }
 
@@ -914,6 +919,25 @@ export class SutramAppShell extends SutramElement {
     }
     render() {
         try {
+        const nextNodes = new Map();
+        const getDynamicNode = (componentTag, subId = null) => {
+            if (!componentTag) return '';
+            const cacheKey = subId ? `${componentTag}:${subId}` : componentTag;
+            let node = this._activeNodes.get(cacheKey);
+            if (!node) {
+                try {
+                    node = document.createElement(componentTag);
+                    if (subId) node.dataset.subId = subId;
+                } catch (e) {
+                    node = document.createElement('div');
+                    node.style.cssText = "padding: 15px; color: var(--intent-danger); font-family: monospace;";
+                    node.innerText = `⚠️ Failed to initialize <${componentTag}>`;
+                }
+            }
+            nextNodes.set(cacheKey, node);
+            return node;
+        };
+
         const registry = window.ExtensionRegistry || ExtensionRegistry;
         const isOffline = window.Sutram?.stores?.Environment?.getState()?.isOffline || false;
 
@@ -953,13 +977,16 @@ export class SutramAppShell extends SutramElement {
             translateX = 'translateX(0vw)';
             gridWidth = '150%';
         }
-
         // Apply viewport to the host to ensure child elements correctly execute :host-context CSS rules
         this.dataset.viewport = viewportMode;
-        return html`
+
+        // GC: Overwrite the active nodes map with only the nodes requested during this render cycle
+        // Detached nodes will fall out of scope and be collected by the browser.
+        const finalHtml = html`
             <div class="shell-container spatial-viewport" data-viewport="${viewportMode}">
                 <!-- Persistent Global Launcher Row -->
-                <div class="top-utility-row" style="position: relative; display: flex; justify-content: space-between; width: 100%; background: var(--bg-deep); flex-shrink: 0; height: 38px; border-bottom: 1px solid var(--border); z-index: 50; padding-left: 2px; padding-right: 0;">
+                <div class="top-utility-row" style="position: relative; display: flex; justify-content: space-between; width: 100%; background: var(--bg-deep); flex-shrink: 0; height: 38px; border-bottom: 1px solid var(--border); z-index: 50; padding-left: 2px; padding-right: 0; ${viewportMode === 'mobile' ? 'touch-action: pan-y; cursor: grab;' : ''}"
+                    @pointerdown=${(e) => { if (viewportMode === 'mobile') this._handleDotDragStart(e); }}>
                     ${viewportMode === 'mobile' ? html`
                         <div class="mobile-only-tools flex items-center" style="display: flex; align-items: center; height: 100%;">
                             <button class="tab-btn ${this._launcherDropdown?.isMobileTools ? 'active' : ''}" style="display: flex; align-items: center;" @click=${(e) => {
@@ -972,9 +999,9 @@ export class SutramAppShell extends SutramElement {
                                 }
                                 this.requestUpdate();
                             }}>
-                                <i data-lucide="wrench" stroke-width="2.5" style="width: 14px; height: 14px; margin-right: 6px; color: var(--intent-primary);"></i>
+                                <yv-icon name="wrench" stroke-width="2.5" style="width: 14px; height: 14px; margin-right: 6px; color: var(--intent-primary);"></yv-icon>
                                 <span>Tools</span>
-                                <i data-lucide="chevron-down" stroke-width="2.5" style="width: 12px; height: 12px; margin-left: 4px; color: var(--text-muted);"></i>
+                                <yv-icon name="chevron-down" stroke-width="2.5" style="width: 12px; height: 12px; margin-left: 4px; color: var(--text-muted);"></yv-icon>
                             </button>
                         </div>
                     ` : html`
@@ -1007,7 +1034,7 @@ export class SutramAppShell extends SutramElement {
                     `}
                     <!-- Mathematically Centered Mobile Dots -->
                     ${viewportMode === 'mobile' ? html`
-                        <div class="mobile-dots-wrapper" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 4px; background: var(--input-bg); border: 1px solid var(--border); padding: 2px 8px; border-radius: 9999px; z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.05); touch-action: pan-y; cursor: grab;" @pointerdown=${(e) => this._handleDotDragStart(e)}>
+                        <div class="mobile-dots-wrapper" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 4px; background: var(--input-bg); border: 1px solid var(--border); padding: 2px 8px; border-radius: 9999px; z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
                             ${colDefinitions.map((c, i) => html`
                                 <div class="pos-dot-target" @click=${() => this._setViewportIndex(i)} title="Jump to ${c.label}" style="padding: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
                                     <div class="pos-dot ${mobileViewportIndex === i ? 'active' : ''}" style="width: ${mobileViewportIndex === i ? '14px' : '6px'}; height: 6px; border-radius: 9999px; background: ${mobileViewportIndex === i ? 'var(--intent-primary)' : 'var(--text-muted)'}; opacity: ${mobileViewportIndex === i ? '1' : '0.5'}; transition: all 0.2s ease;"></div>
@@ -1044,9 +1071,7 @@ export class SutramAppShell extends SutramElement {
                                                     }
                                                 }
                                                 return html`
-                                                <button style="background: var(--input-bg); color: var(--text); padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-family: var(--font-mono, monospace); font-weight: normal; margin: 0 !important; display: inline-flex; align-items: center; gap: 8px; width: auto; box-sizing: border-box; touch-action: none; user-select: none; transition: background 0.2s, border-color 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"
-                                                    onmouseover="this.style.background='var(--bg)'; this.style.borderColor='${this._getPrimaryTabColor(tab)}';"
-                                                    onmouseout="this.style.background='var(--input-bg)'; this.style.borderColor='var(--border)';"
+                                                <button class="yv-interactive-row" style="background: var(--input-bg); color: var(--text); padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-family: var(--font-mono, monospace); font-weight: normal; margin: 0 !important; display: inline-flex; align-items: center; gap: 8px; width: auto; box-sizing: border-box; touch-action: none; user-select: none; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"
                                                     @pointerdown=${(e) => {
                                                         const layoutState = window.Sutram?.stores?.Layout?.getState();
                                                         let existingColDown = null;
@@ -1104,7 +1129,7 @@ export class SutramAppShell extends SutramElement {
                                                         this.requestUpdate();
                                                     }}>
                                                     <div style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0;">
-                                                        ${child.icon ? html`<i data-lucide="${child.icon}" style="width: 14px; height: 14px; color: ${existingCol ? this._getPrimaryTabColor({id: tab.id, intent: tab.intent}) : 'var(--text-muted)'};"></i>` : html`<i data-lucide="puzzle" style="width: 14px; height: 14px; color: ${existingCol ? this._getPrimaryTabColor({id: tab.id, intent: tab.intent}) : 'var(--text-muted)'};"></i>`}
+                                                        ${child.icon ? html`<yv-icon name="${child.icon}" style="width: 14px; height: 14px; color: ${existingCol ? this._getPrimaryTabColor({id: tab.id, intent: tab.intent}) : 'var(--text-muted)'};"></yv-icon>` : html`<yv-icon name="puzzle" style="width: 14px; height: 14px; color: ${existingCol ? this._getPrimaryTabColor({id: tab.id, intent: tab.intent}) : 'var(--text-muted)'};"></yv-icon>`}
                                                     </div>
                                                     <span style="white-space: nowrap;">${child.label}</span>
                                                 </button>
@@ -1135,15 +1160,16 @@ export class SutramAppShell extends SutramElement {
                         sourceCols.forEach(sourceColId => {
                             const dynamicPins = (this._spatialState.columns && this._spatialState.columns[sourceColId]?.pinned) || [];
                             dynamicPins.forEach(pin => {
+                                const slotDef = subSlots.find(s => s.id === pin.id);
                                 colSubSlots.push({
                                     id: pin.id,
-                                    label: pin.label || pin.title || pin.id,
-                                    component: pin.component,
+                                    label: slotDef?.label || pin.label || pin.title || pin.id,
+                                    component: slotDef?.component || pin.component,
                                     extName: pin.extName || 'fs',
                                     targetParent: pin.targetParent || sourceColId,
                                     preferredColumn: pin.preferredColumn || sourceColId,
-                                    icon: pin.icon,
-                                    intent: pin.intent,
+                                    icon: slotDef?.icon || pin.icon,
+                                    intent: slotDef?.intent || pin.intent,
                                     actualSourceCol: sourceColId
                                 });
                             });
@@ -1177,7 +1203,7 @@ export class SutramAppShell extends SutramElement {
                             if (activeId) this._updateUrlHash(targetFocusCol, activeId);
                         }}>
                             <!-- Local Column Header (Projection Stack) -->
-                            <div class="col-header" style="justify-content: space-between; padding: 0 12px; --active-sub-intent: ${activeSubInCol && activeSubInCol.intent ? `var(--intent-${activeSubInCol.intent})` : 'var(--intent-primary)'};">
+                            <div class="col-header" style="justify-content: space-between; padding: 0 0 0 12px; --active-sub-intent: ${activeSubInCol && activeSubInCol.intent ? `var(--intent-${activeSubInCol.intent})` : 'var(--intent-primary)'};">
                                 <yenvui-scrub-track class="sub-tabs" style="flex: 1; padding: 0; height: 100%;">
                                     ${colSubSlots.map(sub => {
                                         const isActive = activeSubInCol && activeSubInCol.id === sub.id;
@@ -1222,13 +1248,18 @@ export class SutramAppShell extends SutramElement {
                                                     this._safeEvict(sub.id, () => {
                                                         layout.unpinFromColumn(sub.actualSourceCol || col.id, sub.id);
                                                         layout.evictProjection(sub.id);
+
+                                                        // Sync URL hash so it doesn't reappear on refresh
+                                                        const updatedLayout = window.Sutram.stores.Layout.getState();
+                                                        const nextActive = updatedLayout.columns[sub.actualSourceCol || col.id]?.active || '';
+                                                        this._updateUrlHash(sub.actualSourceCol || col.id, nextActive);
                                                     });
                                                 }
                                             }}>
                                                 <div class="default-icon-container" style="color: ${intentColor}; opacity: ${isActive ? '1' : '0.5'};">
-                                                    <i data-lucide="${displayIcon}" stroke-width="2.5" style="width: 14px; height: 14px;"></i>
+                                                    <yv-icon name="${displayIcon}" stroke-width="2.5" style="width: 14px; height: 14px;"></yv-icon>
                                                 </div>
-                                                <i data-lucide="x" class="close-icon" stroke-width="2.5" style="width: 14px; height: 14px; color: var(--intent-danger);"></i>
+                                                <yv-icon name="x" class="close-icon" stroke-width="2.5" style="width: 14px; height: 14px; color: var(--intent-danger);"></yv-icon>
                                             </div>
                                             ${sub.label}${window.inSetu?.stores?.Fs?.getState()?.activeBuffers?.[sub.id]?.content !== window.inSetu?.stores?.Fs?.getState()?.activeBuffers?.[sub.id]?.originalContent ? '*' : ''}
                                         </div>
@@ -1236,18 +1267,15 @@ export class SutramAppShell extends SutramElement {
                                 </yenvui-scrub-track>
                                 <!-- Projection Top Actions -->
                                 <div style="display: flex; align-items: center; height: 100%;">
-                                    ${activeSubInCol ? this._layoutConfig.filter(s => s.slot === 'slots:sub-navigation-actions' && s.targetSub === activeSubInCol.id).map(act => html`<div style="display: contents;" data-ext="${act.extName}">${this._getCachedComponent(act.component, activeSubInCol.id)}</div>`) : ''}
+                                    ${activeSubInCol ? this._layoutConfig.filter(s => s.slot === 'slots:sub-navigation-actions' && s.targetSub === activeSubInCol.id).map(act => html`<div style="display: contents;" data-ext="${act.extName}">${getDynamicNode(act.component, activeSubInCol.id)}</div>`) : ''}
                                 </div>
                             </div>
-
-                            <!-- Shadow DOM Projection Pool -->
+                            <!-- Pinned Tab Rendering Pool -->
                             <div style="flex: 1; position: relative; overflow: hidden; display: flex; flex-direction: column; background: var(--bg); min-height: 0;">
                                 ${colSubSlots.map(sub => {
                                     const isActive = activeSubInCol && activeSubInCol.id === sub.id;
-                                    const extMode = registry.getExtension(sub.extName)?.offline_mode || 'none';
-                                    const node = this._getCachedComponent(sub.component, sub.id);
+                                    const node = getDynamicNode(sub.component, sub.id);
 
-                                    // Non-destructive DOM routing: Toggle visibility without unmounting to preserve buffer states
                                     return html`
                                         <div style="display: ${isActive ? 'flex' : 'none'}; flex-direction: column; flex: 1; height: 100%; min-height: 0;" data-ext="${sub.extName}" data-offline-mode="${(typeof registry.getExtension === 'function' ? registry.getExtension(sub.extName)?.offline_mode : null) || 'none'}">
                                             ${node}
@@ -1303,21 +1331,19 @@ export class SutramAppShell extends SutramElement {
                                     if (this._spatialState?.capacity === 1) {
                                         this._setViewportIndex(colIndexes[win.preferredColumn || 'center']);
                                     }
-
                                     this.requestUpdate();
                                 }
                             }}>
-                            ${this._getCachedComponent(win.component, win.id)}
+                            ${getDynamicNode(win.component, win.id)}
                         </sutram-window>
                             </div>
                         `;})}
                     </div>
                 </div>
             </div>
-
             <!-- Global / Transient Overlays -->
             <div style="display: contents;">
-                ${globalSlots.map(s => this._getCachedComponent(s.component))}
+                ${globalSlots.map(s => getDynamicNode(s.component))}
             </div>
 
             <!-- Spatial Drop-Zone Overlay -->
@@ -1327,6 +1353,8 @@ export class SutramAppShell extends SutramElement {
                 @click=${() => { this._dragState.active = false; this.requestUpdate(); }}>
             </sutram-drag-coordinator>
         `;
+        this._activeNodes = nextNodes;
+        return finalHtml;
         } catch(err) {
             console.error("[Telemetry] AppShell render error:", err);
             return html`<div style="color:#ef4444; background:#1e293b; padding: 40px; z-index:99999; position:relative; width: 100vw; height: 100vh; overflow-y: auto; box-sizing: border-box;"><h2>⚠️ AppShell Render Error</h2><pre style="white-space: pre-wrap; margin-bottom: 20px;">${err.message}</pre><pre style="white-space: pre-wrap; font-size: 0.85rem; color: #94a3b8;">${err.stack}</pre></div>`;

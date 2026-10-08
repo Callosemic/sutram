@@ -50,6 +50,31 @@ import '../../yenvui/js/tag.js';
 import '../../yenvui/js/label.js';
 import { YenvuiScrollView } from '../../yenvui/js/scroll-view.js';
 import '../../yenvui/js/scroll-view.js';
+import '/static/vendor/lit/lit-virtualizer.min.js';
+
+// 0. Universal Virtualized List
+export class SutramVirtualList extends LitElement {
+    static properties = {
+        items: { type: Array },
+        renderItem: { type: Object }
+    };
+    static styles = css`
+        :host { display: flex; flex-direction: column; width: 100%; flex: 1; min-width: 0; }
+        lit-virtualizer { width: 100%; flex: 1; min-width: 0; }
+    `;
+
+    render() {
+        if (!this.items || this.items.length === 0) return html``;
+        return html`
+            <lit-virtualizer
+                scroller
+                .items=${this.items}
+                .renderItem=${this.renderItem}>
+            </lit-virtualizer>
+        `;
+    }
+}
+customElements.define('sutram-virtual-list', SutramVirtualList);
 
 // 1. Synchronous Action Button
 export class SutramBtn extends YenvuiBtn {}
@@ -284,14 +309,6 @@ export class SutramSelectionTray extends SutramElement {
         });
         this.selectedItems = SelectionStore.getState().selectedItems;
     }
-
-    updated(changedProperties) {
-        super.updated(changedProperties);
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
-            window.lucide.createIcons({ root: this.shadowRoot });
-        }
-    }
-
     render() {
         const count = this.selectedItems.size;
         const itemsArray = Array.from(this.selectedItems.values());
@@ -318,7 +335,7 @@ export class SutramSelectionTray extends SutramElement {
         return html`
             ${count > 0 ? html`
                 <button class="cart-btn" @click=${() => this.modalOpen = true}>
-                    <i data-lucide="zap" style="width: 14px; height: 14px;"></i>
+                    <yv-icon name="zap" style="width: 14px; height: 14px;"></yv-icon>
                     <span class="cart-text">${count} items</span>
                     <span class="cart-badge mobile-only">${count}</span>
                 </button>
@@ -329,7 +346,7 @@ export class SutramSelectionTray extends SutramElement {
                 <div class="tray-header">
                     <div style="display: flex; gap: 12px;">
                         <div style="width: 32px; height: 32px; border-radius: 8px; background: color-mix(in srgb, var(--intent-warning) 15%, transparent); border: 1px solid color-mix(in srgb, var(--intent-warning) 40%, transparent); display: flex; align-items: center; justify-content: center; color: var(--intent-warning);">
-                            <i data-lucide="zap" style="width: 18px; height: 18px;"></i>
+                            <yv-icon name="zap" style="width: 18px; height: 18px;"></yv-icon>
                         </div>
                         <div>
                             <h3>Quickpack Staging Deck <span class="cart-badge" style="margin-left: 8px;">${count}</span></h3>
@@ -340,8 +357,8 @@ export class SutramSelectionTray extends SutramElement {
                 </div>
                 <div class="tray-subheader">
                     <div style="display: flex; gap: 15px; align-items: center;">
-                        <span style="display: flex; align-items: center; gap: 6px;"><i data-lucide="layers" style="width: 14px; height: 14px;"></i> ${count} items</span>
-                        <span style="display: flex; align-items: center; gap: 6px;"><i data-lucide="database" style="width: 14px; height: 14px;"></i> ~${Math.round(totalSize / 1024)} kb</span>
+                        <span style="display: flex; align-items: center; gap: 6px;"><yv-icon name="layers" style="width: 14px; height: 14px;"></yv-icon> ${count} items</span>
+                        <span style="display: flex; align-items: center; gap: 6px;"><yv-icon name="database" style="width: 14px; height: 14px;"></yv-icon> ~${Math.round(totalSize / 1024)} kb</span>
                     </div>
                 </div>
                 <div class="tray-items">
@@ -362,9 +379,9 @@ export class SutramSelectionTray extends SutramElement {
                     `})}
                 </div>
                 <div class="tray-footer">
-                    <sutram-async-btn label="🗑️ Clear" intent="danger" variant="tinted" .onClick=${() => { SelectionStore.getState().clearSelection(); this.modalOpen = false; }} style="margin-right: auto;"></sutram-async-btn>
+                    <sutram-async-btn label="Clear" intent="danger" .onClick=${() => { SelectionStore.getState().clearSelection(); this.modalOpen = false; }} style="margin-right: auto;"></sutram-async-btn>
                     ${batchActions.map(act => html`
-                        <sutram-async-btn 
+                        <sutram-async-btn  
                             label="${act.icon}${act.label}" 
                             intent="${act.intent || 'primary'}" 
                             variant="${act.variant || 'solid'}"
@@ -469,18 +486,16 @@ export class SutramFolderBrowser extends LitElement {
         const keys = Object.keys(current).filter(k => k !== '_isFile' && !current[k]._isFile).sort((a, b) => a.localeCompare(b));
         return html`
             <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; overflow: hidden;">
-                <sutram-btn intent="neutral" ?disabled=${this.currentPath.length === 0} @click=${() => this._setPath(this.currentPath.slice(0, -1))}>⬆️ Up</sutram-btn>
+                <sutram-btn intent="neutral" ?disabled=${this.currentPath.length === 0} @click=${() => this._setPath(this.currentPath.slice(0, -1))}><yv-icon name="corner-left-up" style="width: 14px; height: 14px; margin-right: 6px;"></yv-icon> Up</sutram-btn>
                 <yenvui-scrub-track style="flex: 1; min-width: 0; font-family: monospace; color: var(--text); opacity: 0.7; font-size: 0.9rem;">
                     /${this.currentPath.join('/')}
                 </yenvui-scrub-track>
             </div>
             <div style="flex: 1; overflow-y: auto;">
                 ${keys.length === 0 ? html`<div style="color: var(--text-muted); font-style: italic; font-size: 0.9rem; margin-top: 10px;">No sub-folders available.</div>` : keys.map(key => html`
-                    <div style="padding: 8px 10px; cursor: pointer; display: flex; align-items: center; border-radius: 4px; transition: background 0.2s; margin-bottom: 4px;" 
-                        onmouseover="this.style.background='var(--input-bg)'" 
-                        onmouseout="this.style.background='transparent'"
+                    <div class="yv-interactive-row" style="padding: 8px 10px; cursor: pointer; display: flex; align-items: center; border-radius: 4px; margin-bottom: 4px;" 
                         @click=${() => this._setPath([...this.currentPath, key])}>
-                        <span style="font-family: monospace; font-weight: bold; color: var(--intent-warning); margin-right: 8px;">📁</span>
+                        <yv-icon name="folder" style="width: 16px; height: 16px; color: var(--intent-warning); margin-right: 8px;"></yv-icon>
                         <span style="color: var(--text); font-size: 0.9rem; font-weight: bold;">${key}</span>
                     </div>
                 `)}
@@ -552,6 +567,8 @@ export class SutramGenericSettingsModal extends SutramElement {
         }));
     }
     render() {
+        if (!this.open) return html``;
+
         const registry = window.ExtensionRegistry;
         const manifest = registry?._manifests?.get(this.extName);
         const title = (manifest?.name || this.extName) + ' Settings';
@@ -559,8 +576,8 @@ export class SutramGenericSettingsModal extends SutramElement {
 
         return html`
             <yenvui-modal  
-                ?open=${this.open} 
-                titleText=${title} 
+                ?open=${true} 
+                titleText=${title}  
                 ?fullscreen=${true} 
                 ?transparent=${true}
                 style="--modal-backdrop: transparent; --modal-backdrop-filter: none;"
@@ -628,7 +645,7 @@ export class SutramGenericSettingsModal extends SutramElement {
                         `;
                     })}
                 <button slot="footer" style="background: var(--intent-primary); color: white;" @click=${this.saveSettings}>
-                    💾 Save Settings
+                    Save Settings
                 </button>
             </yenvui-modal>
         `;
@@ -781,9 +798,8 @@ export class SutramEntityActions extends SutramElement {
                     onClick: (!act.asyncAction && act.onClick) ? (e) => executeAction(act, e) : null
                 });
             });
-
             const groupLabels = { file: 'File', edit: 'Edit', share: 'Share', tools: 'Tools' };
-            const groupIcons = { file: '📄', edit: '✏️', share: '📤', tools: '🔧' };
+            const groupIcons = { file: 'file-text', edit: 'edit-3', share: 'share-2', tools: 'wrench' };
 
             return html`
                 <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
@@ -792,7 +808,7 @@ export class SutramEntityActions extends SutramElement {
                         return html`
                             <sutram-dropdown .items=${groups[g]} align="left">
                                 <button slot="trigger" class="sync-btn" style="background: transparent; color: var(--text); border: 1px solid var(--border); padding: 6px 10px;">
-                                    ${groupIcons[g]} <span style="margin-left: 4px;">${groupLabels[g]}</span>
+                                    <yv-icon name="${groupIcons[g]}" style="width: 14px; height: 14px; margin-right: 4px;"></yv-icon> <span>${groupLabels[g]}</span>
                                 </button>
                             </sutram-dropdown>
                         `;
@@ -808,21 +824,30 @@ export class SutramEntityActions extends SutramElement {
             if ((act.order || 99) < 20) primaryActions.push(act);
             else secondaryActions.push(act);
         });
-
         const renderDirectAction = (act) => {
             if (act.component) {
                 return html`<div style="display: contents; order: ${act.order || 99};">${act.component(this.entityData)}</div>`;
             }
             const label = typeof act.label === 'function' ? act.label(this.entityData) : act.label;
-            const icon = typeof act.icon === 'function' ? act.icon(this.entityData) : (act.icon || '');
+            const rawIcon = typeof act.icon === 'function' ? act.icon(this.entityData) : (act.icon || '');
             const intent = typeof act.intent === 'function' ? act.intent(this.entityData) : (act.intent || 'primary');
             const isActive = typeof act.isActive === 'function' ? act.isActive(this.entityData) : !!act.isActive;
+
+            const renderIcon = (iconStr) => {
+                if (!iconStr) return '';
+                if (typeof iconStr === 'object') return iconStr;
+                if (iconStr.includes('<')) return html`<span style="display: inline-flex; align-items: center; margin-right: 6px;">${iconStr}</span>`;
+                if (/^[a-zA-Z0-9-]+$/.test(iconStr)) {
+                    return html`<yv-icon name="${iconStr}" style="width: 14px; height: 14px; margin-right: 6px; display: inline-block; vertical-align: middle;"></yv-icon>`;
+                }
+                return html`<span style="margin-right: 6px;">${iconStr}</span>`;
+            };
 
             if (act.asyncAction || (window.ExtensionRegistry.executeEntityAction && act.vfsBound)) {
                 return html`
                     <sutram-async-btn 
                         style="margin: 0; order: ${act.order || 99};" 
-                        label="${icon} ${label}" 
+                        .label=${html`${renderIcon(rawIcon)}${label}`} 
                         intent="${intent}" 
                         ?active=${isActive}
                         .onClick=${(e) => executeAction(act, e)}>
@@ -845,7 +870,7 @@ export class SutramEntityActions extends SutramElement {
                     ?active=${isActive}
                     style="order: ${act.order || 99}; gap: 4px;" 
                     @click=${clickHandler}>
-                    ${icon} ${label}
+                    ${renderIcon(rawIcon)}${label}
                 </sutram-btn>
             `;
         };
@@ -855,9 +880,8 @@ export class SutramEntityActions extends SutramElement {
                 const g = act.group && groups[act.group] ? act.group : 'tools';
                 groups[g].push(act);
             });
-
             const groupLabels = { file: 'File', edit: 'Edit', share: 'Share', tools: 'Tools' };
-            const groupIcons = { file: '📄', edit: '✏', share: '📤', tools: '🔧' };
+            const groupIcons = { file: 'file-text', edit: 'edit-3', share: 'share-2', tools: 'wrench' };
 
             const handleTrayAction = async (act, e) => {
                 this._trayOpen = false;
@@ -882,19 +906,31 @@ export class SutramEntityActions extends SutramElement {
                             ${Object.keys(groups).map(g => {
                                 if (groups[g].length === 0) return '';
                                 return html`
-                                    <div class="tray-group-header">${groupIcons[g]}${groupLabels[g]}</div>
+                                    <div class="tray-group-header">
+                                        <yv-icon name="${groupIcons[g]}" style="width: 14px; height: 14px; margin-right: 6px; display: inline-block; vertical-align: middle;"></yv-icon>${groupLabels[g]}
+                                    </div>
                                     <div class="tray-group-grid">
                                         ${groups[g].map(act => {
                                             const label = typeof act.label === 'function' ? act.label(this.entityData) : act.label;
-                                            const icon = typeof act.icon === 'function' ? act.icon(this.entityData) : (act.icon || '');
+                                            const rawIcon = typeof act.icon === 'function' ? act.icon(this.entityData) : (act.icon || '');
                                             const intent = typeof act.intent === 'function' ? act.intent(this.entityData) : (act.intent || 'primary');
                                             const isActive = typeof act.isActive === 'function' ? act.isActive(this.entityData) : !!act.isActive;
+
+                                            const renderIcon = (iconStr) => {
+                                                if (!iconStr) return '';
+                                                if (typeof iconStr === 'object') return iconStr;
+                                                if (iconStr.includes('<')) return html`<span style="display: inline-flex; align-items: center; margin-right: 6px;">${iconStr}</span>`;
+                                                if (/^[a-zA-Z0-9-]+$/.test(iconStr)) {
+                                                    return html`<yv-icon name="${iconStr}" style="width: 14px; height: 14px; margin-right: 6px; display: inline-block; vertical-align: middle;"></yv-icon>`;
+                                                }
+                                                return html`<span style="margin-right: 6px;">${iconStr}</span>`;
+                                            };
 
                                             if (act.asyncAction || (window.ExtensionRegistry.executeEntityAction && act.vfsBound)) {
                                                 return html`
                                                     <sutram-async-btn 
                                                         style="margin: 0; width: 100%; justify-content: flex-start; --btn-padding: 10px 12px; font-size: 0.9rem;" 
-                                                        label="${icon} ${label}" 
+                                                        .label=${html`${renderIcon(rawIcon)}${label}`} 
                                                         intent="${intent}" 
                                                         ?active=${isActive}
                                                         .onClick=${(e) => handleTrayAction(act, e)}>
@@ -907,7 +943,7 @@ export class SutramEntityActions extends SutramElement {
                                                     class="sync-btn ${isActive ? 'active' : ''}" 
                                                     style="width: 100%; justify-content: flex-start; padding: 10px 12px; font-size: 0.9rem; background: var(--intent-${intent}); color: ${intent === 'warning' ? '#000' : '#fff'};" 
                                                     @click=${(e) => handleTrayAction(act, e)}>
-                                                    ${icon} ${label}
+                                                    ${renderIcon(rawIcon)}${label}
                                                 </button>
                                             `;
                                         })}
@@ -928,7 +964,6 @@ export class SutramEntityActions extends SutramElement {
             ` : ''}
             ${primaryActions.map(renderDirectAction)}
         `;
-
         return html`
             ${this.scrollable ? html`
                 <sutram-scrub-track>
@@ -937,7 +972,7 @@ export class SutramEntityActions extends SutramElement {
                     </div>
                 </sutram-scrub-track>
             ` : content}
-            ${renderTray()}
+            ${this._trayOpen ? renderTray() : ''}
         `;
     }
 }
@@ -1016,7 +1051,6 @@ export class SutramCard extends SutramContextMixin(YenvuiCard) {
             }));
         });
     }
-
     updated(changedProperties) {
         super.updated(changedProperties);
         if (changedProperties.has('entityData') || changedProperties.has('filename')) {
@@ -1030,7 +1064,7 @@ export class SutramCard extends SutramContextMixin(YenvuiCard) {
         }
 
         // Keep the dynamic actions injection in sync
-        if (changedProperties.has('entityType') || changedProperties.has('entityData')) {
+        if (changedProperties.has('entityType') || changedProperties.has('entityData') || changedProperties.has('_overlayActive')) {
             this._injectEntityActions();
         }
     }
@@ -1044,6 +1078,11 @@ export class SutramCard extends SutramContextMixin(YenvuiCard) {
         if (!this.entityType || !window.ExtensionRegistry?.getEntityActions) return;
         const actions = window.ExtensionRegistry.getEntityActions(this.entityType, this.entityData || {});
         if (actions.length > 0) {
+            if (!this._hasActions) this._hasActions = true;
+
+            // LAZY-LOAD: Only physically build and inject the DOM nodes when the user opens the tray
+            if (!this._overlayActive) return;
+
             let actionsContainer = this.querySelector('.sutram-injected-actions');
             if (!actionsContainer) {
                 actionsContainer = document.createElement('div');
@@ -1194,11 +1233,14 @@ export class SutramEditor extends SutramContextMixin(YenvuiEditor) {
     willUpdate(changedProperties) {
         super.willUpdate(changedProperties);
         if (changedProperties.has('customExtensions') || changedProperties.has('enableWordcount')) {
-            const extensions = [...(this.customExtensions || _EMPTY_EXTENSIONS)];
+            const baseExts = Array.isArray(this.customExtensions) 
+                ? this.customExtensions.filter(ext => ext !== wordCountPlugin) 
+                : [];
+                
             if (this.enableWordcount) {
-                extensions.push(wordCountPlugin);
+                baseExts.push(wordCountPlugin);
             }
-            this.customExtensions = extensions; // Inject directly into base property
+            this.customExtensions = baseExts; // Inject directly into base property
         }
     }
 
@@ -1223,28 +1265,27 @@ export class SutramSelectorModal extends SutramElement {
         this.items = [];
         this._searchQuery = '';
     }
-
     render() {
+        if (!this.open) return html``;
+
         const filtered = this._searchQuery 
             ? this.utils.fuzzyFilterObjects(this.items, this._searchQuery).slice(0, 50) 
             : this.items.slice(0, 50);
 
         return html`
-            <sutram-modal ?open=${this.open} titleText=${this.titleText} @sutram-modal-closed=${() => { this.open = false; this.dispatchEvent(new CustomEvent('selector-closed')); }}>
+            <sutram-modal ?open=${true} titleText=${this.titleText} @sutram-modal-closed=${() => { this.open = false; this.dispatchEvent(new CustomEvent('selector-closed')); }}>
                 <div slot="body" style="display: flex; flex-direction: column; flex: 1; overflow: hidden; min-height: 300px;">
                     <input type="text" placeholder="Search..." .value=${this._searchQuery} @input=${e => this._searchQuery = e.target.value} style="width: 100%; padding: 10px; font-weight: bold; box-sizing: border-box; background: var(--input-bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; margin-bottom: 10px; flex-shrink: 0;">
                     <div style="display: flex; flex-direction: column; gap: 5px; flex: 1; overflow-y: auto; padding-bottom: 15px;">
                         ${filtered.length === 0 ? html`<span style="color: var(--text-muted); font-style: italic;">No matches found.</span>` : filtered.map(item => {
                             const displayText = typeof item === 'string' ? item : (item.label || item);
                             return html`
-                                <button class="btn-sm" style="background: var(--bg); border: 1px solid var(--border); color: var(--text); text-align: left; padding: 12px 15px; font-size: 1.05rem; font-family: monospace; font-weight: bold; margin: 0; cursor: pointer; border-radius: 4px; transition: background 0.2s;"
-                                    onmouseover="this.style.background='var(--input-bg)'"
-                                    onmouseout="this.style.background='var(--bg)'"
+                                <button class="btn-sm yv-interactive-row" style="background: var(--bg); border: 1px solid var(--border); color: var(--text); text-align: left; padding: 12px 15px; font-size: 1.05rem; font-family: monospace; font-weight: bold; margin: 0; cursor: pointer; border-radius: 4px;"
                                     @click=${() => {
                                         this.open = false;
                                         this.dispatchEvent(new CustomEvent('item-selected', { detail: { item }, bubbles: true, composed: true }));
                                     }}>
-                                    📄 ${displayText}
+                                    <yv-icon name="file" style="width: 14px; height: 14px; margin-right: 6px;"></yv-icon> ${displayText}
                                 </button>
                             `;
                         })}
