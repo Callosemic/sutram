@@ -1,6 +1,6 @@
 [project]
 name = "sutram"
-version = "2.0.0"
+version = "2.1.0"
 description = "Auto-generated project configuration"
 license = { text = "Apache-2.0" }
 [tool.semantic_release]

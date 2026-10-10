@@ -2,6 +2,40 @@
 
 <!-- version list -->
 
+## v2.1.0 (2026-10-10)
+
+### Chores
+
+- Global workspace sweep
+  ([`3f451b7`](https://github.com/Callosemic/sutram/commit/3f451b71ccaba4ee49e890b25a74a5544f72da8c))
+
+- Global workspace sweep
+  ([`b7fd941`](https://github.com/Callosemic/sutram/commit/b7fd94188b7e68ddb55fca41ad71612fd8b8efc1))
+
+- Update semantic_release config in pyproject.toml [skip ci]
+  ([`53965f9`](https://github.com/Callosemic/sutram/commit/53965f909728038d670c973e48dc17437c9d73f3))
+
+### Features
+
+- **sutram**: Introduce dynamic spatial layout ratios, Web Worker search engine, and Light-DOM BEM
+  style substrate
+  ([`5d2fd0f`](https://github.com/Callosemic/sutram/commit/5d2fd0f2c1199860b4a17fd74646eb4bda9a4b9d))
+
+- **sutram**: Introduce dynamic spatial layout ratios, Web Worker search engine, and Light-DOM BEM
+  style substrate
+  ([`8b1577b`](https://github.com/Callosemic/sutram/commit/8b1577bbf13556101225266493d8504b2677f8f4))
+
+### Refactoring
+
+- **sutram**: Integrate native yv-icon component, replace DOM pool with Lit node maps, and introduce
+  virtualized list
+  ([`9c8efbd`](https://github.com/Callosemic/sutram/commit/9c8efbd2e2431d34b9e8833833e0c5d842d3b579))
+
+- **sutram**: Integrate native yv-icon component, replace DOM pool with Lit node maps, and introduce
+  virtualized list
+  ([`a6e20ec`](https://github.com/Callosemic/sutram/commit/a6e20ecb72ef43bbe0653c4c8e8475ba556f8121))
+
+
 ## v2.0.0 (2026-10-06)
 
 ### Chores
