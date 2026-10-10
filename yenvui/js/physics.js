@@ -58,10 +58,14 @@ export class YenvuiGestureController {
         }
         this.active = true;
         this._pointerId = e.pointerId;
-
         // Globally disable text selection while a gesture is active
         document.body.style.userSelect = 'none';
         document.body.style.webkitUserSelect = 'none';
+        document.body.style.overflow = 'hidden';
+
+        this._boundResizeAbort = () => this.abort();
+        window.addEventListener('resize', this._boundResizeAbort);
+
         this.startX = e.clientX || (e.touches && e.touches[0].clientX);
         this.startY = e.clientY || (e.touches && e.touches[0].clientY);
         this.currentX = this.startX;
@@ -124,10 +128,15 @@ export class YenvuiGestureController {
             try { this.host.releasePointerCapture(this._pointerId); } catch(err) {}
             this._pointerId = null;
         }
-
         // Restore text selection
         document.body.style.userSelect = '';
         document.body.style.webkitUserSelect = '';
+        document.body.style.overflow = '';
+
+        if (this._boundResizeAbort) {
+            window.removeEventListener('resize', this._boundResizeAbort);
+            this._boundResizeAbort = null;
+        }
 
         if (this._dragTimer) {
             clearTimeout(this._dragTimer);

@@ -1,32 +1,11 @@
 import { LitElement, html, css } from 'lit';
 import { YenvuiGestureController } from './physics.js';
-
-let globalThemeObserver = null;
-const themeSubscribers = new Set();
-
-function subscribeToTheme(element) {
-    themeSubscribers.add(element);
-    element.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-    if (!globalThemeObserver) {
-        globalThemeObserver = new MutationObserver(() => {
-            const theme = document.body.getAttribute('data-theme') || 'dark';
-            themeSubscribers.forEach(el => el.setAttribute('data-theme', theme));
-        });
-        globalThemeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
-    }
-}
-
-function unsubscribeFromTheme(element) {
-    themeSubscribers.delete(element);
-}
 export class YenvuiBase extends LitElement {
     connectedCallback() {
         super.connectedCallback();
-        subscribeToTheme(this);
     }
     disconnectedCallback() {
         super.disconnectedCallback();
-        unsubscribeFromTheme(this);
         if (this._managedListeners) {
             this._managedListeners.forEach(m => m.target.removeEventListener(m.type, m.listener));
             this._managedListeners = [];
@@ -51,7 +30,7 @@ export class YenvuiScrubTrack extends YenvuiBase {
             display: block; 
             width: 100%; 
             overflow: hidden; 
-            touch-action: pan-x;
+            touch-action: pan-x pan-y;
         }
         .scrub-container {
             display: flex;
@@ -60,8 +39,8 @@ export class YenvuiScrubTrack extends YenvuiBase {
             height: 100%;
             overflow-x: auto;
             overflow-y: hidden;
-            overscroll-behavior: none;
-            touch-action: pan-x;
+            overscroll-behavior-x: none;
+            touch-action: pan-x pan-y;
             scrollbar-width: none;
             white-space: nowrap;
             cursor: grab;

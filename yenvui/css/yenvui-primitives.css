@@ -1,0 +1,7 @@
+/* ==========================================================================
+   yenVUI Micro-Primitive BEM Stylesheet (DEPRECATED)
+   ========================================================================== 
+   OBSOLETE: BEM primitives are now dynamically injected into the Light DOM 
+   via sutram/yenvui/js/shared_styles.js to establish a Single Source of Truth 
+   without requiring a JS bundler.
+*/

@@ -1,17 +1,18 @@
 import { LitElement, html, css } from 'lit';
 async function loadLanguageExtension(lang) {
     try {
-        if (lang === 'python') return (await import('@codemirror/lang-python')).python();
-        if (lang === 'json') return (await import('@codemirror/lang-json')).json();
-        if (lang === 'javascript' || lang === 'ts') return (await import('@codemirror/lang-javascript')).javascript();
-        if (lang === 'yaml' || lang === 'yml') return (await import('@codemirror/lang-yaml')).yaml();
-        if (lang === 'html' || lang === 'htm') return (await import('@codemirror/lang-html')).html();
-        if (lang === 'css') return (await import('@codemirror/lang-css')).css();
-        if (lang === 'rust') return (await import('@codemirror/lang-rust')).rust();
-        if (lang === 'go') return (await import('@codemirror/lang-go')).go();
+        const cm = await import('codemirror-core');
+        if (lang === 'python') return cm.python();
+        if (lang === 'json') return cm.json();
+        if (lang === 'javascript' || lang === 'ts') return cm.javascript();
+        if (lang === 'yaml' || lang === 'yml') return cm.yaml();
+        if (lang === 'html' || lang === 'htm') return cm.htmlLang();
+        if (lang === 'css') return cm.cssLang();
+        if (lang === 'rust' && cm.rust) return cm.rust();
+        if (lang === 'go' && cm.go) return cm.go();
 
         // Default fallback
-        return (await import('@codemirror/lang-markdown')).markdown();
+        return cm.markdown();
     } catch (e) {
         console.warn(`[yenVUI] Failed to dynamically load language: ${lang}`, e);
         return [];
@@ -104,18 +105,17 @@ export class YenvuiEditor extends LitElement {
         this.writingModeConf = null;
         this.customConf = null;
         this.themeConf = null;
+        this.attributesConf = null;
     }
-
     connectedCallback() {
         super.connectedCallback();
-        
-        // Standard yenVUI Theme Observation Protocol
-        this._themeObserver = new MutationObserver(() => {
+
+        this._themeListener = () => {
             const theme = document.body.getAttribute('data-theme') || 'dark';
             this.setAttribute('data-theme', theme);
             this._updateTheme();
-        });
-        this._themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
+        };
+        window.addEventListener('insetu:theme-changed', this._themeListener);
         this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
 
         setTimeout(() => this._initEditor(), 0);
@@ -123,20 +123,20 @@ export class YenvuiEditor extends LitElement {
 
     disconnectedCallback() {
         super.disconnectedCallback();
-        if (this._themeObserver) this._themeObserver.disconnect();
+        if (this._themeListener) window.removeEventListener('insetu:theme-changed', this._themeListener);
         if (this._view) {
             this._view.destroy();
             this._view = null;
         }
     }
-
     updated(changedProperties) {
         if (this._view && this._EditorView) {
             if (changedProperties.has('value')) {
                 const currentDoc = this._view.state.doc.toString();
-                if (currentDoc !== this.value) {
+                const targetValue = this.value || '\n';
+                if (currentDoc !== this.value && currentDoc !== targetValue) {
                     this._view.dispatch({
-                        changes: { from: 0, to: currentDoc.length, insert: this.value || '' }
+                        changes: { from: 0, to: currentDoc.length, insert: targetValue }
                     });
                 }
             }
@@ -201,7 +201,6 @@ export class YenvuiEditor extends LitElement {
                 ".cm-scroller .cm-line": { maxWidth: "720px" },
                 ".cm-gutters": { display: "none" }
             });
-
             const markdownShortcuts = keymap.of([
                 { key: "Mod-b", run: (v) => toggleWrap(v, "**") },
                 { key: "Mod-i", run: (v) => toggleWrap(v, "*") },
@@ -209,11 +208,17 @@ export class YenvuiEditor extends LitElement {
             ]);
 
             this._view.dispatch({
-                effects: this.writingModeConf.reconfigure([writingTheme, markdownShortcuts])
+                effects: [
+                    this.writingModeConf.reconfigure([writingTheme, markdownShortcuts]),
+                    this.attributesConf.reconfigure(this._EditorView.contentAttributes.of({ spellcheck: "true", autocorrect: "on", autocapitalize: "on" }))
+                ]
             });
         } else {
             this._view.dispatch({
-                effects: this.writingModeConf.reconfigure([])
+                effects: [
+                    this.writingModeConf.reconfigure([]),
+                    this.attributesConf.reconfigure(this._EditorView.contentAttributes.of({ spellcheck: "false", autocorrect: "off", autocapitalize: "off" }))
+                ]
             });
         }
     }
@@ -250,6 +255,7 @@ export class YenvuiEditor extends LitElement {
         this.writingModeConf = new Compartment();
         this.customConf = new Compartment();
         this.themeConf = new Compartment();
+        this.attributesConf = new Compartment();
         this._EditorView = EditorView;
 
         // Base theme matching the yenVUI CSS tokens
@@ -281,15 +287,14 @@ export class YenvuiEditor extends LitElement {
             this._initializingEditor = false;
             return;
         }
-
         this._view = new EditorView({
             state: EditorState.create({
-                doc: this.value || '',
+                doc: this.value || '\n',
                 extensions: [
                     basicSetup,
                     baseTheme,
                     EditorView.lineWrapping,
-                    EditorView.contentAttributes.of({ spellcheck: "false", autocorrect: "off", autocapitalize: "off" }),
+                    this.attributesConf.of(EditorView.contentAttributes.of(this.writingMode ? { spellcheck: "true", autocorrect: "on", autocapitalize: "on" } : { spellcheck: "false", autocorrect: "off", autocapitalize: "off" })),
                     EditorView.exceptionSink.of((err) => console.warn("[CodeMirror] Suppressed internal plugin crash:", err)),
                     this.languageConf.of(initialLangExt),
                     this.writingModeConf.of([]),
@@ -329,27 +334,39 @@ export class YenvuiEditor extends LitElement {
             root: this.shadowRoot
         });
         this._initializingEditor = false;
+        if (this._pendingCursor !== undefined) {
+            this.setCursor(this._pendingCursor);
+            this._pendingCursor = undefined;
+        }
+        if (this._pendingScrollTop !== undefined) {
+            this.setScrollInfo(this._pendingScrollTop);
+            this._pendingScrollTop = undefined;
+        }
         if (this.writingMode) {
             this._updateWritingMode();
         }
     }
-    getCursor() { return this._view ? this._view.state.selection.main.head : 0; }
+    getCursor() { return this._view ? this._view.state.selection.main.head : (this._pendingCursor || 0); }
 
     setCursor(pos) {
         if (this._view && pos !== undefined) {
             this._view.dispatch({ selection: { anchor: pos } });
+        } else if (pos !== undefined) {
+            this._pendingCursor = pos;
         }
     }
 
     getScrollInfo() {
-        return this._view ? this._view.scrollDOM.scrollTop : 0;
+        return this._view ? this._view.scrollDOM.scrollTop : (this._pendingScrollTop || 0);
     }
 
     setScrollInfo(top) {
         if (this._view && top !== undefined) {
             requestAnimationFrame(() => {
-                this._view.scrollDOM.scrollTop = top;
+                if (this._view) this._view.scrollDOM.scrollTop = top;
             });
+        } else if (top !== undefined) {
+            this._pendingScrollTop = top;
         }
     }
 

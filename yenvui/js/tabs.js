@@ -112,7 +112,6 @@ export class YenvuiTabs extends YenvuiBase {
             box-shadow: none !important;
             background: transparent !important;
         }
-
         .content-container {
             flex: 1;
             display: flex;
@@ -120,6 +119,7 @@ export class YenvuiTabs extends YenvuiBase {
             min-height: 0;
             overflow: hidden;
             background: var(--bg);
+            container-type: inline-size;
         }
     `;
     constructor() {

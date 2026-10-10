@@ -13,7 +13,7 @@ export class YenvuiScrollView extends YenvuiBase {
             min-height: 0;
             overflow-y: auto;
             box-sizing: border-box;
-            padding: var(--scroll-padding, 10px 12px 20px 12px);
+            padding: var(--scroll-padding, 0 12px);
             --mobile-edge-padding: 0px;
             --content-padding-x: 12px;
         }
@@ -32,7 +32,7 @@ export class YenvuiScrollView extends YenvuiBase {
     `;
     constructor() {
         super();
-        this.padding = '10px 12px 20px 12px';
+        this.padding = '0 12px';
     }
 
     updated(changedProperties) {

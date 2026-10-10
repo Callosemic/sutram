@@ -103,7 +103,6 @@ export class YenvuiModal extends LitElement {
             background: var(--bg-hover, #f1f5f9);
             filter: none;
         }
-
         .body {
             padding: 20px;
             overflow-y: auto;
@@ -115,6 +114,7 @@ export class YenvuiModal extends LitElement {
             flex-direction: column;
             gap: 15px;
             -webkit-overflow-scrolling: touch; /* Momentum scrolling for iOS */
+            container-type: inline-size;
         }
         :host([flush]) .body {
             padding: 0;
@@ -141,7 +141,8 @@ export class YenvuiModal extends LitElement {
             border: none !important; 
             cursor: pointer; 
         }
-        ::slotted(yenvui-async-btn[slot="footer"]) {
+        ::slotted(yenvui-async-btn[slot="footer"]),
+        ::slotted(sutram-async-btn[slot="footer"]) {
             flex: 1;
             margin: 0 !important;
             padding: 0 !important;

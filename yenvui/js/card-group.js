@@ -96,9 +96,8 @@ export class YenvuiCardGroup extends LitElement {
                 if (axis === 'horizontal' && this.enableEdgeSelection && this._gestureController.startX < 30) {
                     const deltaX = endX - this._gestureController.startX;
                     const deltaY = Math.abs(endY - this._gestureController.startY);
-
                     if (deltaX > 30 && deltaX > deltaY) {
-                        const card = getDeepElementFromPoint(endX, endY, 'yenvui-card');
+                        const card = getDeepElementFromPoint(endX, endY, 'yenvui-card, sutram-card');
                         if (card && !card.disableSelection) {
                             card.selected = !card.selected;
                             card.dispatchEvent(new CustomEvent('yenvui-card-select-toggled', {

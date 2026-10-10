@@ -53,6 +53,12 @@ export class YenvuiCard extends YenvuiBase {
             .selection-strip {
                 border-radius: 0 !important;
             }
+            .action-grip-rail {
+                border-radius: 0 !important;
+            }
+            .actions-tray {
+                border-radius: 0 !important;
+            }
         }
         .selection-strip {
             width: 14px !important;
@@ -250,29 +256,17 @@ export class YenvuiCard extends YenvuiBase {
             text-align: center;
             margin: 0;
         }
-
         /* Unstyled slots for host-injected buttons */
-        ::slotted(button), ::slotted(sutram-async-btn) {
+        ::slotted(button), ::slotted(sutram-btn), ::slotted(sutram-async-btn), ::slotted(yenvui-btn), ::slotted(yenvui-async-btn) {
             height: 30px;
             padding: 0 10px !important;
-            border-radius: 6px;
             font-size: 0.75rem !important;
-            font-weight: 700;
             display: inline-flex !important;
             align-items: center;
             justify-content: center;
             gap: 5px;
-            cursor: pointer;
-            transition: filter 0.15s ease, transform 0.1s ease;
             white-space: nowrap;
-            user-select: none;
             margin: 0 !important;
-            background: var(--input-bg);
-            color: var(--text);
-            border: 1px solid var(--border);
-        }
-        ::slotted(button:hover) {
-            filter: brightness(1.12);
         }
 
         /* E-Ink High Contrast Overrides */
@@ -378,6 +372,22 @@ export class YenvuiCard extends YenvuiBase {
         this._overlayActive = false;
         this._hasActions = false;
         this.selected = false;
+        this._isPanning = false;
+
+        this._overlayListener = (e) => {
+            if (e.detail.source !== this && this._overlayActive) {
+                this._overlayActive = false;
+            }
+        };
+        this._focusOutListener = (e) => {
+            if (!this.contains(e.relatedTarget) && this._overlayActive) {
+                this._overlayActive = false;
+            }
+        };
+    }
+    _initGestureController() {
+        if (this._gestureController) return;
+
         this._gestureController = new YenvuiGestureController(this, {
             scrollableContainerSelector: 'actions-wrapper',
             onPanStart: (startX, startY) => {
@@ -425,7 +435,6 @@ export class YenvuiCard extends YenvuiBase {
                         setTimeout(() => { wrapper.style.transition = ''; }, 200);
 
                         const newScroll = this._initialScrollLeft + deltaX;
-                        // If pulled past 20% to the right, snap it closed
                         if (newScroll < -(this._cardWidth * 0.2)) {
                             this._overlayActive = false;
                         }
@@ -434,8 +443,8 @@ export class YenvuiCard extends YenvuiBase {
                 }
 
                 if (Math.abs(deltaX) > 30) {
-                    const isLeftSwipe = deltaX > 30;   // Right-to-Left
-                    const isRightSwipe = deltaX < -30; // Left-to-Right
+                    const isLeftSwipe = deltaX > 30;
+                    const isRightSwipe = deltaX < -30;
 
                     const isLeftSide = this._localStartX < (this._cardWidth * 0.30);
                     const isRightSide = this._localStartX > (this._cardWidth * 0.70);
@@ -451,17 +460,8 @@ export class YenvuiCard extends YenvuiBase {
                 }
             }
         });
-        this._overlayListener = (e) => {
-            if (e.detail.source !== this && this._overlayActive) {
-                this._overlayActive = false;
-            }
-        };
-        this._focusOutListener = (e) => {
-            if (!this.contains(e.relatedTarget) && this._overlayActive) {
-                this._overlayActive = false;
-            }
-        };
     }
+
     connectedCallback() {
         super.connectedCallback();
         this.addEventListener('focusout', this._focusOutListener);
@@ -487,10 +487,15 @@ export class YenvuiCard extends YenvuiBase {
                 detail: { source: this }
             }));
         }
-
         // Self-Healing Wrapper: Reset transient overlay state if Lit recycles the DOM node for a new item
         if (changedProperties.has('entityData') || changedProperties.has('filename') || changedProperties.has('titleText')) {
-            if (this._overlayActive) {
+            const oldFilename = changedProperties.get('filename');
+            const oldTitle = changedProperties.get('titleText');
+
+            const filenameChanged = changedProperties.has('filename') && oldFilename !== this.filename;
+            const titleChanged = changedProperties.has('titleText') && oldTitle !== this.titleText;
+
+            if (this._overlayActive && (filenameChanged || titleChanged)) {
                 this._overlayActive = false;
             }
         }
@@ -524,11 +529,10 @@ export class YenvuiCard extends YenvuiBase {
     render() {
         const isSingleRow = !this.descriptionText && !this.detailText;
         const resolvedIntent = this.intent ? `var(--intent-${this.intent})` : (this.intentColor || 'var(--intent-neutral)');
-
         return html`
             <div class="card-wrapper" style="--card-intent: ${resolvedIntent}"
-                @mouseleave=${() => { if (window.matchMedia('(hover: hover)').matches && !this._gestureController.active) this._overlayActive = false; }}
-                @pointerdown=${(e) => this._gestureController.start(e)}>
+                @mouseleave=${() => { if (window.matchMedia('(hover: hover)').matches && (!this._gestureController || !this._gestureController.active)) this._overlayActive = false; }}
+                @pointerdown=${(e) => { this._initGestureController(); this._gestureController.start(e); }}>
 
                 ${!this.disableSelection ? html`<div class="selection-hit-zone" title="Select Item" @click=${(e) => { e.stopPropagation(); this._toggleSelection(); }}></div><div class="selection-strip"></div>` : ''}
                 <div class="content-col" @click=${(e) => {
@@ -588,7 +592,6 @@ export class YenvuiCard extends YenvuiBase {
 
                     // If we clicked the dropdown trigger itself, abort so the menu can open
                     if (isDropdownTrigger && !isMenuItem) return;
-
                     const isActionable = path.some(el => {
                         if (!el.tagName) return false;
                         const tag = el.tagName.toUpperCase();
@@ -596,8 +599,6 @@ export class YenvuiCard extends YenvuiBase {
                         if (isMenuItem) return true;
                         return false;
                     });
-
-                    if (isActionable) this._overlayActive = false; 
                 }, capture: true}}>
                     ${!isSingleRow ? html`<span class="tray-caption">${this.titleText}</span>` : ''}
                     <div class="actions-wrapper">
