@@ -28,7 +28,8 @@ sutram/
 │   │   ├── 0009_sutram_spatial_layout_and_projection_engine.md # ADR-0009: Spatial 3-column layout engine and DOM projection pooling
 │   │   ├── 0010_sutram_floating_window_projection.md # ADR-0010: Floating window projection layer and z-index management
 │   │   ├── 0011_sutram_context_mixin_and_grid_constrained_windows.md # ADR-0011: SutramContextMixin and grid-constrained spatial window projections
-│   │   └── 0012_yv_icon_component_and_direct_node_retention.md # ADR-0012: Native yv-icon component and direct Lit element node retention
+│   │   ├── 0012_yv_icon_component_and_direct_node_retention.md # ADR-0012: Native yv-icon component and direct Lit element node retention
+│   │   └── 0013_sutram_dynamic_spatial_ratios_and_light_dom_bem_styles.md # [comment required]
 │   └── yenvui_contracts.md         # Interface contract specification and CSS intent tokens for yenVUI presentation chassis
 ├── pyproject.toml                  # Python project metadata and semantic release configuration
 ├── readme.md                       # Master repository architecture map and component reference
@@ -48,12 +49,15 @@ sutram/
 │       ├── sutram_sdk.js           # IoC Micro-Kernel, SutramElement base class, SutramContextMixin, and ExtensionRegistry
 │       ├── sw-core.js              # Abstracted Service Worker core runtime for offline caching and navigation fallbacks
 │       ├── utils.js                # Pure algorithmic utility helpers (fuzzy filter, debounce, coalescedAsync, slugify, time formatting, nativeShareFiles)
-│       └── wordcount.js            # Ephemeral word count widget decoration plugin for CodeMirror 6
+│       ├── wordcount.js            # Ephemeral word count widget decoration plugin for CodeMirror 6
+│       └── workers/                # [comment required]
+│           └── search-worker.js    # [comment required]
 ├── tests/                          # Automated presentation chassis compliance tests and fitness functions
 │   └── sutram_consumer_linter.py   # Reusable static analysis script for consumer UDF compliance
 └── yenvui/                         # Edge-Native presentation chassis and Web Component UI library
     ├── css/                        # Universal CSS theme tokens and layout resets
-    │   └── theme-tokens.css        # CSS custom property tokens for Dark, Light, and E-Ink brutalist themes
+    │   ├── theme-tokens.css        # CSS custom property tokens for Dark, Light, and E-Ink brutalist themes
+    │   └── yenvui-primitives.css   # [comment required]
     ├── js/                         # Pure ES module frontend runtime kernel and utilities
     │   ├── async-btn.js            # Agnostic asynchronous action button with status feedback state machine
     │   ├── board.js                # Multi-column container-query responsive layout grid and column container
@@ -73,6 +77,7 @@ sutram/
     │   ├── scroll-view.js          # Container-query responsive scrollable view container with adaptive edge padding
     │   ├── search-bar.js           # Standardized text search input with instant clear action
     │   ├── selection-tray.js       # Floating action tray for batch selection operations
+    │   ├── shared_styles.js        # Lit CSS intent tokens, presentation primitives, and theme styles
     │   ├── spinner.js              # Asynchronous CSS loading indicator component with custom text label
     │   ├── status-bar.js           # System status and background synchronization indicator bar
     │   ├── tabs.js                 # Horizontal swipe carousel tab navigation and cached view router
