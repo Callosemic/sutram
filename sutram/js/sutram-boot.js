@@ -50,84 +50,7 @@
         return originalDefine(name, constructor, options);
     };
     // =========================================================================
-    // 2. Fetch Manifests & Parse SemVer
-    // =========================================================================
-    // The host HTML (inSetu) passes the discovery URLs via a global array
-    const urlParams = new URLSearchParams(window.location.search);
-    const isPopout = urlParams.get('popout') === 'true';
-
-    if (isPopout) {
-        const allowedModules = (urlParams.get('modules') || '').split(',').map(m => m.trim());
-        if (allowedModules.length > 0 && window.ACTIVE_EXTENSIONS) {
-            // Prune extensions down to exactly what was requested
-            window.ACTIVE_EXTENSIONS = window.ACTIVE_EXTENSIONS.filter(ext => allowedModules.includes(ext));
-
-            // Prune manifests down to core OS and requested modules to save network requests
-            if (window.SUTRAM_MANIFEST_URLS) {
-                window.SUTRAM_MANIFEST_URLS = window.SUTRAM_MANIFEST_URLS.filter(url => {
-                    if (url === '/static/vendor.json') return true;
-                    return allowedModules.some(mod => url.includes(`/extensions/${mod}/`));
-                });
-            }
-        }
-    }
-
-    const manifestUrls = window.SUTRAM_MANIFEST_URLS || [];
-    const packages = {}; // Tracks highest version of each specifier
-
-    // Lightweight SemVer Comparator
-    const compareSemVer = (a, b) => {
-        const pa = a.split('.').map(Number);
-        const pb = b.split('.').map(Number);
-        for (let i = 0; i < 3; i++) {
-            if ((pa[i] || 0) > (pb[i] || 0)) return 1;
-            if ((pa[i] || 0) < (pb[i] || 0)) return -1;
-        }
-        return 0;
-    };
-
-    for (const url of manifestUrls) {
-        try {
-            const res = await fetch(url);
-            if (!res.ok) continue;
-            
-            const manifest = await res.json();
-            if (!manifest.imports) continue;
-
-            // Extract the base path of the manifest to resolve relative vendor paths
-            const basePath = url.substring(0, url.lastIndexOf('/') + 1);
-
-            Object.entries(manifest.imports).forEach(([specifier, meta]) => {
-                if (!packages[specifier] || compareSemVer(meta.version, packages[specifier].version) > 0) {
-                    packages[specifier] = {
-                        version: meta.version,
-                        // Resolve the physical absolute/relative path for the browser
-                        resolvedPath: basePath + meta.path 
-                    };
-                }
-            });
-        } catch (e) {
-            console.warn(`[Sutram] Failed to process vendor manifest from ${url}`, e);
-        }
-    }
-
-    // =========================================================================
-    // 3. Synthesize & Inject HTML5 Import Map
-    // =========================================================================
-    const finalImports = {};
-    Object.entries(packages).forEach(([specifier, meta]) => {
-        finalImports[specifier] = meta.resolvedPath;
-    });
-
-    if (Object.keys(finalImports).length > 0) {
-        const script = document.createElement('script');
-        script.type = 'importmap';
-        script.textContent = JSON.stringify({ imports: finalImports });
-        document.head.appendChild(script);
-        console.log('[Sutram] Import map synthesized and injected.', finalImports);
-    }
-    // =========================================================================
-    // 4. Define yv-icon Micro-Primitive
+    // 2. Define yv-icon Micro-Primitive (SVG Sprite Renderer)
     // =========================================================================
     class YvIcon extends HTMLElement {
         connectedCallback() {
@@ -139,17 +62,21 @@
                 this.style.width = '16px';
                 this.style.height = '16px';
             }
-
             const name = this.getAttribute('name');
-            const svgContent = window.INSETU_ICONS && window.INSETU_ICONS[name] ? window.INSETU_ICONS[name] : '';
-            this.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 100%; height: 100%; display: block;">${svgContent}</svg>`;
+            const paths = window.SutramIcons ? (window.SutramIcons[name] || '') : '';
+            this.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 100%; height: 100%; display: block;">' + paths + '</svg>';
         }
-    }
-    customElements.define('yv-icon', YvIcon);
+}
+customElements.define('yv-icon', YvIcon);
 
     // =========================================================================
-    // 5. Trigger Stage 2
+    // 3. Trigger Stage 2
     // =========================================================================
     // Signal the host OS that it is safe to dynamically import the app modules
-    window.dispatchEvent(new CustomEvent('sutram:boot-ready'));
+    const triggerBoot = () => window.dispatchEvent(new CustomEvent('sutram:boot-ready'));
+    if (document.readyState === 'loading') {
+        window.addEventListener('DOMContentLoaded', triggerBoot);
+    } else {
+        triggerBoot();
+    }
 })();

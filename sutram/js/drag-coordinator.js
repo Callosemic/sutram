@@ -205,7 +205,6 @@ export class SutramDragCoordinator extends SutramElement {
             background: #000000 !important;
             color: #ffffff !important;
         }
-
         :host([data-theme="e-ink"]) .drag-floater {
             background: #ffffff !important;
             color: #000000 !important;
@@ -216,7 +215,23 @@ export class SutramDragCoordinator extends SutramElement {
 
     connectedCallback() {
         super.connectedCallback();
-        this.observeTheme();
+    }
+    updated(changedProperties) {
+        super.updated(changedProperties);
+        if (changedProperties.has('dragState')) {
+            this._dropZonesCache = null; // Invalidate cache when drag layout shifts
+        }
+    }
+
+    getHoveredZone(x, y) {
+        if (!this._dropZonesCache) {
+            this._dropZonesCache = Array.from(this.shadowRoot.querySelectorAll('yenvui-drop-target')).map(el => {
+                const rect = el.getBoundingClientRect();
+                return { zone: el.zone, left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+            });
+        }
+        const hovered = this._dropZonesCache.find(z => x >= z.left && x <= z.right && y >= z.top && y <= z.bottom);
+        return hovered ? hovered.zone : null;
     }
 
     updatePointer(x, y) {
@@ -261,13 +276,13 @@ export class SutramDragCoordinator extends SutramElement {
                         </div>
                         <div style="display: flex; gap: 10px;">
                             <yenvui-drop-target zone="left" class="drop-target-btn intent-primary" .intent=${'primary'} ?hovered=${currentZone === 'left'}>
-                                Left Flank
+                                Left
                             </yenvui-drop-target>
                             <yenvui-drop-target zone="center" class="drop-target-btn intent-primary" .intent=${'primary'} ?hovered=${currentZone === 'center'}>
-                                Center Focus
+                                Center
                             </yenvui-drop-target>
                             <yenvui-drop-target zone="right" class="drop-target-btn intent-primary" .intent=${'primary'} ?hovered=${currentZone === 'right'} style="${capacity === 2 ? 'opacity: 0.4; pointer-events: none;' : ''}">
-                                Right Flank
+                                Right
                             </yenvui-drop-target>
                         </div>
                     </div>
@@ -324,14 +339,14 @@ export class SutramDragCoordinator extends SutramElement {
                         <div style="display: flex; flex-direction: column; gap: 8px;">
                             <div style="display: flex; gap: 8px;">
                                 <yenvui-drop-target zone="span-1-left" class="drop-target-btn intent-warning" .intent=${'warning'} ?hovered=${currentZone === 'span-1-left'}>
-                                    Left Flank
+                                    Left
                                 </yenvui-drop-target>
                                 <yenvui-drop-target zone="span-1-center" class="drop-target-btn intent-warning" .intent=${'warning'} ?hovered=${currentZone === 'span-1-center'}>
-                                    Center Focus
+                                    Center
                                 </yenvui-drop-target>
                                 ${capacity >= 3 ? html`
                                     <yenvui-drop-target zone="span-1-right" class="drop-target-btn intent-warning" .intent=${'warning'} ?hovered=${currentZone === 'span-1-right'}>
-                                        Right Flank
+                                        Right
                                     </yenvui-drop-target>
                                 ` : ''}
                             </div>
@@ -351,7 +366,7 @@ export class SutramDragCoordinator extends SutramElement {
 
                             ${capacity >= 3 ? html`
                                 <yenvui-drop-target zone="span-3-left" class="drop-target-btn intent-warning" .intent=${'warning'} ?hovered=${currentZone === 'span-3-left'}>
-                                    All 3 Columns
+                                    All Columns
                                 </yenvui-drop-target>
                             ` : ''}
                         </div>

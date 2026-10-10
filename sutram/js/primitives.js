@@ -209,7 +209,7 @@ export class SutramSelectionTray extends SutramElement {
         modalOpen: { type: Boolean }
     };
 
-    static styles = css`
+    static styles = [sharedStyles, css`
         .cart-btn {
             background: color-mix(in srgb, var(--intent-warning) 15%, transparent);
             color: var(--intent-warning);
@@ -252,29 +252,34 @@ export class SutramSelectionTray extends SutramElement {
             opacity: 0; pointer-events: none; transition: opacity 0.2s;
         }
         .tray-overlay.open { opacity: 1; pointer-events: auto; }
-
         .tray-panel {
             position: fixed; top: 60px; right: 20px; width: 450px; max-width: calc(100vw - 40px);
-            background: var(--pane-bg); border: 1px solid var(--border); border-radius: 12px;
+            background: var(--pane-bg); background: color-mix(in srgb, var(--pane-bg) 95%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--border); border-radius: 12px;
             box-shadow: 0 12px 40px rgba(0,0,0,0.5); z-index: 3000; display: flex; flex-direction: column;
             transform: translateY(-20px); opacity: 0; pointer-events: none; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
             max-height: calc(100dvh - 80px);
         }
         .tray-panel.open { transform: translateY(0); opacity: 1; pointer-events: auto; }
 
-        .tray-header {
-            display: flex; justify-content: space-between; align-items: flex-start; padding: 20px 20px 15px 20px;
+        .sync-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: var(--btn-padding, 8px 14px);
+            font-size: var(--btn-font-size, 0.85rem);
+            font-family: inherit;
+            font-weight: var(--btn-font-weight, normal);
+            border-radius: var(--btn-border-radius, 4px);
+            border: none;
+            cursor: pointer;
+            white-space: nowrap;
+            box-sizing: border-box;
+            transition: filter 0.2s ease, transform 0.1s ease;
+            color: #ffffff;
         }
-        .tray-header h3 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 1.1rem; color: var(--text); }
-        .tray-header p { margin: 4px 0 0 0; color: var(--text-muted); font-size: 0.85rem; font-family: var(--font-mono); }
-        .tray-header button { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem; }
-        .tray-header button:hover { color: var(--text); }
-
-        .tray-subheader {
-            padding: 0 20px 15px 20px; border-bottom: 1px solid var(--border);
-            display: flex; justify-content: space-between; align-items: center;
-            font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted);
-        }
+        .sync-btn:hover { filter: brightness(1.1); }
+        .sync-btn:active { transform: scale(0.98); }
 
         .tray-items {
             flex: 1; overflow-y: auto; padding: 15px 20px; display: flex; flex-direction: column; gap: 10px;
@@ -288,11 +293,10 @@ export class SutramSelectionTray extends SutramElement {
         .tray-item-title { font-weight: bold; color: var(--text); font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 8px; justify-content: space-between; }
         .tray-item-path { font-family: monospace; font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .pack-tag { background: color-mix(in srgb, var(--intent-warning) 20%, transparent); color: var(--intent-warning); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; }
-
         .tray-footer {
             display: flex; gap: 10px; padding: 15px 20px; border-top: 1px solid var(--border); background: var(--bg-deep); border-radius: 0 0 12px 12px;
         }
-    `;
+    `];
 
     constructor() {
         super();
@@ -312,12 +316,28 @@ export class SutramSelectionTray extends SutramElement {
     render() {
         const count = this.selectedItems.size;
         const itemsArray = Array.from(this.selectedItems.values());
-
         let totalSize = 0;
+        let hasUnknown = false;
         itemsArray.forEach(item => {
-            if (item.data?.size_bytes) totalSize += item.data.size_bytes;
-            else totalSize += 4096; // Fallback estimate
+            if (item.data?.size_bytes) {
+                totalSize += item.data.size_bytes;
+            } else {
+                const path = item.data?.filepath || item.data?.folderpath || item.data?.id;
+                const manifest = window.inSetu?.stores?.App?.getState()?.manifest;
+                if (manifest?.ctx?.[path]?.meta?.size_bytes) {
+                    totalSize += manifest.ctx[path].meta.size_bytes;
+                } else {
+                    hasUnknown = true;
+                }
+            }
         });
+
+        let sizeDisplay = '';
+        if (totalSize > 0) {
+            sizeDisplay = `~${Math.round(totalSize / 1024)} kb${hasUnknown ? '+' : ''}`;
+        } else if (hasUnknown) {
+            sizeDisplay = 'Calculated on compile';
+        }
 
         let batchActions = [];
         const registry = window.ExtensionRegistry;
@@ -343,29 +363,23 @@ export class SutramSelectionTray extends SutramElement {
 
             <div class="tray-overlay ${this.modalOpen ? 'open' : ''}" @click=${() => this.modalOpen = false}></div>
             <div class="tray-panel ${this.modalOpen ? 'open' : ''}">
-                <div class="tray-header">
-                    <div style="display: flex; gap: 12px;">
-                        <div style="width: 32px; height: 32px; border-radius: 8px; background: color-mix(in srgb, var(--intent-warning) 15%, transparent); border: 1px solid color-mix(in srgb, var(--intent-warning) 40%, transparent); display: flex; align-items: center; justify-content: center; color: var(--intent-warning);">
-                            <yv-icon name="zap" style="width: 18px; height: 18px;"></yv-icon>
-                        </div>
-                        <div>
-                            <h3>Quickpack Staging Deck <span class="cart-badge" style="margin-left: 8px;">${count}</span></h3>
-                            <p>Compiled payload bundle staging</p>
-                        </div>
+                <div style="padding: 15px 20px; border-bottom: 1px solid var(--border); background: var(--bg-deep); display: flex; justify-content: space-between; align-items: flex-start; border-radius: 12px 12px 0 0;">
+                    <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; padding-right: 15px;">
+                        <span style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase; font-weight: bold;">SELECTION STAGING</span>
+                        <span style="font-weight: bold; font-size: 1.15rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center;">Quickpack Deck <span class="cart-badge" style="display: inline-flex; margin-left: 8px;">${count}</span></span>${sizeDisplay ? html`<span style="font-size: 0.8rem; color: var(--intent-highlight); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${sizeDisplay}</span>` : ''}
                     </div>
-                    <button @click=${() => this.modalOpen = false}>✕</button>
-                </div>
-                <div class="tray-subheader">
-                    <div style="display: flex; gap: 15px; align-items: center;">
-                        <span style="display: flex; align-items: center; gap: 6px;"><yv-icon name="layers" style="width: 14px; height: 14px;"></yv-icon> ${count} items</span>
-                        <span style="display: flex; align-items: center; gap: 6px;"><yv-icon name="database" style="width: 14px; height: 14px;"></yv-icon> ~${Math.round(totalSize / 1024)} kb</span>
-                    </div>
+                    <button class="sync-btn" @click=${() => this.modalOpen = false} style="background: var(--input-bg); color: var(--text-muted); border: 1px solid var(--border); padding: 4px; font-size: 1.2rem; line-height: 1;">✕</button>
                 </div>
                 <div class="tray-items">
                     ${itemsArray.map(item => {
                         const name = item.data?.titleText || item.data?.filepath?.split('/').pop() || 'Unknown Item';
                         const path = item.data?.filepath || item.data?.folderpath || item.data?.id || '';
-                        const sizeText = item.data?.size_bytes ? `${Math.round(item.data.size_bytes / 1024)} kb` : '';
+                        let sizeBytes = item.data?.size_bytes;
+                        if (!sizeBytes) {
+                            const manifest = window.inSetu?.stores?.App?.getState()?.manifest;
+                            sizeBytes = manifest?.ctx?.[path]?.meta?.size_bytes;
+                        }
+                        const sizeText = sizeBytes ? `${Math.round(sizeBytes / 1024)} kb` : '';
                         return html`
                         <div class="tray-item">
                             <div class="tray-item-info">
@@ -382,9 +396,10 @@ export class SutramSelectionTray extends SutramElement {
                     <sutram-async-btn label="Clear" intent="danger" .onClick=${() => { SelectionStore.getState().clearSelection(); this.modalOpen = false; }} style="margin-right: auto;"></sutram-async-btn>
                     ${batchActions.map(act => html`
                         <sutram-async-btn  
-                            label="${act.icon}${act.label}" 
+                            .label=${act.label}
+                            .icon=${act.icon}
                             intent="${act.intent || 'primary'}" 
-                            variant="${act.variant || 'solid'}"
+                            variant="${act.variant || 'tinted'}"
                             ?emphasis=${act.emphasis}
                             .onClick=${async (e) => {
                                 if (act.asyncAction) await act.asyncAction(itemsArray, e);
@@ -448,13 +463,37 @@ customElements.define('sutram-categorized-list', SutramCategorizedList);
 export class SutramFolderBrowser extends LitElement {
     static properties = {
         files: { type: Array },
-        currentPath: { type: Array }
+        currentPath: { type: Array },
+        _treeData: { type: Object, state: true }
     };
 
     constructor() {
         super();
         this.files = [];
         this.currentPath = [];
+        this._treeData = {};
+        const workerPath = window.SUTRAM_PUBLIC_PATH 
+            ? new URL('./workers/search-worker.js', window.SUTRAM_PUBLIC_PATH) 
+            : new URL('./workers/search-worker.js', import.meta.url);
+        this._worker = new Worker(workerPath, { type: 'module' });
+        this._worker.onmessage = (e) => {
+            if (e.data.requestId === this._lastReqId) {
+                this._treeData = e.data.tree;
+            }
+        };
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        if (this._worker) this._worker.terminate();
+    }
+
+    updated(changedProperties) {
+        super.updated(changedProperties);
+        if (changedProperties.has('files')) {
+            this._lastReqId = Date.now();
+            this._worker.postMessage({ type: 'BUILD_TREE', requestId: this._lastReqId, items: this.files });
+        }
     }
 
     createRenderRoot() {
@@ -469,15 +508,13 @@ export class SutramFolderBrowser extends LitElement {
             composed: true
         }));
     }
-
     render() {
-        const tree = buildFileTree(this.files);
-        let current = tree;
+        let current = this._treeData || {};
         for (const p of this.currentPath) {
             if (current[p]) {
                 current = current[p];
             } else {
-                current = tree;
+                current = this._treeData || {};
                 this.currentPath = [];
                 break;
             }
@@ -486,7 +523,7 @@ export class SutramFolderBrowser extends LitElement {
         const keys = Object.keys(current).filter(k => k !== '_isFile' && !current[k]._isFile).sort((a, b) => a.localeCompare(b));
         return html`
             <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; overflow: hidden;">
-                <sutram-btn intent="neutral" ?disabled=${this.currentPath.length === 0} @click=${() => this._setPath(this.currentPath.slice(0, -1))}><yv-icon name="corner-left-up" style="width: 14px; height: 14px; margin-right: 6px;"></yv-icon> Up</sutram-btn>
+                <sutram-btn intent="neutral" icon="corner-left-up" label="Up" ?disabled=${this.currentPath.length === 0} @click=${() => this._setPath(this.currentPath.slice(0, -1))}></sutram-btn>
                 <yenvui-scrub-track style="flex: 1; min-width: 0; font-family: monospace; color: var(--text); opacity: 0.7; font-size: 0.9rem;">
                     /${this.currentPath.join('/')}
                 </yenvui-scrub-track>
@@ -661,7 +698,7 @@ export class SutramEntityActions extends SutramElement {
         variant: { type: String },
         _trayOpen: { type: Boolean, state: true }
     };
-    static styles = css`
+    static styles = [sharedStyles, css`
         :host { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
         :host([scrollable]) {
             flex-wrap: nowrap;
@@ -754,7 +791,7 @@ export class SutramEntityActions extends SutramElement {
         }
         :host([data-theme="e-ink"]) .sync-btn:hover { background: #f1f5f9 !important; }
         :host([data-theme="e-ink"]) .sync-btn.active { background: #000000 !important; color: #ffffff !important; }
-    `;
+    `];
     updated(changedProperties) {
         super.updated(changedProperties);
         if (changedProperties.has('_trayOpen')) {
@@ -770,7 +807,6 @@ export class SutramEntityActions extends SutramElement {
     }
     connectedCallback() {
         super.connectedCallback();
-        this.observeTheme();
     }
     render() {
         if (!this.entityType || !window.ExtensionRegistry?.getEntityActions) return '';
@@ -842,12 +878,12 @@ export class SutramEntityActions extends SutramElement {
                 }
                 return html`<span style="margin-right: 6px;">${iconStr}</span>`;
             };
-
             if (act.asyncAction || (window.ExtensionRegistry.executeEntityAction && act.vfsBound)) {
                 return html`
                     <sutram-async-btn 
                         style="margin: 0; order: ${act.order || 99};" 
-                        .label=${html`${renderIcon(rawIcon)}${label}`} 
+                        .label=${label}
+                        .icon=${rawIcon}
                         intent="${intent}" 
                         ?active=${isActive}
                         .onClick=${(e) => executeAction(act, e)}>
@@ -868,9 +904,10 @@ export class SutramEntityActions extends SutramElement {
                 <sutram-btn 
                     intent=${intent} 
                     ?active=${isActive}
-                    style="order: ${act.order || 99}; gap: 4px;" 
+                    style="order: ${act.order || 99}; gap: 4px;"
+                    .label=${label}
+                    .icon=${rawIcon}
                     @click=${clickHandler}>
-                    ${renderIcon(rawIcon)}${label}
                 </sutram-btn>
             `;
         };
@@ -884,7 +921,6 @@ export class SutramEntityActions extends SutramElement {
             const groupIcons = { file: 'file-text', edit: 'edit-3', share: 'share-2', tools: 'wrench' };
 
             const handleTrayAction = async (act, e) => {
-                this._trayOpen = false;
                 await executeAction(act, e);
             };
 
@@ -925,23 +961,22 @@ export class SutramEntityActions extends SutramElement {
                                                 }
                                                 return html`<span style="margin-right: 6px;">${iconStr}</span>`;
                                             };
-
                                             if (act.asyncAction || (window.ExtensionRegistry.executeEntityAction && act.vfsBound)) {
                                                 return html`
                                                     <sutram-async-btn 
                                                         style="margin: 0; width: 100%; justify-content: flex-start; --btn-padding: 10px 12px; font-size: 0.9rem;" 
-                                                        .label=${html`${renderIcon(rawIcon)}${label}`} 
+                                                        .label=${label}
+                                                        .icon=${rawIcon}
                                                         intent="${intent}" 
                                                         ?active=${isActive}
                                                         .onClick=${(e) => handleTrayAction(act, e)}>
                                                     </sutram-async-btn>
                                                 `;
                                             }
-
                                             return html`
                                                 <button 
                                                     class="sync-btn ${isActive ? 'active' : ''}" 
-                                                    style="width: 100%; justify-content: flex-start; padding: 10px 12px; font-size: 0.9rem; background: var(--intent-${intent}); color: ${intent === 'warning' ? '#000' : '#fff'};" 
+                                                    style="width: 100%; justify-content: flex-start; padding: 10px 12px; font-size: 0.9rem; background: color-mix(in srgb, var(--intent-${intent}) 15%, transparent); color: var(--intent-${intent}); border: 1px solid color-mix(in srgb, var(--intent-${intent}) 40%, transparent);" 
                                                     @click=${(e) => handleTrayAction(act, e)}>
                                                     ${renderIcon(rawIcon)}${label}
                                                 </button>
@@ -957,9 +992,9 @@ export class SutramEntityActions extends SutramElement {
         };
         const content = html`
             ${actions.length > 0 ? html`
-                <sutram-btn intent="neutral" style="padding: 4px 12px; font-size: 1.1rem; line-height: 1; order: -1; margin-right: 4px;"
+                <sutram-btn intent="neutral" style="order: -1; margin-right: 4px;"
+                    label="⋮"
                     @click=${(e) => { e.stopPropagation(); this._trayOpen = true; }}>
-                    ⋮
                 </sutram-btn>
             ` : ''}
             ${primaryActions.map(renderDirectAction)}
@@ -1255,7 +1290,13 @@ customElements.define('sutram-editor', SutramEditor);
 
 // 15. Selector Modal
 export class SutramSelectorModal extends SutramElement {
-    static properties = { open: { type: Boolean, reflect: true }, titleText: { type: String }, items: { type: Array }, _searchQuery: { type: String } };
+    static properties = { 
+        open: { type: Boolean, reflect: true }, 
+        titleText: { type: String }, 
+        items: { type: Array }, 
+        _searchQuery: { type: String },
+        _filteredItems: { type: Array, state: true }
+    };
     static styles = [sharedStyles, css`:host { display: contents; }`];
 
     constructor() {
@@ -1264,13 +1305,44 @@ export class SutramSelectorModal extends SutramElement {
         this.titleText = "Select Item";
         this.items = [];
         this._searchQuery = '';
+        this._filteredItems = [];
+        const workerPath = window.SUTRAM_PUBLIC_PATH 
+            ? new URL('./workers/search-worker.js', window.SUTRAM_PUBLIC_PATH) 
+            : new URL('./workers/search-worker.js', import.meta.url);
+        this._worker = new Worker(workerPath, { type: 'module' });
+        this._worker.onmessage = (e) => {
+            if (e.data.requestId === this._lastSearchReq) {
+                this._filteredItems = e.data.results.slice(0, 50);
+            }
+        };
     }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        if (this._worker) this._worker.terminate();
+    }
+
+    updated(changedProperties) {
+        super.updated(changedProperties);
+        if (changedProperties.has('items') || changedProperties.has('_searchQuery')) {
+            if (!this._searchQuery) {
+                this._filteredItems = this.items.slice(0, 50);
+            } else {
+                this._lastSearchReq = Date.now();
+                this._worker.postMessage({ 
+                    type: 'FUZZY_SEARCH', 
+                    requestId: this._lastSearchReq, 
+                    items: this.items, 
+                    query: this._searchQuery
+                });
+            }
+        }
+    }
+
     render() {
         if (!this.open) return html``;
 
-        const filtered = this._searchQuery 
-            ? this.utils.fuzzyFilterObjects(this.items, this._searchQuery).slice(0, 50) 
-            : this.items.slice(0, 50);
+        const filtered = this._filteredItems || [];
 
         return html`
             <sutram-modal ?open=${true} titleText=${this.titleText} @sutram-modal-closed=${() => { this.open = false; this.dispatchEvent(new CustomEvent('selector-closed')); }}>

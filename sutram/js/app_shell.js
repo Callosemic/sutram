@@ -7,7 +7,32 @@ import { SutramProjectionCompiler } from './projection_engine.js';
 import './drag-coordinator.js';
 import '../../yenvui/js/tabs.js';
 import { YenvuiGestureController, getDeepElementFromPoint } from '../../yenvui/js/physics.js';
+const getSpatialMetrics = (capacity, activeViewport, layoutRatios) => {
+    const layout = (Array.isArray(layoutRatios) && layoutRatios.length > 0) ? layoutRatios : [1, 1, 1];
+    const safeViewport = Math.max(0, Math.min(activeViewport, layout.length - capacity));
+    const activeSum = layout.slice(safeViewport, safeViewport + capacity).reduce((a, b) => a + b, 0) || 1;
 
+    return {
+        getColWidth: (idx) => `${(layout[idx] / activeSum) * 100}%`,
+        getColLeft: (idx) => {
+            const leftOffset = layout.slice(0, idx).reduce((a, b) => a + b, 0);
+            return `${(leftOffset / activeSum) * 100}%`;
+        },
+        getTrackOffset: () => {
+            const leftOffset = layout.slice(0, safeViewport).reduce((a, b) => a + b, 0);
+            return `-${(leftOffset / activeSum) * 100}%`;
+        },
+        getWinBounds: (colIdx, span) => {
+            const safeSpan = Math.min(span, layout.length - colIdx);
+            const leftOffset = layout.slice(0, colIdx).reduce((a, b) => a + b, 0);
+            const spanWidth = layout.slice(colIdx, colIdx + safeSpan).reduce((a, b) => a + b, 0);
+            return { 
+                left: `${(leftOffset / activeSum) * 100}%`, 
+                width: `${(spanWidth / activeSum) * 100}%` 
+            };
+        }
+    };
+};
 export class SutramAppShell extends SutramElement {
     static properties = {
         _layoutConfig: { type: Array },
@@ -18,7 +43,7 @@ export class SutramAppShell extends SutramElement {
             display: flex;
             flex-direction: column;
             height: calc(100dvh - 30px); /* Account for global status bar */
-            width: 100vw;
+            width: 100%;
             overflow: hidden;
             background: var(--bg);
             overscroll-behavior: none;
@@ -92,63 +117,32 @@ export class SutramAppShell extends SutramElement {
             position: relative;
         }
         .spatial-track {
-            display: flex;
+            position: relative;
             flex: 1;
             min-height: 0;
             transition: transform 0.32s cubic-bezier(0.2, 0.9, 0.2, 1);
             width: 100%;
         }
-
         /* Responsive Viewport States */
-        :host([data-viewport="mobile"]) .spatial-track, [data-viewport="mobile"] .spatial-track {
-            width: 300% !important;
-        }
-        :host([data-viewport="mobile"]) .spatial-col, [data-viewport="mobile"] .spatial-col {
-            width: 33.333333% !important;
-            min-width: 33.333333% !important;
-            max-width: 33.333333% !important;
-            flex-shrink: 0 !important;
-            height: 100% !important;
-            display: flex !important;
-            flex-direction: column !important;
-            overflow: hidden !important;
-            border-right: none;
-        }
-
-        :host([data-viewport="tablet"]) .spatial-track, [data-viewport="tablet"] .spatial-track {
-            width: 150% !important;
-        }
-        :host([data-viewport="tablet"]) .spatial-col, [data-viewport="tablet"] .spatial-col {
-            width: 33.333333% !important;
-            min-width: 33.333333% !important;
-            max-width: 33.333333% !important;
-            flex-shrink: 0 !important;
-            height: 100% !important;
-            display: flex !important;
-            flex-direction: column !important;
-            overflow: hidden !important;
-            border-right: 1px solid var(--border);
-        }
-
-        :host([data-viewport="desktop"]) .spatial-track, [data-viewport="desktop"] .spatial-track {
-            width: 100% !important;
-            transform: translateX(0) !important;
-        }
-        :host([data-viewport="desktop"]) .spatial-col, [data-viewport="desktop"] .spatial-col {
-            flex: 1 !important;
-            width: 33.333333% !important;
-            min-width: 0 !important;
-            height: 100% !important;
-            display: flex !important;
-            flex-direction: column !important;
-            overflow: hidden !important;
-            border-right: 1px solid var(--border);
-        }
         .spatial-col {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            height: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
+            border-right: 1px solid var(--border);
             container-type: inline-size;
             overscroll-behavior-x: none;
+            width: var(--col-width, 33.333%) !important;
+            left: var(--col-left, 0%) !important;
+            transition: width 0.32s cubic-bezier(0.2, 0.9, 0.2, 1), left 0.32s cubic-bezier(0.2, 0.9, 0.2, 1);
         }
 
+        :host([data-viewport="mobile"]) .spatial-col, [data-viewport="mobile"] .spatial-col {
+            border-right: none;
+        }
         .spatial-col:last-child {
             border-right: none !important;
         }
@@ -202,13 +196,10 @@ export class SutramAppShell extends SutramElement {
         }
         :host([data-viewport="mobile"]) .desktop-only-folders, [data-viewport="mobile"] .desktop-only-folders { display: none !important; }
         :host([data-viewport="mobile"]) .mobile-only-tools, [data-viewport="mobile"] .mobile-only-tools { display: flex !important; }
-        :host([data-viewport="mobile"]) .mobile-dots-wrapper, [data-viewport="mobile"] .mobile-dots-wrapper { display: flex !important; }
         :host([data-viewport="desktop"]) .desktop-only-folders, :host([data-viewport="tablet"]) .desktop-only-folders,
         [data-viewport="desktop"] .desktop-only-folders, [data-viewport="tablet"] .desktop-only-folders { display: flex !important; }
         :host([data-viewport="desktop"]) .mobile-only-tools, :host([data-viewport="tablet"]) .mobile-only-tools,
         [data-viewport="desktop"] .mobile-only-tools, [data-viewport="tablet"] .mobile-only-tools { display: none !important; }
-        :host([data-viewport="desktop"]) .mobile-dots-wrapper, :host([data-viewport="tablet"]) .mobile-dots-wrapper,
-        [data-viewport="desktop"] .mobile-dots-wrapper, [data-viewport="tablet"] .mobile-dots-wrapper { display: none !important; }
         .pos-dot-target { padding: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .pos-dot { width: 6px; height: 6px; border-radius: 9999px; background: var(--text-muted); transition: all 0.2s ease; }
         .pos-dot.active { width: 14px; background: var(--intent-primary); box-shadow: none; }
@@ -365,7 +356,7 @@ export class SutramAppShell extends SutramElement {
         super();
         this._layoutConfig = [];
         this._activeNodes = new Map();
-        this._spatialState = { capacity: 3, focusedColumn: 'center', mobileViewportIndex: 1, columns: { left: { pinned: [] }, center: { pinned: [] }, right: { pinned: [] } } };
+        this._spatialState = { capacity: 3, focusedColumn: 'center', mobileViewportIndex: 1, layoutRatios: null, columns: { left: { pinned: [] }, center: { pinned: [] }, right: { pinned: [] } } };
         // PointerEvent Drag State
 
         // Custom Overlay State for Launcher Folders
@@ -427,22 +418,17 @@ export class SutramAppShell extends SutramElement {
                     this._dragState.currentX = x;
                     this._dragState.currentY = y;
                     let zoneChanged = false;
-                    // Throttle the heavy DOM piercing to ~20fps (50ms) for drop zone detection
-                    const now = Date.now();
-                    if (!this._lastDropCheck || now - this._lastDropCheck > 50) {
-                        this._lastDropCheck = now;
-                        const dropTarget = getDeepElementFromPoint(x, y, 'yenvui-drop-target');
-                        const newZone = dropTarget ? dropTarget.zone : null;
+
+                    const coordinator = this.shadowRoot.querySelector('sutram-drag-coordinator');
+                    if (coordinator) {
+                        const newZone = typeof coordinator.getHoveredZone === 'function' ? coordinator.getHoveredZone(x, y) : null;
                         if (this._dragState.currentZone !== newZone) {
                             this._dragState.currentZone = newZone;
                             zoneChanged = true;
                         }
-                    }
 
-                    // PERFORMANCE OPTIMIZATION: Bypass the heavy AppShell render cycle (O(N) layout nodes) 
-                    // and write coordinates directly to the isolated DragCoordinator component at 60fps.
-                    const coordinator = this.shadowRoot.querySelector('sutram-drag-coordinator');
-                    if (coordinator) {
+                        // PERFORMANCE OPTIMIZATION: Bypass the heavy AppShell render cycle (O(N) layout nodes) 
+                        // and write coordinates directly to the isolated DragCoordinator component at 60fps.
                         if (zoneChanged) {
                             // Only trigger a full Lit reconciliation if the drop zones actually need to visually shuffle
                             coordinator.dragState = { ...this._dragState };
@@ -501,11 +487,7 @@ export class SutramAppShell extends SutramElement {
                                 layout.pinToColumn(destCol, entity);
                                 layout.setFocusedColumn(destCol);
                                 layout.setActiveProjection(destCol, entity.id);
-
-                                const colIndexes = { 'left': 0, 'center': 1, 'right': 2 };
-                                if (this._spatialState?.capacity === 1) {
-                                    this._setViewportIndex(colIndexes[destCol]);
-                                }
+                                layout.setFocusedColumn(destCol);
                             }
                         }
                     }
@@ -524,6 +506,39 @@ export class SutramAppShell extends SutramElement {
             if (ctrl && typeof ctrl.abort === 'function') ctrl.abort();
         });
     }
+    updated(changedProperties) {
+        super.updated(changedProperties);
+        const track = this.shadowRoot.querySelector('.spatial-track');
+        if (track) {
+            const capacity = this._spatialState?.capacity || 3;
+            const index = this._spatialState?.mobileViewportIndex ?? 1;
+            const layoutRatios = this._spatialState?.layoutRatios || [1, 1, 1];
+            const metrics = getSpatialMetrics(capacity, index, layoutRatios);
+
+            if (!this._isPanningTrack) {
+                track.style.transform = `translateX(${metrics.getTrackOffset()})`;
+            }
+        }
+        // Auto-scroll active sub-tabs into view
+        const activeTabs = this.shadowRoot.querySelectorAll('.sub-tab.active');
+        activeTabs.forEach(tab => {
+            const track = tab.closest('yenvui-scrub-track');
+            if (track && track.shadowRoot) {
+                const container = track.shadowRoot.querySelector('.scrub-container');
+                if (container) {
+                    const tabRect = tab.getBoundingClientRect();
+                    if (tabRect.width > 0) {
+                        const contRect = container.getBoundingClientRect();
+                        container.scrollBy({
+                            left: tabRect.left - contRect.left - contRect.width / 2 + tabRect.width / 2,
+                            behavior: 'smooth'
+                        });
+                    }
+                }
+            }
+        });
+    }
+
     connectedCallback() {
         try {
         super.connectedCallback();
@@ -561,6 +576,7 @@ export class SutramAppShell extends SutramElement {
                     capacity: safeState.capacity || 3,
                     focusedColumn: safeState.focusedColumn || 'center',
                     mobileViewportIndex: safeState.mobileViewportIndex ?? 1,
+                    layoutRatios: safeState.layoutRatios || null,
                     columns: safeState.columns || { left: { pinned: [] }, center: { pinned: [] }, right: { pinned: [] } },
                     windows: safeState.windows || []
                 };
@@ -581,6 +597,11 @@ export class SutramAppShell extends SutramElement {
                         if (maxCapacity === 1 && storeState.focusedColumn) {
                             const colMap = { 'left': 0, 'center': 1, 'right': 2 };
                             storeState.setMobileViewport(colMap[storeState.focusedColumn] || 1);
+                        } else if (maxCapacity === 2 && storeState.focusedColumn) {
+                            const colMap = { 'left': 0, 'center': 1, 'right': 2 };
+                            const targetIdx = colMap[storeState.focusedColumn] || 1;
+                            const newViewport = targetIdx === 0 ? 0 : (targetIdx === 2 ? 2 : (storeState.mobileViewportIndex === 2 ? 2 : 0));
+                            storeState.setMobileViewport(newViewport);
                         }
 
                         // Enforce window visibility bounds on resize
@@ -737,29 +758,13 @@ export class SutramAppShell extends SutramElement {
                     }
 
                     let targetCol = existingColClick;
-
                     if (!existingColClick) {
                         targetCol = child.preferredColumn || 'center';
-                        let visibleCols = ['left', 'center', 'right'];
-                        if (capacity === 1) {
-                            const colMap = ['left', 'center', 'right'];
-                            visibleCols = [colMap[mobileViewportIndex] || focusedColumn || 'center'];
-                        } else if (capacity === 2) {
-                            visibleCols = ['left', 'center'];
-                        }
-
-                        if (!visibleCols.includes(targetCol)) {
-                            targetCol = capacity === 1 ? visibleCols[0] : focusedColumn;
-                        }
                         if (layoutState) layoutState.pinToColumn(targetCol, child);
                     }
                     if (layoutState) {
                         layoutState.setFocusedColumn(targetCol);
                         layoutState.setActiveProjection(targetCol, child.id);
-                        if (capacity === 1) {
-                            const colIndexes = { 'left': 0, 'center': 1, 'right': 2 };
-                            this._setViewportIndex(colIndexes[targetCol]);
-                        }
                     }
                     this._handleSubTabClick(child.id);
                     this._launcherDropdown = null;
@@ -848,11 +853,11 @@ export class SutramAppShell extends SutramElement {
         }
         this._folderDragController.start(e);
     }
-
     _handleDotDragStart(e) {
         if (!this._dotDragController) {
             this._dotDragController = new YenvuiGestureController(this, {
                 onPanStart: () => {
+                    this._isPanningTrack = true;
                     const track = this.shadowRoot.querySelector('.spatial-track');
                     if (track) track.style.transition = 'none'; // Disable CSS snapping animation during active drag
                 },
@@ -860,16 +865,25 @@ export class SutramAppShell extends SutramElement {
                     if (axis === 'horizontal') {
                         const deltaX = x - this._dotDragController.startX;
                         const currentIdx = this._spatialState?.mobileViewportIndex ?? 1;
-                        const track = this.shadowRoot.querySelector('.spatial-track');
+                        const capacity = this._spatialState?.capacity || 3;
+                        const layoutRatios = this._spatialState?.layoutRatios || [1, 1, 1];
+                        const metrics = getSpatialMetrics(capacity, currentIdx, layoutRatios);
+                        const baseOffset = parseFloat(metrics.getTrackOffset());
 
+                        const track = this.shadowRoot.querySelector('.spatial-track');
                         if (track) {
                             let dragOffset = deltaX;
+                            const maxIdx = Math.max(0, layoutRatios.length - capacity);
+                            const minOffsetStr = getSpatialMetrics(capacity, maxIdx, layoutRatios).getTrackOffset();
+                            const minOffset = parseFloat(minOffsetStr);
+                            const maxOffset = 0; // The track never translates positively
+
                             // Apply a heavy rubber-band friction effect if dragging past the absolute edges
-                            if ((currentIdx === 0 && deltaX > 0) || (currentIdx === 2 && deltaX < 0)) {
+                            if ((baseOffset <= minOffset && deltaX < 0) || (baseOffset >= maxOffset && deltaX > 0)) {
                                 dragOffset = deltaX * 0.2; 
                             }
                             // Direct DOM manipulation for buttery 60fps tracking without triggering Lit renders
-                            track.style.transform = `translateX(calc(${currentIdx * -100}vw + ${dragOffset}px))`;
+                            track.style.transform = `translateX(calc(${baseOffset}% + ${dragOffset}px))`;
                         }
                     }
                 },
@@ -883,24 +897,32 @@ export class SutramAppShell extends SutramElement {
                         const deltaX = endX - this._dotDragController.startX;
                         const threshold = window.innerWidth * 0.2;
                         const current = this._spatialState?.mobileViewportIndex ?? 1;
+                        const capacity = this._spatialState?.capacity || 3;
+                        const layoutRatios = this._spatialState?.layoutRatios || [1, 1, 1];
+                        const maxIdx = Math.max(0, layoutRatios.length - capacity);
+
                         let newIdx = current;
 
-                        if (deltaX > threshold) {
-                            newIdx = Math.max(0, current - 1);
-                        } else if (deltaX < -threshold) {
-                            newIdx = Math.min(2, current + 1);
-                        }
+                        if (deltaX > threshold) newIdx = Math.max(0, current - 1);
+                        else if (deltaX < -threshold) newIdx = Math.min(maxIdx, current + 1);
 
                         if (newIdx !== current) {
                             this._setViewportIndex(newIdx);
                         }
+                        this._isPanningTrack = false;
 
-                        // Synchronously apply the exact mathematical transform so the CSS transition handles the snap 
-                        // back from the rubber-band offset, avoiding single-frame visual flashes from Lit's async render queue.
-                        if (track) {
-                            track.style.transform = `translateX(${newIdx * -100}vw)`;
+                        if (newIdx !== current) {
+                            this._setViewportIndex(newIdx);
+                        } else {
+                            const metrics = getSpatialMetrics(capacity, newIdx, layoutRatios);
+                            if (track) {
+                                track.style.transform = `translateX(${metrics.getTrackOffset()})`;
+                            }
+                            this.requestUpdate();
                         }
-                        this.requestUpdate(); // Sync Lit's internal state
+                    } else {
+                        this._isPanningTrack = false;
+                        this.requestUpdate();
                     }
                 }
             });
@@ -966,17 +988,10 @@ export class SutramAppShell extends SutramElement {
             { id: 'center', label: 'Center Focus' },
             { id: 'right', label: 'Right Flank' }
         ];
-        // Viewport translation math for mobile and split-screen states
-        let translateX = 'translateX(0vw)';
-        let gridWidth = '100%'; 
-        if (capacity === 1) {
-            const baseOffset = mobileViewportIndex * -100;
-            translateX = `translateX(${baseOffset}vw)`;
-            gridWidth = '300%';
-        } else if (capacity === 2) {
-            translateX = 'translateX(0vw)';
-            gridWidth = '150%';
-        }
+
+        const layoutRatios = this._spatialState.layoutRatios || [1, 1, 1];
+        const metrics = getSpatialMetrics(capacity, mobileViewportIndex, layoutRatios);
+
         // Apply viewport to the host to ensure child elements correctly execute :host-context CSS rules
         this.dataset.viewport = viewportMode;
 
@@ -985,8 +1000,8 @@ export class SutramAppShell extends SutramElement {
         const finalHtml = html`
             <div class="shell-container spatial-viewport" data-viewport="${viewportMode}">
                 <!-- Persistent Global Launcher Row -->
-                <div class="top-utility-row" style="position: relative; display: flex; justify-content: space-between; width: 100%; background: var(--bg-deep); flex-shrink: 0; height: 38px; border-bottom: 1px solid var(--border); z-index: 50; padding-left: 2px; padding-right: 0; ${viewportMode === 'mobile' ? 'touch-action: pan-y; cursor: grab;' : ''}"
-                    @pointerdown=${(e) => { if (viewportMode === 'mobile') this._handleDotDragStart(e); }}>
+                <div class="top-utility-row" style="position: relative; display: flex; justify-content: space-between; width: 100%; background: var(--bg-deep); flex-shrink: 0; height: 38px; border-bottom: 1px solid var(--border); z-index: 50; padding-left: 2px; padding-right: 0; ${capacity < layoutRatios.length ? 'touch-action: pan-y; cursor: grab;' : ''}"
+                    @pointerdown=${(e) => { if (capacity < layoutRatios.length) this._handleDotDragStart(e); }}>
                     ${viewportMode === 'mobile' ? html`
                         <div class="mobile-only-tools flex items-center" style="display: flex; align-items: center; height: 100%;">
                             <button class="tab-btn ${this._launcherDropdown?.isMobileTools ? 'active' : ''}" style="display: flex; align-items: center;" @click=${(e) => {
@@ -1032,22 +1047,34 @@ export class SutramAppShell extends SutramElement {
                             })}
                         </yenvui-scrub-track>
                     `}
-                    <!-- Mathematically Centered Mobile Dots -->
-                    ${viewportMode === 'mobile' ? html`
+                    <!-- Centered Dots (1-Column Mobile View) -->
+                    ${capacity === 1 && capacity < layoutRatios.length ? html`
                         <div class="mobile-dots-wrapper" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 4px; background: var(--input-bg); border: 1px solid var(--border); padding: 2px 8px; border-radius: 9999px; z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
-                            ${colDefinitions.map((c, i) => html`
-                                <div class="pos-dot-target" @click=${() => this._setViewportIndex(i)} title="Jump to ${c.label}" style="padding: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                            ${Array.from({ length: Math.max(1, layoutRatios.length - capacity + 1) }).map((_, i) => html`
+                                <div class="pos-dot-target" @click=${(e) => { e.stopPropagation(); e.preventDefault(); }} @pointerdown=${(e) => { e.stopPropagation(); this._setViewportIndex(i); }} title="Jump to View ${i+1}" style="padding: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
                                     <div class="pos-dot ${mobileViewportIndex === i ? 'active' : ''}" style="width: ${mobileViewportIndex === i ? '14px' : '6px'}; height: 6px; border-radius: 9999px; background: ${mobileViewportIndex === i ? 'var(--intent-primary)' : 'var(--text-muted)'}; opacity: ${mobileViewportIndex === i ? '1' : '0.5'}; transition: all 0.2s ease;"></div>
                                 </div>
                             `)}
                         </div>
                     ` : ''}
 
-                    <div style="display: flex; align-items: center; height: 100%; flex-shrink: 0; position: relative;">
+                    <!-- Top Right Utility Rail -->
+                    <div style="position: absolute; right: 0; top: 0; bottom: 0; display: flex; align-items: center; gap: 6px; height: 100%; flex-shrink: 0; background: var(--bg-deep); z-index: 105; padding-right: 5px;">
+                        <slot name="header-quickpack"></slot>
+                        <slot name="header-actions-left"></slot>
+                        ${capacity > 1 && capacity < layoutRatios.length ? html`
+                            <div class="desktop-dots-wrapper" style="display: flex; align-items: center; gap: 4px; background: var(--input-bg); border: 1px solid var(--border); padding: 2px 8px; border-radius: 9999px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+                                ${Array.from({ length: Math.max(1, layoutRatios.length - capacity + 1) }).map((_, i) => html`
+                                    <div class="pos-dot-target" @click=${(e) => { e.stopPropagation(); e.preventDefault(); }} @pointerdown=${(e) => { e.stopPropagation(); this._setViewportIndex(i); }} title="Jump to View ${i+1}" style="padding: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                                        <div class="pos-dot ${mobileViewportIndex === i ? 'active' : ''}" style="width: ${mobileViewportIndex === i ? '14px' : '6px'}; height: 6px; border-radius: 9999px; background: ${mobileViewportIndex === i ? 'var(--intent-primary)' : 'var(--text-muted)'}; opacity: ${mobileViewportIndex === i ? '1' : '0.5'}; transition: all 0.2s ease;"></div>
+                                    </div>
+                                `)}
+                            </div>
+                        ` : ''}
                         <slot name="header-actions"></slot>
                     </div>
                 </div>
-                <!-- Global Launcher Dropdown Overlay -->
+                        <!-- Global Launcher Dropdown Overlay -->
                 ${this._launcherDropdown ? html`
                     ${this._launcherDropdown.isMobileTools ? html`
                         <div class="global-launcher-menu mobile-tools-panel" style="position: absolute; top: 38px; left: 0; right: 0; width: 100vw; max-height: calc(100dvh - 38px); overflow-y: auto; background: var(--pane-bg); background: color-mix(in srgb, var(--pane-bg) 95%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); box-shadow: var(--overlay-shadow); z-index: 9999; display: flex; flex-direction: column; padding: 12px 12px 20px 12px; box-sizing: border-box; gap: 18px;">
@@ -1101,28 +1128,12 @@ export class SutramAppShell extends SutramElement {
                                                         }
 
                                                         let targetCol = existingColClick;
-
                                                         if (!existingColClick) {
                                                             targetCol = child.preferredColumn || 'center';
-                                                            let visibleCols = ['left', 'center', 'right'];
-                                                            if (capacity === 1) {
-                                                                const colMap = ['left', 'center', 'right'];
-                                                                visibleCols = [colMap[mobileViewportIndex] || focusedColumn || 'center'];
-                                                            } else if (capacity === 2) {
-                                                                visibleCols = ['left', 'center'];
-                                                            }
-
-                                                            if (!visibleCols.includes(targetCol)) {
-                                                                targetCol = capacity === 1 ? visibleCols[0] : focusedColumn;
-                                                            }
                                                             if (layoutState) layoutState.pinToColumn(targetCol, child);
                                                         }
                                                         if (layoutState) {
                                                             layoutState.setFocusedColumn(targetCol);
-                                                            if (capacity === 1) {
-                                                                const colIndexes = { 'left': 0, 'center': 1, 'right': 2 };
-                                                                this._setViewportIndex(colIndexes[targetCol]);
-                                                            }
                                                         }
                                                         this._handleSubTabClick(child.id);
                                                         this._launcherDropdown = null;
@@ -1146,16 +1157,11 @@ export class SutramAppShell extends SutramElement {
                     `}
                 ` : ''}
                 <!-- Adaptive Spatial Track -->
-                <div class="spatial-track capacity-${capacity}" style="width: ${gridWidth}; transform:${translateX}; position: relative;">
+                <div class="spatial-track capacity-${capacity}" style="${!this._isPanningTrack ? `transform: translateX(${metrics.getTrackOffset()});` : ''}">
                     ${colDefinitions.map((col, idx) => {
                         // Micro-Apps only appear in the spatial grid when explicitly launched/pinned
                         let colSubSlots = [];
                         let sourceCols = [col.id];
-                        // Flank Affinity Memory: In 2-column mode, collapse the right flank into the left flank permanently
-                        if (capacity === 2) {
-                            if (col.id === 'left') sourceCols = ['left', 'right'];
-                            else if (col.id === 'right') sourceCols = []; // Prevent DOM stealing by the hidden column
-                        }
                         // Hydrate the column purely from the LayoutStore's pinned arrays
                         sourceCols.forEach(sourceColId => {
                             const dynamicPins = (this._spatialState.columns && this._spatialState.columns[sourceColId]?.pinned) || [];
@@ -1196,7 +1202,8 @@ export class SutramAppShell extends SutramElement {
                             activeSubInCol = colSubSlots[0];
                         }
                         return html`
-                        <div class="spatial-col ${focusedColumn === col.id && capacity > 1 ? 'is-focused' : ''}" data-col-id="${col.id}" @click=${() => {
+                        <div class="spatial-col ${focusedColumn === col.id && capacity > 1 ? 'is-focused' : ''}" data-col-id="${col.id}" style="--col-width: ${metrics.getColWidth(idx)}; --col-left: ${metrics.getColLeft(idx)};" @click=${(e) => {
+                            if (this._isPanningTrack) { e.preventDefault(); e.stopPropagation(); return; }
                             const activeId = activeSubInCol ? activeSubInCol.id : (colSubSlots[0] ? colSubSlots[0].id : null);
                             const targetFocusCol = activeSubInCol ? (activeSubInCol.actualSourceCol || col.id) : col.id;
                             if (window.Sutram?.stores?.Layout) window.Sutram.stores.Layout.getState().setFocusedColumn(targetFocusCol);
@@ -1298,11 +1305,10 @@ export class SutramAppShell extends SutramElement {
                             const colIdx = colIdxMap[win.anchorCol || 'center'] ?? 1;
                             let safeSpan = Math.min(win.span || 1, 3 - colIdx);
                             safeSpan = Math.min(safeSpan, capacity);
-                            const leftPct = (colIdx / 3) * 100;
-                            const widthPct = (safeSpan / 3) * 100;
+                            const bounds = metrics.getWinBounds(colIdx, safeSpan, layoutRatios);
 
                             return html`
-                            <div style="position: absolute; left: ${leftPct}%; width: ${widthPct}\%; top: 0; bottom: 0; pointer-events: auto; z-index:${win.z || 1000}; transition: left 0.3s cubic-bezier(0.2, 0.9, 0.2, 1), width 0.3s cubic-bezier(0.2, 0.9, 0.2, 1);">
+                            <div style="position: absolute; left: ${bounds.left}; width: ${bounds.width}; top: 0; bottom: 0; pointer-events: auto; z-index:${win.z || 1000}; transition: left 0.3s cubic-bezier(0.2, 0.9, 0.2, 1), width 0.3s cubic-bezier(0.2, 0.9, 0.2, 1);">
                                 <sutram-window
                                     .titleText=${win.label || win.id}
                                     .anchorCol=${win.anchorCol || 'center'}
@@ -1326,11 +1332,7 @@ export class SutramAppShell extends SutramElement {
                                     layout.pinToColumn(destCol, win);
                                     layout.setFocusedColumn(destCol);
                                     layout.setActiveProjection(destCol, win.id);
-
-                                    const colIndexes = { 'left': 0, 'center': 1, 'right': 2 };
-                                    if (this._spatialState?.capacity === 1) {
-                                        this._setViewportIndex(colIndexes[win.preferredColumn || 'center']);
-                                    }
+                                    layout.setFocusedColumn(win.preferredColumn || 'center');
                                     this.requestUpdate();
                                 }
                             }}>

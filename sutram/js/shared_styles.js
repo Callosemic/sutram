@@ -1,8 +1,11 @@
 // sutram/js/shared_styles.js
-// Pure CSS Intent Tokens & Dumb Presentation Primitives
-
+// Architectural Proxy: Wraps yenVUI primitives and injects Sutram-specific structural overrides
 import { css } from 'lit';
+import { sharedStyles as yenvuiSharedStyles } from '../../yenvui/js/shared_styles.js';
+
 export const sharedStyles = css`
+    ${yenvuiSharedStyles}
+
     /* Global Reset for Components */
     * { 
         box-sizing: border-box; 

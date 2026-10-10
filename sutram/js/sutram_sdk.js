@@ -1,8 +1,8 @@
 // sutram/js/sdk.js
 // Pure IoC Micro-Kernel & State Container Factory
 import { LitElement, html } from 'lit';
-import { createStore } from 'https://esm.sh/zustand/vanilla';
-import { devtools, subscribeWithSelector } from 'https://esm.sh/zustand/middleware';
+import { createStore } from 'zustand/vanilla';
+import { devtools, subscribeWithSelector } from 'zustand/middleware';
 export function createSutramStore(name, initialState, persistenceSchema = {}, getScopeId = () => 'default', prefix = 'sutram') {
     const store = createStore(
         devtools(
@@ -105,20 +105,6 @@ export function bindStoreInput(store, statePath, currentValue, options = {}) {
         return html`<sutram-toggle id=${id} style=${style} .label=${label} .checked=${!!currentValue} ?flush=${flush} @sutram-input-changed=${handleInput}></sutram-toggle>`;
     }
     return html`<sutram-input id=${id} type=${type} style=${style} .label=${label} placeholder=${placeholder} min=${min||''} max=${max||''} .value=${currentValue || ''} ?inline=${inline} ?flush=${flush} @sutram-input-changed=${handleInput}></sutram-input>`;
-}
-let globalSutramThemeObserver = null;
-const sutramThemeSubscribers = new Set();
-
-function subscribeSutramToTheme(element) {
-    sutramThemeSubscribers.add(element);
-    element.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
-    if (!globalSutramThemeObserver) {
-        globalSutramThemeObserver = new MutationObserver(() => {
-            const theme = document.body.getAttribute('data-theme') || 'dark';
-            sutramThemeSubscribers.forEach(el => el.setAttribute('data-theme', theme));
-        });
-        globalSutramThemeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
-    }
 }
 export const SutramContextMixin = (SuperClass) => class extends SuperClass {
     constructor() {
@@ -237,9 +223,6 @@ export class SutramElement extends SutramContextMixin(LitElement) {
             proto._isSafeRender = true;
         }
     }
-    observeTheme() {
-        subscribeSutramToTheme(this);
-    }
     updated(changedProperties) {
         super.updated(changedProperties);
     }
@@ -251,10 +234,8 @@ export class SutramElement extends SutramContextMixin(LitElement) {
         };
         this.registerGlobalListener('click', document, listener);
     }
-
     disconnectedCallback() {
         super.disconnectedCallback();
-        sutramThemeSubscribers.delete(this);
     }
 }
 export const ExtensionRegistry = {
@@ -572,7 +553,6 @@ clearSelection: () => SelectionStore.setState({ selectedItems: new Map() })
 export const EnvironmentStore = createSutramStore('Environment', {
     isOffline: false
 });
-
 export const LayoutStore = createSutramStore('Layout', {
     columns: {
         left: { active: null, pinned: [] },
@@ -582,7 +562,9 @@ export const LayoutStore = createSutramStore('Layout', {
     focusedColumn: 'center',
     mobileViewportIndex: 1, // 0 = left, 1 = center, 2 = right
     capacity: 3, // 1, 2, or 3 columns
+    layoutRatios: null, // e.g., [1, 2, 1]
     windows: [],
+    setLayoutRatios: (ratios) => LayoutStore.setState({ layoutRatios: ratios }),
     openWindow: (entity, anchorCol = 'center', span = 1) => LayoutStore.setState((state) => {
         const { capacity, focusedColumn, mobileViewportIndex } = state;
         let visibleCols = ['left', 'center', 'right'];
@@ -678,21 +660,24 @@ export const LayoutStore = createSutramStore('Layout', {
     })),
     setFocusedColumn: (col) => {
         LayoutStore.setState(state => {
-            // Guard: Prevent navigating into empty spatial columns
-            if (state.columns[col] && (!state.columns[col].pinned || state.columns[col].pinned.length === 0)) {
-                return {};
-            }
+            if (state.columns[col] && (!state.columns[col].pinned || state.columns[col].pinned.length === 0)) return {};
 
             const colMap = { 'left': 0, 'center': 1, 'right': 2 };
             const targetIdx = colMap[col] !== undefined ? colMap[col] : 1;
+            const layout = state.layoutRatios || [1, 1, 1];
+            const maxIdx = Math.max(0, layout.length - state.capacity);
+
             let newViewport = state.mobileViewportIndex;
-            if (state.capacity === 1) {
+            if (targetIdx < newViewport) {
                 newViewport = targetIdx;
-            } else if (state.capacity === 2) {
-                newViewport = 1;
+            } else if (targetIdx >= newViewport + state.capacity) {
+                newViewport = targetIdx - state.capacity + 1;
             }
 
-            return { focusedColumn: col, mobileViewportIndex: newViewport };
+            return { 
+                focusedColumn: col, 
+                mobileViewportIndex: Math.max(0, Math.min(newViewport, maxIdx)) 
+            };
         });
         LayoutStore.getState().enforceWindowBounds();
     },
@@ -711,6 +696,6 @@ export const LayoutStore = createSutramStore('Layout', {
         }
     }
 }, {
-    sessionSync: ['columns', 'capacity', 'mobileViewportIndex', 'windows'],
-    localSync: ['columns']
+    sessionSync: ['columns', 'capacity', 'mobileViewportIndex', 'windows', 'layoutRatios'],
+    localSync: ['columns', 'layoutRatios']
 });

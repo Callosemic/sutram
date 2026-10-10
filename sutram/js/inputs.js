@@ -6,41 +6,6 @@ window.addEventListener('error', e => {
         e.stopImmediatePropagation();
     }
 });
-const inputStyles = css`
-    :host { display: block; margin-bottom: 15px; font-family: var(--font-family, inherit); }
-    :host([flush]) { margin-bottom: 0 !important; }
-    .wrapper { display: flex; flex-direction: column; gap: 6px; }
-
-    :host([inline]) .wrapper { flex-direction: row; align-items: center; gap: 15px; }
-    :host([inline]) sutram-label { flex-shrink: 0; margin: 0; white-space: nowrap; }
-    :host([inline]) .input-base { flex: 1; min-width: 0; }
-    
-    .input-base {
-        padding: 8px 12px;
-        font-size: 0.95rem;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        background: var(--bg-input, var(--bg));
-        color: var(--text);
-        transition: border-color 0.2s, box-shadow 0.2s;
-        font-family: inherit;
-        box-sizing: border-box;
-        width: 100%;
-    }
-    
-    .input-base:focus {
-        outline: none;
-        border-color: var(--intent-primary);
-        box-shadow: 0 0 0 2px rgba(var(--intent-primary-rgb, 0, 123, 255), 0.2);
-    }
-    
-    .input-base:disabled {
-        background: var(--bg-hover);
-        cursor: not-allowed;
-        opacity: 0.7;
-    }
-`;
-
 // 1. Text / Password / Number Input
 export class SutramInput extends LitElement {
     static properties = {
@@ -49,9 +14,11 @@ export class SutramInput extends LitElement {
         placeholder: { type: String },
         type: { type: String },
         disabled: { type: Boolean },
-        inline: { type: Boolean, reflect: true }
+        inline: { type: Boolean, reflect: true },
+        flush: { type: Boolean, reflect: true }
     };
-    static styles = [inputStyles];
+
+    createRenderRoot() { return this; }
 
     constructor() {
         super();
@@ -60,6 +27,7 @@ export class SutramInput extends LitElement {
         this.placeholder = '';
         this.disabled = false;
         this.inline = false;
+        this.flush = false;
     }
 
     _onInput(e) {
@@ -69,13 +37,14 @@ export class SutramInput extends LitElement {
         }));
     }
     render() {
+        const wrapClass = `yv-form-wrapper ${this.flush ? 'yv-form-wrapper--flush' : ''} ${this.inline ? 'yv-form-wrapper--inline' : ''}`;
         return html`
-            <div class="wrapper">
+            <div class="${wrapClass}">
                 ${this.label ? html`<sutram-label .text=${this.label}></sutram-label>` : ''}
                 <input 
-                    class="input-base"
+                    class="yv-input"
                     type=${this.type}
-                    .value=${this.value}
+                    .value=${this.value || ''}
                     placeholder=${this.placeholder}
                     ?disabled=${this.disabled}
                     @input=${this._onInput}
@@ -93,11 +62,11 @@ export class SutramSelect extends LitElement {
         value: { type: String },
         options: { type: Array },
         disabled: { type: Boolean },
-        inline: { type: Boolean, reflect: true }
+        inline: { type: Boolean, reflect: true },
+        flush: { type: Boolean, reflect: true }
     };
-    static styles = [inputStyles, css`
-        select.input-base { cursor: pointer; appearance: auto; }
-    `];
+
+    createRenderRoot() { return this; }
 
     constructor() {
         super();
@@ -105,6 +74,7 @@ export class SutramSelect extends LitElement {
         this.options = [];
         this.disabled = false;
         this.inline = false;
+        this.flush = false;
     }
 
     _onChange(e) {
@@ -114,10 +84,11 @@ export class SutramSelect extends LitElement {
         }));
     }
     render() {
+        const wrapClass = `yv-form-wrapper ${this.flush ? 'yv-form-wrapper--flush' : ''} ${this.inline ? 'yv-form-wrapper--inline' : ''}`;
         return html`
-            <div class="wrapper">
+            <div class="${wrapClass}">
                 ${this.label ? html`<sutram-label .text=${this.label}></sutram-label>` : ''}
-                <select class="input-base" .value=${this.value} ?disabled=${this.disabled} @change=${this._onChange}>
+                <select class="yv-select" .value=${this.value || ''} ?disabled=${this.disabled} @change=${this._onChange}>
                     ${this.options.map(opt => html`<option value=${opt.value} ?selected=${this.value === opt.value}>${opt.label || opt.value}</option>`)}
                 </select>
             </div>
@@ -125,6 +96,7 @@ export class SutramSelect extends LitElement {
     }
 }
 customElements.define('sutram-select', SutramSelect);
+
 // 3. Textarea
 export class SutramTextarea extends LitElement {
     static properties = {
@@ -139,29 +111,12 @@ export class SutramTextarea extends LitElement {
         autoSize: { type: Boolean },
         maxHeight: { type: Number },
         minRows: { type: Number },
-        borderless: { type: Boolean, reflect: true }
+        borderless: { type: Boolean, reflect: true },
+        flush: { type: Boolean, reflect: true }
     };
-    static styles = [inputStyles, css`
-        textarea { resize: vertical; min-height: 80px; }
-        .monospace { font-family: var(--font-monospace, monospace); font-size: 0.9rem; }
 
-        /* Align textarea labels to the top if inline */
-        :host([inline]) .wrapper { align-items: flex-start; }
-        :host([inline]) label { padding-top: 8px; }
-        :host([borderless]) {
-            margin-bottom: 0 !important;
-        }
-        :host([borderless]) textarea, textarea.borderless {
-            border: none !important;
-            outline: none !important;
-            box-shadow: none !important;
-            background: transparent !important;
-            resize: none !important;
-            overflow: hidden !important;
-            padding: 0 !important;
-            min-height: 0 !important;
-        }
-    `];
+    createRenderRoot() { return this; }
+
     constructor() {
         super();
         this.value = '';
@@ -175,6 +130,7 @@ export class SutramTextarea extends LitElement {
         this.maxHeight = 500;
         this.minRows = 1;
         this.borderless = false;
+        this.flush = false;
     }
 
     connectedCallback() {
@@ -208,12 +164,10 @@ export class SutramTextarea extends LitElement {
     _adjustHeight() {
         if (this.autoSize === false) return;
 
-        // Decouple from the synchronous render cycle
         window.requestAnimationFrame(() => {
-            const textarea = this.shadowRoot.querySelector('textarea');
+            const textarea = this.querySelector('textarea');
             if (!textarea) return;
 
-            // Guardrail: if scrollHeight is 0, the element is likely hidden (e.g., inert dialog)
             if (textarea.scrollHeight === 0) return;
 
             const currentHeight = textarea.style.height;
@@ -236,13 +190,16 @@ export class SutramTextarea extends LitElement {
         }));
     }
     render() {
+        const wrapClass = `yv-form-wrapper ${this.flush ? 'yv-form-wrapper--flush' : ''} ${this.inline ? 'yv-form-wrapper--inline' : ''}`;
+        const monoClass = this.monospace ? 'yv-textarea--monospace' : '';
+        const borderlessClass = this.borderless ? 'yv-textarea--borderless' : '';
         return html`
-            <div class="wrapper">
+            <div class="${wrapClass}">
                 ${this.label ? html`<sutram-label .text=${this.label}></sutram-label>` : ''}
                 <textarea 
-                    class="input-base ${this.monospace ? 'monospace' : ''}"
+                    class="yv-textarea ${monoClass} ${borderlessClass}"
                     rows=${this.rows}
-                    .value=${this.value}
+                    .value=${this.value || ''}
                     placeholder=${this.placeholder}
                     ?disabled=${this.disabled}
                     ?readonly=${this.readOnly}
@@ -259,35 +216,17 @@ export class SutramToggle extends LitElement {
     static properties = {
         label: { type: String },
         checked: { type: Boolean },
-        disabled: { type: Boolean }
+        disabled: { type: Boolean },
+        flush: { type: Boolean, reflect: true }
     };
-    static styles = [inputStyles, css`
-        .toggle-wrapper { display: flex; align-items: center; gap: 10px; cursor: pointer; margin-top: 4px; }
-        .toggle-wrapper.disabled { cursor: not-allowed; opacity: 0.6; }
-        .track {
-            width: 36px; height: 20px;
-            background: var(--border);
-            border-radius: 20px;
-            position: relative;
-            transition: background 0.2s;
-        }
-        .track.checked { background: var(--intent-primary); }
-        .thumb {
-            width: 16px; height: 16px;
-            background: #fff;
-            border-radius: 50%;
-            position: absolute;
-            top: 2px; left: 2px;
-            transition: transform 0.2s;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-        }
-        .track.checked .thumb { transform: translateX(16px); }
-        input[type="checkbox"] { display: none; }
-    `];
+
+    createRenderRoot() { return this; }
+
     constructor() {
         super();
         this.checked = false;
         this.disabled = false;
+        this.flush = false;
     }
 
     _onToggle(e) {
@@ -300,14 +239,15 @@ export class SutramToggle extends LitElement {
     }
 
     render() {
+        const wrapClass = `yv-form-wrapper ${this.flush ? 'yv-form-wrapper--flush' : ''}`;
         return html`
-            <div class="wrapper">
-                <label class="toggle-wrapper ${this.disabled ? 'disabled' : ''}" @click=${this._onToggle}>
-                    <div class="track ${this.checked ? 'checked' : ''}">
-                        <div class="thumb"></div>
+            <div class="${wrapClass}">
+                <label class="yv-toggle-wrapper ${this.disabled ? 'disabled' : ''}" @click=${this._onToggle}>
+                    <div class="yv-toggle-track ${this.checked ? 'checked' : ''}">
+                        <div class="yv-toggle-thumb"></div>
                     </div>
                     ${this.label ? html`<span style="font-size: 0.9rem; font-weight: 500; color: var(--text);">${this.label}</span>` : ''}
-                    <input type="checkbox" .checked=${this.checked} ?disabled=${this.disabled}>
+                    <input type="checkbox" style="display:none;" .checked=${this.checked} ?disabled=${this.disabled}>
                 </label>
             </div>
         `;
