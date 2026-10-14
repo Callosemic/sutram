@@ -254,19 +254,13 @@ export class SutramDragCoordinator extends SutramElement {
             <yenvui-drop-overlay class="hud-overlay" ?active=${true}>
                 <!-- Localized Bounding Box HUD Container -->
                 <div class="hud-hud-card" style="left: ${rect.left}px; top:${rect.top}px; width: ${rect.width}px; height:${rect.height}px;">
-
                     <div style="width: 100%; max-width: 500px;">
-                        <!-- Header -->
-                        <div style="display: flex; flex-direction: column; margin-bottom: 20px;">
-                            <div class="hud-header-subtitle">
-                                <yv-icon name="split" style="width: 14px; height: 14px;"></yv-icon> REPOSITION OR DOCK
-                            </div>
-                            <div class="hud-header-title">
-                                ${entity?.label || entity?.id || 'Projection'}
-                            </div>
-                        </div>
-
+                        <!-- Top Close Action -->
+                        <yenvui-drop-target zone="close" class="drop-target-btn intent-danger" .intent=${'danger'} ?hovered=${currentZone === 'close'} style="margin-bottom: 14px;">
+                            <yv-icon name="x" style="width: 18px; height: 18px;"></yv-icon> Close
+                        </yenvui-drop-target>
                     <!-- TAB POSITION Section -->
+                    ${!entity?.windowOnly ? html`
                     <div class="section-box tab-pos">
                         <div class="section-header tab-pos">
                             <span style="display: flex; align-items: center; gap: 6px;">
@@ -286,9 +280,10 @@ export class SutramDragCoordinator extends SutramElement {
                             </yenvui-drop-target>
                         </div>
                     </div>
+                    ` : ''}
 
                     <!-- ARRANGE TABS Section -->
-                    ${sourceCol && sourceCol !== 'window' && this.spatialState?.columns?.[sourceCol]?.pinned?.length > 1 ? html`
+                    ${!entity?.windowOnly && sourceCol && sourceCol !== 'window' && this.spatialState?.columns?.[sourceCol]?.pinned?.length > 1 ? html`
                         <div class="section-box arrange-tabs">
                             <div class="section-header arrange-tabs">
                                 <span style="display: flex; align-items: center; gap: 6px;">
@@ -371,10 +366,15 @@ export class SutramDragCoordinator extends SutramElement {
                             ` : ''}
                         </div>
                     </div>
-                    <!-- Bottom Close Action -->
-                    <yenvui-drop-target zone="close" class="drop-target-btn intent-danger" .intent=${'danger'} ?hovered=${currentZone === 'close'}>
-                        <yv-icon name="x" style="width: 18px; height: 18px;"></yv-icon> Close
-                    </yenvui-drop-target>
+                    <!-- Footer Projection Title -->
+                    <div style="display: flex; flex-direction: column; align-items: center; text-align: center; margin-top: 6px;">
+                        <div class="hud-header-subtitle" style="justify-content: center;">
+                            <yv-icon name="split" style="width: 14px; height: 14px;"></yv-icon> REPOSITION OR DOCK
+                        </div>
+                        <div class="hud-header-title">
+                            ${entity?.label || entity?.id || 'Projection'}
+                        </div>
+                    </div>
 
                 </div>
                 <!-- Floating Cursor Node (Hardware Accelerated) -->

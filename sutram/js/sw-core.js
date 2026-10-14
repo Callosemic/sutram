@@ -1,7 +1,6 @@
 // sutram/js/sw-core.js
 // Phase 2: Abstracted Service Worker Core
-
-const CACHE_NAME = 'sutram-offline-v2';
+const CACHE_NAME = self.OS_CACHE_VERSION ? `sutram-offline-${self.OS_CACHE_VERSION}` : 'sutram-offline-v2';
 // Let the host supply ASSETS via global if needed, or default
 const ASSETS = self.HOST_ASSETS || [
     '/',

@@ -3,6 +3,7 @@
 import { LitElement, html } from 'lit';
 import { createStore } from 'zustand/vanilla';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
+import { getEventPath, getEventTarget } from '../../yenvui/js/physics.js';
 export function createSutramStore(name, initialState, persistenceSchema = {}, getScopeId = () => 'default', prefix = 'sutram') {
     const store = createStore(
         devtools(
@@ -58,7 +59,6 @@ export function createSutramStore(name, initialState, persistenceSchema = {}, ge
 
             if (Object.keys(hydrated).length > 0) store.setState(hydrated);
         };
-
         store.hydrateStore = hydrate;
         setTimeout(() => hydrate(getScopeId()), 0);
 
@@ -77,6 +77,20 @@ export function createSutramStore(name, initialState, persistenceSchema = {}, ge
                     sessionStorage.setItem(`${prefix}_session_${scope}_${name}_${k}`, JSON.stringify(valToSave));
                 }
             });
+        });
+    }
+
+    if (typeof window !== 'undefined' && schema.onEvict) {
+        window.addEventListener('sutram-evict-projection', (e) => {
+            const id = e.detail?.id;
+            if (id && schema.onEvict[id]) {
+                const patch = typeof schema.onEvict[id] === 'function' 
+                    ? schema.onEvict[id](store.getState()) 
+                    : schema.onEvict[id];
+                if (patch && typeof patch === 'object') {
+                    store.setState(patch);
+                }
+            }
         });
     }
 
@@ -111,7 +125,16 @@ export const SutramContextMixin = (SuperClass) => class extends SuperClass {
         super();
         this._storeUnsubs = [];
         this._managedIntervals = [];
-        this._managedListeners = [];
+        this._sutramManagedListeners = [];
+    }
+
+    connectedCallback() {
+        if (super.connectedCallback) super.connectedCallback();
+        if (typeof this.onProjectionEvicted === 'function') {
+            this.registerGlobalListener('sutram-evict-projection', window, (e) => {
+                this.onProjectionEvicted(e.detail?.id);
+            });
+        }
     }
 
     subscribe(storeOrName, selectorOrListener, listener = undefined) {
@@ -129,6 +152,9 @@ export const SutramContextMixin = (SuperClass) => class extends SuperClass {
                     if (lateStore) {
                         clearInterval(checkInterval);
                         activeUnsub = listener ? lateStore.subscribe(selectorOrListener, listener) : lateStore.subscribe(selectorOrListener);
+                        if (!listener && typeof selectorOrListener === 'function' && typeof lateStore.getState === 'function') {
+                            try { selectorOrListener(lateStore.getState()); } catch (e) {}
+                        }
                     }
                 }, 20);
 
@@ -147,6 +173,9 @@ export const SutramContextMixin = (SuperClass) => class extends SuperClass {
             return () => {};
         }
         const unsub = listener ? store.subscribe(selectorOrListener, listener) : store.subscribe(selectorOrListener);
+        if (!listener && typeof selectorOrListener === 'function' && typeof store.getState === 'function') {
+            try { selectorOrListener(store.getState()); } catch (e) {}
+        }
         this._storeUnsubs.push(unsub);
         return unsub;
     }
@@ -156,10 +185,9 @@ export const SutramContextMixin = (SuperClass) => class extends SuperClass {
         this._managedIntervals.push(id);
         return id;
     }
-
     registerGlobalListener(eventType, targetNode, callback, options = false) {
         targetNode.addEventListener(eventType, callback, options);
-        this._managedListeners.push({ eventType, targetNode, callback, options });
+        this._sutramManagedListeners.push({ eventType, targetNode, callback, options });
     }
 
     dispatch(eventName, detail = null) {
@@ -179,10 +207,12 @@ export const SutramContextMixin = (SuperClass) => class extends SuperClass {
         this._managedIntervals.forEach(id => clearInterval(id));
         this._managedIntervals = [];
 
-        this._managedListeners.forEach(({ eventType, targetNode, callback, options }) => {
-            targetNode.removeEventListener(eventType, callback, options);
+        this._sutramManagedListeners.forEach(({ eventType, targetNode, callback, options }) => {
+            if (targetNode && typeof targetNode.removeEventListener === 'function') {
+                targetNode.removeEventListener(eventType, callback, options);
+            }
         });
-        this._managedListeners = [];
+        this._sutramManagedListeners = [];
     }
 };
 
@@ -216,8 +246,8 @@ export class SutramElement extends SutramContextMixin(LitElement) {
                 try {
                     return origRender.apply(this, args);
                 } catch (e) {
-                    console.error(`⚠️ [Component Render Boundary] <${this.tagName ? this.tagName.toLowerCase() : 'element'}> failed in render:`, e);
-                    return html`<div style="padding: 10px; color: var(--intent-danger); background: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; font-family: var(--font-mono); font-size: 0.8rem;">⚠️ Element &lt;${this.tagName ? this.tagName.toLowerCase() : 'element'}&gt; render error: ${e.message}</div>`;
+                    console.error(`[Component Render Boundary] <${this.tagName ? this.tagName.toLowerCase() : 'element'}> failed in render:`, e);
+                    return html`<div style="padding: 10px; color: var(--intent-danger); background: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; font-family: var(--font-mono); font-size: 0.8rem; display: flex; align-items: center; gap: 6px;"><yv-icon name="alert-triangle" style="width: 14px; height: 14px; flex-shrink: 0;"></yv-icon><span>Element &lt;${this.tagName ? this.tagName.toLowerCase() : 'element'}&gt; render error: ${e.message}</span></div>`;
                 }
             };
             proto._isSafeRender = true;
@@ -228,11 +258,19 @@ export class SutramElement extends SutramContextMixin(LitElement) {
     }
     registerOutsideClick(callback) {
         const listener = (e) => {
-            if (!e.composedPath().includes(this)) {
+            if (!getEventPath(e).includes(this)) {
                 callback(e);
             }
         };
         this.registerGlobalListener('click', document, listener);
+    }
+
+    getEventPath(e) {
+        return getEventPath(e);
+    }
+
+    getEventTarget(e, selector = null) {
+        return getEventTarget(e, selector);
     }
     disconnectedCallback() {
         super.disconnectedCallback();
@@ -555,10 +593,11 @@ export const EnvironmentStore = createSutramStore('Environment', {
 });
 export const LayoutStore = createSutramStore('Layout', {
     columns: {
-        left: { active: null, pinned: [] },
-        center: { active: null, pinned: [] },
-        right: { active: null, pinned: [] }
+        left: { active: null, pinned: [], history: [] },
+        center: { active: null, pinned: [], history: [] },
+        right: { active: null, pinned: [], history: [] }
     },
+    focusHistory: [], // Global MRU stack of { col, id }
     focusedColumn: 'center',
     mobileViewportIndex: 1, // 0 = left, 1 = center, 2 = right
     capacity: 3, // 1, 2, or 3 columns
@@ -583,15 +622,29 @@ export const LayoutStore = createSutramStore('Layout', {
         if (capacity === 2 && safeSpan === 2 && safeAnchor === 'right') {
             safeAnchor = 'left';
         }
-
+        const existing = state.windows.find(w => w.id === entity.id);
         return {
-            windows: [...state.windows.filter(w => w.id !== entity.id), { ...entity, anchorCol: safeAnchor, span: safeSpan, z: Date.now() }]
+            windows: [
+                ...state.windows.filter(w => w.id !== entity.id),
+                { ...(existing || {}), ...entity, anchorCol: existing ? existing.anchorCol : safeAnchor, span: existing ? existing.span : safeSpan, z: Date.now() }
+            ]
         };
     }),
     closeWindow: (id) => {
-        LayoutStore.setState((state) => ({
-            windows: state.windows.filter(w => w.id !== id)
-        }));
+        LayoutStore.setState((state) => {
+            const nextWindows = state.windows.filter(w => w.id !== id);
+            const nextGlobalHistory = (state.focusHistory || []).filter(h => h.id !== id);
+            return {
+                windows: nextWindows,
+                focusHistory: nextGlobalHistory
+            };
+        });
+        const st = LayoutStore.getState();
+        const lastFocus = (st.focusHistory || [])[st.focusHistory.length - 1];
+        if (lastFocus && st.columns[lastFocus.col]?.pinned?.some(p => p.id === lastFocus.id)) {
+            st.setActiveProjection(lastFocus.col, lastFocus.id);
+            st.setFocusedColumn(lastFocus.col);
+        }
         LayoutStore.getState().evictProjection(id);
     },
     updateWindowConstraints: (id, anchorCol, span) => LayoutStore.setState((state) => ({
@@ -636,28 +689,67 @@ export const LayoutStore = createSutramStore('Layout', {
             [column]: { ...state.columns[column], pinned: [...state.columns[column].pinned, entity] } 
         }
     })),
-    unpinFromColumn: (column, entityId) => LayoutStore.setState((state) => {
-        const newPinned = state.columns[column].pinned.filter(e => e.id !== entityId);
-        const newActive = state.columns[column].active === entityId 
-            ? (newPinned.length > 0 ? newPinned[newPinned.length - 1].id : null) 
-            : state.columns[column].active;
-        return {
-            columns: { 
-                ...state.columns, 
-                [column]: { 
-                    ...state.columns[column], 
-                    pinned: newPinned,
-                    active: newActive
-                } 
+    unpinFromColumn: (column, entityId) => {
+        let targetReturnCol = column;
+        LayoutStore.setState((state) => {
+            const colState = state.columns[column] || { pinned: [], history: [], active: null };
+            const newPinned = (colState.pinned || []).filter(e => e.id !== entityId);
+            const newColHistory = (colState.history || []).filter(id => id !== entityId && newPinned.some(p => p.id === id));
+            const newGlobalHistory = (state.focusHistory || []).filter(h => !(h.col === column && h.id === entityId));
+
+            let newActive = colState.active;
+            if (colState.active === entityId) {
+                newActive = newColHistory.length > 0
+                    ? newColHistory[newColHistory.length - 1]
+                    : (newPinned.length > 0 ? newPinned[newPinned.length - 1].id : null);
             }
+
+            const nextColumns = {
+                ...state.columns,
+                [column]: {
+                    ...colState,
+                    pinned: newPinned,
+                    history: newColHistory,
+                    active: newActive
+                }
+            };
+
+            // Determine if global focus should return to a prior projection (in this column or another column)
+            const lastGlobal = newGlobalHistory.length > 0 ? newGlobalHistory[newGlobalHistory.length - 1] : null;
+            if (lastGlobal && nextColumns[lastGlobal.col]?.pinned?.some(p => p.id === lastGlobal.id)) {
+                targetReturnCol = lastGlobal.col;
+                nextColumns[lastGlobal.col] = {
+                    ...nextColumns[lastGlobal.col],
+                    active: lastGlobal.id
+                };
+            } else if (!newActive) {
+                const fallbackCol = ['center', 'left', 'right'].find(c => nextColumns[c]?.pinned?.length > 0);
+                if (fallbackCol) targetReturnCol = fallbackCol;
+            }
+
+            return {
+                columns: nextColumns,
+                focusHistory: newGlobalHistory
+            };
+        });
+        if (targetReturnCol) {
+            LayoutStore.getState().setFocusedColumn(targetReturnCol);
+        }
+    },
+    setActiveProjection: (col, id) => LayoutStore.setState((state) => {
+        const colState = state.columns[col] || { pinned: [], history: [], active: null };
+        const nextColHistory = [...(colState.history || []).filter(x => x !== id), id].slice(-30);
+        const nextGlobalHistory = id
+            ? [...(state.focusHistory || []).filter(h => !(h.col === col && h.id === id)), { col, id }].slice(-50)
+            : (state.focusHistory || []);
+        return {
+            columns: {
+                ...state.columns,
+                [col]: { ...colState, active: id, history: nextColHistory }
+            },
+            focusHistory: nextGlobalHistory
         };
     }),
-    setActiveProjection: (col, id) => LayoutStore.setState((state) => ({
-        columns: {
-            ...state.columns,
-            [col]: { ...state.columns[col], active: id }
-        }
-    })),
     setFocusedColumn: (col) => {
         LayoutStore.setState(state => {
             if (state.columns[col] && (!state.columns[col].pinned || state.columns[col].pinned.length === 0)) return {};
@@ -674,9 +766,15 @@ export const LayoutStore = createSutramStore('Layout', {
                 newViewport = targetIdx - state.capacity + 1;
             }
 
+            const activeId = state.columns[col]?.active;
+            const nextGlobalHistory = activeId
+                ? [...(state.focusHistory || []).filter(h => !(h.col === col && h.id === activeId)), { col, id: activeId }].slice(-50)
+                : (state.focusHistory || []);
+
             return { 
                 focusedColumn: col, 
-                mobileViewportIndex: Math.max(0, Math.min(newViewport, maxIdx)) 
+                mobileViewportIndex: Math.max(0, Math.min(newViewport, maxIdx)),
+                focusHistory: nextGlobalHistory
             };
         });
         LayoutStore.getState().enforceWindowBounds();
@@ -690,12 +788,15 @@ export const LayoutStore = createSutramStore('Layout', {
         LayoutStore.getState().enforceWindowBounds();
     },
     evictProjection: (id) => {
-        // Dispatch a global intent so the shell and domain stores can perform surgical garbage collection
+        // Defer eviction broadcast to the microtask queue so synchronous callers of closeWindow()
+        // finish reading component/store state before teardown listeners reset store fields.
         if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('sutram-evict-projection', { detail: { id }, bubbles: true, composed: true }));
+            queueMicrotask(() => {
+                window.dispatchEvent(new CustomEvent('sutram-evict-projection', { detail: { id }, bubbles: true, composed: true }));
+            });
         }
     }
 }, {
-    sessionSync: ['columns', 'capacity', 'mobileViewportIndex', 'windows', 'layoutRatios'],
-    localSync: ['columns', 'layoutRatios']
+    sessionSync: ['columns', 'focusHistory', 'capacity', 'mobileViewportIndex', 'windows', 'layoutRatios'],
+    localSync: ['columns', 'focusHistory', 'layoutRatios']
 });

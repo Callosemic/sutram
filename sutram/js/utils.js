@@ -1,6 +1,21 @@
 // sutram/js/utils.js
 // Pure mathematical and string manipulation algorithms
 
+export function cleanCodeArtifacts(text) {
+    if (!text || typeof text !== 'string') return '';
+    let result = text;
+    result = result.replace(/\{\{\s*(.)\s*\*\s*(\d+)\s*\}\}/g, (_, char, count) => char.repeat(parseInt(count, 10)));
+    result = result.replace(/\{\{\s*triple(.)\s*\}\}/g, (_, char) => char.repeat(3));
+    result = result.replace(/_(?:[^_\n]_){3,}/g, (match) => match.replace(/_/g, ''));
+    result = result.replace(/\x5b\x73\x6f\x75\x72\x63\x65:\s*\d+\x5d/gi, '');
+    result = result.replace(/\x5b\x63\x69\x74\x65:\s*[\d\s,]+\x5d/gi, '');
+    result = result.replace(/\x5b\x63\x69\x74\x65_start\x5d/gi, '');
+    result = result.replace(/\x5b\x63\x69\x74\x65_end\x5d/gi, '');
+    result = result.replace(/\x5b\x63\x69\x74\x65\x5d/gi, '');
+    result = result.replace(/<\/?(?:span|cite)[^>]*>/gi, '');
+    return result;
+}
+
 export function normalizeAccentText(str) {
     if (!str) return '';
     return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -236,10 +251,65 @@ export function timeAgo(timestamp) {
     if (diff < 86400) return `${Math.floor(diff/3600)} hour${Math.floor(diff/3600) !== 1 ? 's' : ''} ago`;
     return `${Math.floor(diff/86400)} day${Math.floor(diff/86400) !== 1 ? 's' : ''} ago`;
 }
-
 export function formatDate(timestamp) {
     if (!timestamp) return 'Unknown Date';
     const date = new Date(timestamp);
     if (isNaN(date.getTime())) return 'Unknown Date';
     return date.toLocaleString();
 }
+
+export function resolveSutramAsset(relativePath, fallbackMetaUrl = import.meta.url) {
+    const base = (typeof window !== 'undefined' && window.SUTRAM_PUBLIC_PATH)
+        ? new URL(window.SUTRAM_PUBLIC_PATH, window.location.origin).href
+        : fallbackMetaUrl;
+    return new URL(relativePath, base).href;
+}
+
+class SutramWorkerBroker {
+    constructor() {
+        this._worker = null;
+        this._reqId = 0;
+        this._pending = new Map();
+    }
+
+    _getWorker() {
+        if (!this._worker) {
+            const workerUrl = resolveSutramAsset('./workers/search-worker.js');
+            this._worker = new Worker(workerUrl, { type: 'module' });
+            this._worker.onmessage = (e) => {
+                const { requestId, ...payload } = e.data || {};
+                const resolve = this._pending.get(requestId);
+                if (resolve) {
+                    this._pending.delete(requestId);
+                    resolve(payload);
+                }
+            };
+            this._worker.onerror = (err) => {
+                console.warn('[SutramWorker] Background worker error, falling back to main thread:', err);
+            };
+        }
+        return this._worker;
+    }
+
+    dispatch(type, payload = {}) {
+        return new Promise((resolve) => {
+            try {
+                const worker = this._getWorker();
+                const requestId = ++this._reqId;
+                this._pending.set(requestId, resolve);
+                worker.postMessage({ type, requestId, ...payload });
+            } catch (err) {
+                if (type === 'BUILD_TREE') {
+                    resolve({ tree: buildFileTree(payload.items || []) });
+                } else if (type === 'FUZZY_SEARCH') {
+                    const getSearchString = (item) => typeof item === 'string' ? item : (item.label || String(item));
+                    resolve({ results: fuzzyFilterObjects(payload.items || [], payload.query || '', getSearchString) });
+                } else {
+                    resolve({});
+                }
+            }
+        });
+    }
+}
+
+export const SutramWorker = new SutramWorkerBroker();

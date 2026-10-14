@@ -11,42 +11,6 @@
             console.warn(`[Sutram] Soft-skipping duplicate registration for <${name}>`);
             return;
         }
-
-        if (constructor && constructor.prototype) {
-            // Intercept connectedCallback before customElements.define captures the prototype
-            if (constructor.prototype.connectedCallback && !constructor.prototype._isSafeConnected) {
-                const origConnected = constructor.prototype.connectedCallback;
-                constructor.prototype.connectedCallback = function(...args) {
-                    try {
-                        origConnected.apply(this, args);
-                    } catch (e) {
-                        console.error(`⚠️ [Isolated Component Error] <${name}> failed in connectedCallback:`, e);
-                        const toastStore = window.Sutram?.stores?.Toast;
-                        if (toastStore && typeof toastStore.getState === 'function') {
-                            toastStore.getState().addToast(
-                                `Extension <${name}> error: ${e.message}`,
-                                'danger'
-                            );
-                        }
-                    }
-                };
-                constructor.prototype._isSafeConnected = true;
-            }
-            // Intercept render before customElements.define captures the prototype
-            if (constructor.prototype.render && !constructor.prototype._isSafeRender) {
-                const origRender = constructor.prototype.render;
-                constructor.prototype.render = function(...args) {
-                    try {
-                        return origRender.apply(this, args);
-                    } catch (e) {
-                        console.error(`⚠️ [Isolated Component Error] <${name}> failed in render:`, e);
-                        return `⚠️ Element <${name}> render error: ${e.message}`;
-                    }
-                };
-                constructor.prototype._isSafeRender = true;
-            }
-        }
-
         return originalDefine(name, constructor, options);
     };
     // =========================================================================

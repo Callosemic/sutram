@@ -25,7 +25,7 @@ import { YenvuiLabel } from '../../yenvui/js/label.js';
 import { YenvuiDropdown } from '../../yenvui/js/dropdown.js';
 import { YenvuiScrubTrack } from '../../yenvui/js/yenvui-base.js';
 import { sharedStyles } from './shared_styles.js';
-import { buildFileTree } from './utils.js';
+import { buildFileTree, SutramWorker } from './utils.js';
 
 import '../../yenvui/js/async-btn.js';
 import '../../yenvui/js/status-bar.js';
@@ -116,21 +116,26 @@ export class SutramAsyncBtn extends SutramContextMixin(YenvuiAsyncBtn) {
             this._updateState();
         });
     }
-
     updated(changedProperties) {
         super.updated(changedProperties);
-        if (changedProperties.has('label') && this.label !== '🚫 Offline' && !this._isOfflineReadOnly) {
+        if (changedProperties.has('label') && this.label !== 'Offline' && !this._isOfflineReadOnly) {
             this._originalLabel = this.label;
+        }
+        if (changedProperties.has('icon') && this.icon !== 'wifi-off' && !this._isOfflineReadOnly) {
+            this._originalIcon = this.icon;
         }
     }
 
     _updateState() {
         if (this._isOfflineReadOnly) {
-            if (this.label !== '🚫 Offline') this._originalLabel = this.label;
-            this.label = '🚫 Offline';
+            if (this.label !== 'Offline') this._originalLabel = this.label;
+            if (this.icon !== 'wifi-off') this._originalIcon = this.icon;
+            this.label = 'Offline';
+            this.icon = 'wifi-off';
             this.disabled = true;
         } else {
             this.label = this._originalLabel || this.label;
+            if (this._originalIcon !== undefined) this.icon = this._originalIcon;
             this.disabled = false;
         }
     }
@@ -466,33 +471,23 @@ export class SutramFolderBrowser extends LitElement {
         currentPath: { type: Array },
         _treeData: { type: Object, state: true }
     };
-
     constructor() {
         super();
         this.files = [];
         this.currentPath = [];
         this._treeData = {};
-        const workerPath = window.SUTRAM_PUBLIC_PATH 
-            ? new URL('./workers/search-worker.js', window.SUTRAM_PUBLIC_PATH) 
-            : new URL('./workers/search-worker.js', import.meta.url);
-        this._worker = new Worker(workerPath, { type: 'module' });
-        this._worker.onmessage = (e) => {
-            if (e.data.requestId === this._lastReqId) {
-                this._treeData = e.data.tree;
-            }
-        };
-    }
-
-    disconnectedCallback() {
-        super.disconnectedCallback();
-        if (this._worker) this._worker.terminate();
+        this._lastReqId = 0;
     }
 
     updated(changedProperties) {
         super.updated(changedProperties);
         if (changedProperties.has('files')) {
-            this._lastReqId = Date.now();
-            this._worker.postMessage({ type: 'BUILD_TREE', requestId: this._lastReqId, items: this.files });
+            const reqId = ++this._lastReqId;
+            SutramWorker.dispatch('BUILD_TREE', { items: this.files || [] }).then(({ tree }) => {
+                if (reqId === this._lastReqId) {
+                    this._treeData = tree || {};
+                }
+            });
         }
     }
 
@@ -591,11 +586,10 @@ export class SutramGenericSettingsModal extends SutramElement {
         this.open = true;
         this.requestUpdate();
     }
-
     saveSettings(e) {
         const btn = e.target;
         const orig = btn.innerText;
-        btn.innerText = '⏳ Saving...';
+        btn.innerText = 'Saving...';
 
         this.dispatchEvent(new CustomEvent('sutram-settings-save', {
             detail: { extName: this.extName, formData: this.formData, btn, origText: orig },
@@ -869,15 +863,6 @@ export class SutramEntityActions extends SutramElement {
             const intent = typeof act.intent === 'function' ? act.intent(this.entityData) : (act.intent || 'primary');
             const isActive = typeof act.isActive === 'function' ? act.isActive(this.entityData) : !!act.isActive;
 
-            const renderIcon = (iconStr) => {
-                if (!iconStr) return '';
-                if (typeof iconStr === 'object') return iconStr;
-                if (iconStr.includes('<')) return html`<span style="display: inline-flex; align-items: center; margin-right: 6px;">${iconStr}</span>`;
-                if (/^[a-zA-Z0-9-]+$/.test(iconStr)) {
-                    return html`<yv-icon name="${iconStr}" style="width: 14px; height: 14px; margin-right: 6px; display: inline-block; vertical-align: middle;"></yv-icon>`;
-                }
-                return html`<span style="margin-right: 6px;">${iconStr}</span>`;
-            };
             if (act.asyncAction || (window.ExtensionRegistry.executeEntityAction && act.vfsBound)) {
                 return html`
                     <sutram-async-btn 
@@ -1298,7 +1283,6 @@ export class SutramSelectorModal extends SutramElement {
         _filteredItems: { type: Array, state: true }
     };
     static styles = [sharedStyles, css`:host { display: contents; }`];
-
     constructor() {
         super();
         this.open = false;
@@ -1306,34 +1290,23 @@ export class SutramSelectorModal extends SutramElement {
         this.items = [];
         this._searchQuery = '';
         this._filteredItems = [];
-        const workerPath = window.SUTRAM_PUBLIC_PATH 
-            ? new URL('./workers/search-worker.js', window.SUTRAM_PUBLIC_PATH) 
-            : new URL('./workers/search-worker.js', import.meta.url);
-        this._worker = new Worker(workerPath, { type: 'module' });
-        this._worker.onmessage = (e) => {
-            if (e.data.requestId === this._lastSearchReq) {
-                this._filteredItems = e.data.results.slice(0, 50);
-            }
-        };
-    }
-
-    disconnectedCallback() {
-        super.disconnectedCallback();
-        if (this._worker) this._worker.terminate();
+        this._lastSearchReq = 0;
     }
 
     updated(changedProperties) {
         super.updated(changedProperties);
         if (changedProperties.has('items') || changedProperties.has('_searchQuery')) {
             if (!this._searchQuery) {
-                this._filteredItems = this.items.slice(0, 50);
+                this._filteredItems = (this.items || []).slice(0, 50);
             } else {
-                this._lastSearchReq = Date.now();
-                this._worker.postMessage({ 
-                    type: 'FUZZY_SEARCH', 
-                    requestId: this._lastSearchReq, 
-                    items: this.items, 
+                const reqId = ++this._lastSearchReq;
+                SutramWorker.dispatch('FUZZY_SEARCH', {
+                    items: this.items || [],
                     query: this._searchQuery
+                }).then(({ results }) => {
+                    if (reqId === this._lastSearchReq) {
+                        this._filteredItems = (results || []).slice(0, 50);
+                    }
                 });
             }
         }
@@ -1368,3 +1341,132 @@ export class SutramSelectorModal extends SutramElement {
     }
 }
 customElements.define('sutram-selector-modal', SutramSelectorModal);
+
+// 16. Universal Spatial Report Projection (Dry-runs, Diffs, and Logs)
+export class SutramReportProjection extends SutramElement {
+    static properties = {
+        caption: { type: String },
+        content: { type: String },
+        tabs: { type: Array },
+        activeTab: { type: String },
+        actions: { type: Array },
+        extraContent: { type: Object },
+        suggestedFilename: { type: String },
+        windowId: { type: String }
+    };
+    static styles = [sharedStyles, css`
+        :host {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            background: var(--bg);
+            box-sizing: border-box;
+        }
+        .output-box {
+            font-family: var(--font-mono);
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            color: var(--text);
+            white-space: pre-wrap;
+            overflow-y: auto;
+            flex: 1;
+            min-height: 150px;
+        }
+    `];
+
+    constructor() {
+        super();
+        this.caption = '';
+        this.content = '';
+        this.tabs = [];
+        this.activeTab = '';
+        this.actions = [];
+        this.extraContent = null;
+        this.suggestedFilename = '';
+        this.windowId = '';
+    }
+
+    _getActiveContent() {
+        if (this.tabs && this.tabs.length > 0) {
+            const currentTabId = this.activeTab || this.tabs[0].id;
+            const tab = this.tabs.find(t => t.id === currentTabId) || this.tabs[0];
+            return tab ? (tab.content || '') : '';
+        }
+        return this.content || '';
+    }
+
+    render() {
+        const activeContent = this._getActiveContent();
+        const hasTabs = this.tabs && this.tabs.length > 1;
+        const currentTabId = this.activeTab || (this.tabs && this.tabs[0]?.id) || '';
+        const filename = this.suggestedFilename || `report_${Date.now()}.txt`;
+
+        return html`
+            <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 15px; gap: 10px;">
+                ${this.caption ? html`<p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">${this.caption}</p>` : ''}
+                ${hasTabs ? html`
+                    <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
+                        ${this.tabs.map(tab => html`
+                            <sutram-btn
+                                size="sm"
+                                .icon=${tab.icon || 'file-text'}
+                                .label=${tab.label}
+                                intent="${currentTabId === tab.id ? 'primary' : 'neutral'}"
+                                ?active=${currentTabId === tab.id}
+                                @click=${() => { this.activeTab = tab.id; this.requestUpdate(); }}>
+                            </sutram-btn>
+                        `)}
+                    </div>
+                ` : ''}
+                <div class="output-box">${activeContent || 'No output.'}</div>
+                ${this.extraContent ? html`<div style="flex-shrink: 0;">${this.extraContent}</div>` : ''}
+                <div style="padding: 6px 10px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end;">
+                    <sutram-entity-actions
+                        ?scrollable=${true}
+                        style="justify-content: flex-end;"
+                        .entityType=${'text_blob'}
+                        .entityData=${{
+                            textContent: activeContent,
+                            suggestedFilename: filename
+                        }}>
+                    </sutram-entity-actions>
+                </div>
+            </div>
+            ${this.actions && this.actions.length > 0 ? html`
+                <div style="padding: 12px 15px; border-top: 1px solid var(--border); background: var(--input-bg); display: flex; width: 100%; gap: 10px; flex-shrink: 0; box-sizing: border-box;">
+                    ${this.actions.map(act => {
+                        const btnStyle = act.style || (act.primary ? 'flex: 2; margin: 0;' : 'flex: 1; margin: 0;');
+                        if (act.asyncAction) {
+                            return html`
+                                <sutram-async-btn
+                                    .icon=${act.icon}
+                                    .label=${act.label}
+                                    intent="${act.intent || 'primary'}"
+                                    style="${btnStyle}"
+                                    ?disabled=${act.disabled}
+                                    .onClick=${act.asyncAction}>
+                                </sutram-async-btn>
+                            `;
+                        }
+                        return html`
+                            <sutram-btn
+                                .icon=${act.icon}
+                                .label=${act.label}
+                                intent="${act.intent || 'neutral'}"
+                                style="${btnStyle}"
+                                ?disabled=${act.disabled}
+                                @click=${act.onClick}>
+                            </sutram-btn>
+                        `;
+                    })}
+                </div>
+            ` : ''}
+        `;
+    }
+}
+customElements.define('sutram-report-projection', SutramReportProjection);
