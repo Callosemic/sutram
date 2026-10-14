@@ -66,6 +66,12 @@ export class YenvuiDropdown extends YenvuiBase {
     _toggle(e) {
         if (!this._loadingItemId) this.open = !this.open;
     }
+    _notifyError(err) {
+        console.error(err);
+        window.dispatchEvent(new CustomEvent('sutram-status-update', {
+            detail: { msg: `Action Failed: ${err.message}`, timeout: 4000, isError: true }
+        }));
+    }
     async _executeItem(item, e) {
         if (this._loadingItemId) return;
 
@@ -74,8 +80,7 @@ export class YenvuiDropdown extends YenvuiBase {
             try {
                 await item.asyncAction(e);
             } catch (err) {
-                console.error(err);
-                if (window.inSetu?.ui?.setGlobalStatus) window.inSetu.ui.setGlobalStatus(`Action Failed: ${err.message}`, 4000, true);
+                this._notifyError(err);
             } finally {
                 this._loadingItemId = null;
                 this.open = false;
@@ -86,14 +91,10 @@ export class YenvuiDropdown extends YenvuiBase {
                 try {
                     const result = item.onClick(e);
                     if (result && typeof result.catch === 'function') {
-                        result.catch(err => {
-                            console.error(err);
-                            if (window.inSetu?.ui?.setGlobalStatus) window.inSetu.ui.setGlobalStatus(`Action Failed: ${err.message}`, 4000, true);
-                        });
+                        result.catch(err => this._notifyError(err));
                     }
                 } catch (err) {
-                    console.error(err);
-                    if (window.inSetu?.ui?.setGlobalStatus) window.inSetu.ui.setGlobalStatus(`Action Failed: ${err.message}`, 4000, true);
+                    this._notifyError(err);
                 }
             }
         }

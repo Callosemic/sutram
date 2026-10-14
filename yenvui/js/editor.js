@@ -8,8 +8,28 @@ async function loadLanguageExtension(lang) {
         if (lang === 'yaml' || lang === 'yml') return cm.yaml();
         if (lang === 'html' || lang === 'htm') return cm.htmlLang();
         if (lang === 'css') return cm.cssLang();
-        if (lang === 'rust' && cm.rust) return cm.rust();
-        if (lang === 'go' && cm.go) return cm.go();
+        if (lang === 'markdown' || lang === 'md') return cm.markdown();
+
+        // Stage A (ADR 0032): Attempt importmap resolution first
+        try {
+            const langMod = await import(/* webpackIgnore: true */ `@codemirror/lang-${lang}`);
+            const fn = langMod[lang] || langMod.default;
+            if (typeof fn === 'function') return fn();
+        } catch (importErr) {
+            // Stage A Fallback: Trigger host-injected JIT vendorization provider
+            if (typeof window.Sutram?.vendorizeLanguage === 'function') {
+                try {
+                    const vendorPath = await window.Sutram.vendorizeLanguage(lang);
+                    if (vendorPath) {
+                        const staticMod = await import(/* webpackIgnore: true */ vendorPath);
+                        const fn = staticMod[lang] || staticMod.default;
+                        if (typeof fn === 'function') return fn();
+                    }
+                } catch (vendorErr) {
+                    console.warn(`[yenVUI] JIT vendorization failed for '${lang}':`, vendorErr);
+                }
+            }
+        }
 
         // Default fallback
         return cm.markdown();
@@ -369,7 +389,6 @@ export class YenvuiEditor extends LitElement {
             this._pendingScrollTop = top;
         }
     }
-
     insertAtCursor(text) {
         if (this._view) {
             const pos = this.getCursor();
@@ -379,6 +398,32 @@ export class YenvuiEditor extends LitElement {
                 scrollIntoView: true
             });
         }
+    }
+
+    transformContent(transformFn) {
+        if (!this._view || typeof transformFn !== 'function') return false;
+        const { state, dispatch } = this._view;
+        const selection = state.selection.main;
+        if (selection.empty) {
+            const original = state.doc.toString();
+            const transformed = transformFn(original);
+            if (transformed !== original) {
+                dispatch({
+                    changes: { from: 0, to: original.length, insert: transformed }
+                });
+                return true;
+            }
+        } else {
+            const selectedText = state.sliceDoc(selection.from, selection.to);
+            const transformed = transformFn(selectedText);
+            if (transformed !== selectedText) {
+                dispatch({
+                    changes: { from: selection.from, to: selection.to, insert: transformed }
+                });
+                return true;
+            }
+        }
+        return false;
     }
 }
 customElements.define('yenvui-editor', YenvuiEditor);

@@ -45,9 +45,9 @@ export class YenvuiWindow extends YenvuiBase {
         .window-btn:hover { background: var(--bg-hover); color: var(--text); }
         .window-btn.active-span { background: color-mix(in srgb, var(--intent-color, var(--intent-primary)) 20%, transparent); color: var(--intent-color, var(--intent-primary)); border: 1px solid var(--intent-color, var(--intent-primary)); }
         .window-btn.close-btn:hover { color: var(--intent-danger); background: color-mix(in srgb, var(--intent-danger) 15%, transparent); }
-        .body { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; background: var(--bg); container-type: inline-size; }
+        .body { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; background: var(--bg); container-type: inline-size; }
 
-        :host([data-theme="e-ink"]) dialog {
+        :host-context([data-theme="e-ink"]) dialog {
             border: 2px solid #000;
             box-shadow: 4px 4px 0 var(--intent-color, #8b5cf6);
         }
@@ -60,6 +60,15 @@ export class YenvuiWindow extends YenvuiBase {
         this.titleText = '';
         this.icon = 'component';
         this.intent = 'primary';
+    }
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        const dialog = this.shadowRoot.querySelector('dialog');
+        if (dialog && dialog.open) {
+            document.body.appendChild(dialog);
+            dialog.close();
+            dialog.remove();
+        }
     }
     updated(changedProperties) {
         super.updated(changedProperties);
@@ -91,11 +100,6 @@ export class YenvuiWindow extends YenvuiBase {
                     <div class="title-area">
                         <yv-icon name="${this.icon}" style="width: 14px; height: 14px; color: var(--intent-color, var(--intent-primary));"></yv-icon>
                         ${this.titleText}
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 4px;">
-                        <button class="window-btn close-btn" title="Close" @pointerdown=${(e) => e.stopPropagation()} @click=${() => this.dispatchEvent(new CustomEvent('yenvui-window-close', { bubbles: true, composed: true }))}>
-                            <yv-icon name="x" style="width: 16px; height: 16px;"></yv-icon>
-                        </button>
                     </div>
                 </div>
                 <div class="body"><slot></slot></div>

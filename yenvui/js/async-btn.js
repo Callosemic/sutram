@@ -76,9 +76,9 @@ export class YenvuiAsyncBtn extends YenvuiBase {
         super();
         this.label = '';
         this.icon = '';
-        this.loadingLabel = '⏳...';
-        this.successLabel = '✅';
-        this.errorLabel = '❌';
+        this.loadingLabel = '';
+        this.successLabel = '';
+        this.errorLabel = '';
         this.intent = 'primary';
         this.variant = 'tinted';
         this.emphasis = false;
@@ -116,12 +116,19 @@ export class YenvuiAsyncBtn extends YenvuiBase {
             }
         }
     }
-
     render() {
         let text = this.label;
-        if (this.status === 'loading') text = this.loadingLabel;
-        if (this.status === 'success') text = this.successLabel;
-        if (this.status === 'error') text = this.errorLabel;
+        let stateIcon = this.icon;
+        if (this.status === 'loading') {
+            text = this.loadingLabel || 'Working...';
+            stateIcon = 'loader';
+        } else if (this.status === 'success') {
+            text = this.successLabel || 'Done';
+            stateIcon = 'check';
+        } else if (this.status === 'error') {
+            text = this.errorLabel || 'Error';
+            stateIcon = 'alert-triangle';
+        }
 
         let activeIntent = this.intent;
         if (this.status === 'success') activeIntent = 'success';
@@ -132,9 +139,9 @@ export class YenvuiAsyncBtn extends YenvuiBase {
             if (typeof iconStr === 'object') return iconStr;
             if (iconStr.includes('<')) return html`<span style="display: inline-flex; align-items: center; margin-right: 6px;">${iconStr}</span>`;
             if (/^[a-zA-Z0-9-]+$/.test(iconStr)) {
-                return html`<yv-icon name="${iconStr}" style="width: 14px; height: 14px; margin-right: 6px; display: inline-block; vertical-align: middle;"></yv-icon>`;
+                return html`<yv-icon name="${iconStr}" style="width: 14px; height: 14px; margin-right: ${text ? '6px' : '0'}; display: inline-block; vertical-align: middle;"></yv-icon>`;
             }
-            return html`<span style="margin-right: 6px;">${iconStr}</span>`;
+            return html`<span style="margin-right: ${text ? '6px' : '0'};">${iconStr}</span>`;
         };
 
         return html`
@@ -143,7 +150,7 @@ export class YenvuiAsyncBtn extends YenvuiBase {
                 class="yv-btn yv-btn--${activeIntent || 'primary'} yv-btn--${this.variant || 'tinted'} yv-btn--${this.size || 'md'} ${this.emphasis ? 'yv-btn--emphasis' : ''} ${this.active ? 'yv-btn--active' : ''}" 
                 ?disabled=${this.disabled || this.status === 'loading'}
                 @click=${this._handleClick}>
-                ${this.status === 'idle' ? renderIcon(this.icon) : ''}${text}
+                ${renderIcon(stateIcon)}${text}
             </button>
         `;
     }

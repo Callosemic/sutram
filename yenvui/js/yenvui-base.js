@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'lit';
-import { YenvuiGestureController } from './physics.js';
+import { YenvuiGestureController, getEventPath } from './physics.js';
 export class YenvuiBase extends LitElement {
     connectedCallback() {
         super.connectedCallback();
@@ -17,7 +17,7 @@ export class YenvuiBase extends LitElement {
 
     registerOutsideClick(callback) {
         const listener = (e) => {
-            if (!e.composedPath().includes(this)) callback(e);
+            if (!getEventPath(e).includes(this)) callback(e);
         };
         document.addEventListener('click', listener);
         if (!this._managedListeners) this._managedListeners = [];

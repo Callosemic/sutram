@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'lit';
-import { YenvuiGestureController, getDeepElementFromPoint } from './physics.js';
+import { YenvuiGestureController, getDeepElementFromPoint, getEventPath } from './physics.js';
 
 export class YenvuiCardGroup extends LitElement {
     static properties = {
@@ -156,7 +156,7 @@ export class YenvuiCardGroup extends LitElement {
 
     _handleStackClick(e) {
         if (!this.stacked || !this.accordion || this._childCount <= 1) return;
-        const path = e.composedPath();
+        const path = getEventPath(e);
         const isActionClick = path.some(el => {
             if (!el || !el.tagName) return false;
             if (el._overlayActive) return true;
@@ -165,7 +165,6 @@ export class YenvuiCardGroup extends LitElement {
             if (el.classList && (el.classList.contains('actions-tray') || el.classList.contains('trigger-bar') || el.classList.contains('actions-wrapper') || el.classList.contains('selection-gutter'))) return true;
             return false;
         });
-
         if (isActionClick) return;
 
         const slot = this.shadowRoot.querySelector('slot');
@@ -245,8 +244,8 @@ export class YenvuiCardGroup extends LitElement {
                 child.style.maxHeight = '';
                 child.style.overflow = '';
             }
-
             if (isVisuallyStacked) {
+                child.style.setProperty('--card-content-visibility', 'visible');
                 child.style.setProperty('--card-margin-bottom', '0px');
 
                 const lastVisibleIndex = (this.accordion && !this.expanded) 
@@ -281,6 +280,7 @@ export class YenvuiCardGroup extends LitElement {
                     }
                 }
             } else {
+                child.style.removeProperty('--card-content-visibility');
                 child.style.removeProperty('--card-margin-bottom');
                 child.style.removeProperty('--card-border-top');
                 child.style.removeProperty('--card-border-top-left-radius');

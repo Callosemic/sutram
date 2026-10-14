@@ -104,6 +104,8 @@ export class YenvuiCollapsible extends YenvuiBase {
             display: flex;
             flex-direction: column;
             padding: 0 0 12px 0;
+            content-visibility: auto;
+            contain-intrinsic-size: auto 180px;
         }
 
         :host([flush]) .content {

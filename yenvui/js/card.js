@@ -1,6 +1,6 @@
 import { html, css } from 'lit';
 import { YenvuiBase } from './yenvui-base.js';
-import { YenvuiGestureController } from './physics.js';
+import { YenvuiGestureController, getEventPath } from './physics.js';
 
 export class YenvuiCard extends YenvuiBase {
     static properties = {
@@ -22,7 +22,20 @@ export class YenvuiCard extends YenvuiBase {
         stale: { type: Boolean, reflect: true }
     };
     static styles = css`
-        :host { display: block; margin-bottom: var(--card-margin-bottom, 12px); position: relative; touch-action: pan-x pan-y; }
+        :host {
+            display: block;
+            margin-bottom: var(--card-margin-bottom, 12px);
+            position: relative;
+            touch-action: pan-x pan-y;
+            content-visibility: var(--card-content-visibility, auto);
+            contain-intrinsic-size: auto 76px;
+        }
+        :host([compact]) {
+            contain-intrinsic-size: auto 42px;
+        }
+        :host([_overlayactive]) {
+            content-visibility: visible;
+        }
         .card-wrapper {
             touch-action: pan-x pan-y;
             background: var(--bg-card, var(--input-bg));
@@ -585,8 +598,7 @@ export class YenvuiCard extends YenvuiBase {
                 </div>
                 <div class="actions-tray" @click=${{handleEvent: (e) => { 
                     if (this._isPanning) { e.stopPropagation(); e.preventDefault(); return; }
-
-                    const path = e.composedPath ? e.composedPath() : [];
+                    const path = getEventPath(e);
                     const isDropdownTrigger = path.some(el => el.tagName === 'SUTRAM-DROPDOWN' || el.tagName === 'YENVUI-DROPDOWN');
                     const isMenuItem = path.some(el => el.classList && el.classList.contains('menu-item'));
 

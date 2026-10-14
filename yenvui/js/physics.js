@@ -3,6 +3,42 @@
 /**
  * Traverses Shadow DOM boundaries to find the deepest element at given coordinates.
  */
+/**
+* Centralized event path resolution helper. Handles shadow DOM piercing,
+* composedPath fallbacks, and synthetic events safely.
+*/
+export function getEventPath(e) {
+    if (!e) return [];
+    if (typeof e.composedPath === 'function') {
+        const path = e.composedPath();
+        if (path && path.length > 0) return path;
+    }
+    const path = [];
+    let current = e ? e.target : null;
+    while (current) {
+        path.push(current);
+        if (current.tagName === 'HTML') {
+            path.push(document, window);
+            break;
+        }
+        current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
+    }
+    return path;
+}
+
+/**
+* Traverses the event path to find the first element matching a given CSS selector.
+*/
+export function getEventTarget(e, selector = null) {
+    const path = getEventPath(e);
+    if (!selector) return path[0] || (e ? e.target : null);
+    for (const el of path) {
+        if (el && el.matches && el.matches(selector)) return el;
+        if (el && el.closest && el.closest(selector)) return el.closest(selector);
+    }
+    return null;
+}
+
 export function getDeepElementFromPoint(x, y, selector = null) {
     let el = document.elementFromPoint(x, y);
     while (el && el.shadowRoot) {
