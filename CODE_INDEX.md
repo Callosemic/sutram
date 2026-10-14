@@ -29,7 +29,8 @@ sutram/
 │   │   ├── 0010_sutram_floating_window_projection.md # ADR-0010: Floating window projection layer and z-index management
 │   │   ├── 0011_sutram_context_mixin_and_grid_constrained_windows.md # ADR-0011: SutramContextMixin and grid-constrained spatial window projections
 │   │   ├── 0012_yv_icon_component_and_direct_node_retention.md # ADR-0012: Native yv-icon component and direct Lit element node retention
-│   │   └── 0013_sutram_dynamic_spatial_ratios_and_light_dom_bem_styles.md # [comment required]
+│   │   ├── 0013_sutram_dynamic_spatial_ratios_and_light_dom_bem_styles.md # [comment required]
+│   │   └── 0014_sutram_focus_backstack_worker_broker_and_content_visibility.md # [comment required]
 │   └── yenvui_contracts.md         # Interface contract specification and CSS intent tokens for yenVUI presentation chassis
 ├── pyproject.toml                  # Python project metadata and semantic release configuration
 ├── readme.md                       # Master repository architecture map and component reference

@@ -91,6 +91,7 @@ State-aware wrappers, IoC brokers, and form controls delivered via `sutram`:
 | **`<sutram-spinner>`** | Loading indicator wrapper | Wraps `<yenvui-spinner>`. |
 | **`<sutram-empty-state>`** | Empty state wrapper | Wraps `<yenvui-empty-state>`. |
 | **`<sutram-board>` & `<sutram-column>`** | Board layout wrappers | Wraps `<yenvui-board>` and `<yenvui-column>`. |
+| **`<sutram-report-projection>`** | Spatial report projection primitive | Multi-tab dry-run and diff inspector with integrated text-blob action staging and async controls. |
 
 ---
 
