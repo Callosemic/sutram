@@ -170,7 +170,7 @@ export class SutramAppShell extends SutramElement {
             border-right: none !important;
         }
         .masthead-action-rail-cell {
-            width: 44px;
+            width: var(--yv-rail-cell-width, 44px);
             height: 100%;
             border-radius: 0;
             border: none;
@@ -188,19 +188,12 @@ export class SutramAppShell extends SutramElement {
             background: var(--rail-hover, rgba(99, 102, 241, 0.22));
             color: var(--text);
         }
-
         /* Strip padding and force stretch alignment for full-bleed action rails */
         .masthead {
             padding-top: 0 !important;
             padding-bottom: 0 !important;
             padding-right: 0 !important;
-            height: 44px;
-            align-items: stretch !important;
-        }
-        .col-header {
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-            height: 44px;
+            height: var(--yv-header-height, 44px);
             align-items: stretch !important;
         }
         .masthead-right-rail, .col-header-actions {
@@ -235,13 +228,15 @@ export class SutramAppShell extends SutramElement {
         }
         .col-header {
             display: flex;
-            align-items: center;
-            height: 36px;
+            align-items: stretch !important;
+            height: var(--yv-header-height, 44px);
             background: var(--bg-deep);
             border-bottom: 1px solid var(--border);
-            padding: 0 0 0 12px;
+            padding: 0 0 0 var(--yv-gutter-x, 12px);
             flex-shrink: 0;
             position: relative;
+            z-index: 100;
+            overflow: visible !important;
         }
         /* Draggable Tab Enhancements */
         .sub-tab {
@@ -263,9 +258,9 @@ export class SutramAppShell extends SutramElement {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 20px;
-            height: 20px;
-            margin-right: 6px;
+            width: var(--yv-icon-size, 14px);
+            height: var(--yv-icon-size, 14px);
+            margin-right: var(--yv-icon-gap, 8px);
             border-radius: 4px;
             transition: background 0.2s;
         }
@@ -425,7 +420,6 @@ export class SutramAppShell extends SutramElement {
                                 if (sourceCol === 'window') layout.closeWindow(entity.id);
                                 else if (sourceCol) layout.unpinFromColumn(sourceCol, entity.id);
                                 layout.pinToColumn(destCol, entity);
-                                layout.setFocusedColumn(destCol);
                                 layout.setActiveProjection(destCol, entity.id);
                                 layout.setFocusedColumn(destCol);
                             }
@@ -1013,7 +1007,7 @@ export class SutramAppShell extends SutramElement {
             <div class="shell-container spatial-viewport" data-viewport="${viewportMode}">
                 ${!isPopout ? html`
                     <!-- Persistent Global Launcher Row -->
-                    <div class="top-utility-row" style="position: relative; display: flex; justify-content: space-between; width: 100%; background: var(--bg-deep); flex-shrink: 0; height: 38px; border-bottom: 1px solid var(--border); z-index: 50; padding-left: 2px; padding-right: 0; ${capacity < layoutRatios.length ? 'touch-action: pan-y; cursor: grab;' : ''}"
+                    <div class="top-utility-row" style="position: relative; display: flex; justify-content: space-between; width: 100%; background: var(--bg-deep); flex-shrink: 0; height: 38px; border-bottom: 1px solid var(--border); z-index: 50; padding-left: 0; padding-right: 0; ${capacity < layoutRatios.length ? 'touch-action: pan-y; cursor: grab;' : ''}"
                         @pointerdown=${(e) => { if (capacity < layoutRatios.length) this._handleDotDragStart(e); }}>
                         ${viewportMode === 'mobile' ? html`
                             <div class="mobile-only-tools flex items-center" style="display: flex; align-items: center; height: 100%;">
@@ -1069,9 +1063,8 @@ export class SutramAppShell extends SutramElement {
                                 `)}
                             </div>
                         ` : ''}
-
                         <!-- Top Right Utility Rail -->
-                        <div style="position: absolute; right: 0; top: 0; bottom: 0; display: flex; align-items: center; gap: 6px; height: 100%; flex-shrink: 0; background: var(--bg-deep); z-index: 105; padding-right: 5px;">
+                        <div style="position: absolute; right: 0; top: 0; bottom: 0; display: flex; align-items: stretch; gap: 0; height: 100%; flex-shrink: 0; background: var(--bg-deep); z-index: 105; padding-right: 0;">
                             <slot name="header-quickpack"></slot>
                             <slot name="header-actions-left"></slot>
                             ${capacity > 1 && capacity < layoutRatios.length ? html`
@@ -1336,9 +1329,8 @@ export class SutramAppShell extends SutramElement {
                                     const destCol = win.preferredColumn || 'center';
                                     layout.closeWindow(win.id);
                                     layout.pinToColumn(destCol, win);
-                                    layout.setFocusedColumn(destCol);
                                     layout.setActiveProjection(destCol, win.id);
-                                    layout.setFocusedColumn(win.preferredColumn || 'center');
+                                    layout.setFocusedColumn(destCol);
                                     this.requestUpdate();
                                 }
                             }}>

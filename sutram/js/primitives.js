@@ -22,37 +22,13 @@ import { YenvuiEmptyState } from '../../yenvui/js/empty-state.js';
 import { YenvuiBoard, YenvuiColumn } from '../../yenvui/js/board.js';
 import { YenvuiTag } from '../../yenvui/js/tag.js';
 import { YenvuiLabel } from '../../yenvui/js/label.js';
-import { YenvuiDropdown } from '../../yenvui/js/dropdown.js';
+import { YenvuiDropdown, YenvuiFilterDropdown } from '../../yenvui/js/dropdown.js';
 import { YenvuiScrubTrack } from '../../yenvui/js/yenvui-base.js';
+import { YenvuiScrollView } from '../../yenvui/js/scroll-view.js';
+import { YenvuiDiffViewer } from '../../yenvui/js/diff-viewer.js';
 import { sharedStyles } from './shared_styles.js';
 import { buildFileTree, resolveDirectoryState, SutramWorker } from './utils.js';
-
-import '../../yenvui/js/async-btn.js';
-import '../../yenvui/js/status-bar.js';
-import '../../yenvui/js/toast.js';
-import '../../yenvui/js/modal.js';
-import '../../yenvui/js/window.js';
-import '../../yenvui/js/category-section.js';
-import '../../yenvui/js/card.js';
-import '../../yenvui/js/card-group.js';
-import '../../yenvui/js/editor.js';
-import '../../yenvui/js/toolbar.js';
-import '../../yenvui/js/collapsible.js';
-import { YenvuiFilterDropdown } from '../../yenvui/js/dropdown.js';
-import '../../yenvui/js/pill.js';
-import '../../yenvui/js/filter-group.js';
-import '../../yenvui/js/selection-tray.js';
-import '../../yenvui/js/search-bar.js';
-import '../../yenvui/js/spinner.js';
-import '../../yenvui/js/empty-state.js';
-import '../../yenvui/js/board.js';
-import '../../yenvui/js/tag.js';
-import '../../yenvui/js/label.js';
-import { YenvuiScrollView } from '../../yenvui/js/scroll-view.js';
-import '../../yenvui/js/scroll-view.js';
-import { YenvuiDiffViewer } from '../../yenvui/js/diff-viewer.js';
-import '../../yenvui/js/diff-viewer.js';
-import '/static/vendor/lit/lit-virtualizer.min.js';
+import 'lit-virtualizer';
 
 // 0. Universal Virtualized List
 export class SutramVirtualList extends LitElement {
@@ -1199,236 +1175,20 @@ customElements.define('sutram-scrub-track', SutramScrubTrack);
 export class SutramScrollView extends YenvuiScrollView {}
 customElements.define('sutram-scroll-view', SutramScrollView);
 export class SutramToolbar extends YenvuiToolbar {
-    static styles = [
-        ...(Array.isArray(YenvuiToolbar.styles) ? YenvuiToolbar.styles : (YenvuiToolbar.styles ? [YenvuiToolbar.styles] : [])),
-        css`
-            :host {
-                position: relative;
-                z-index: 25;
-            }
-            yenvui-dropdown, sutram-dropdown, yenvui-filter-dropdown, sutram-filter-dropdown, [class*="dropdown"] {
-                position: relative !important;
-                z-index: 50 !important;
-            }
-            .yv-dropdown-menu,
-            .dropdown-menu,
-            .menu,
-            .dropdown-content,
-            [class*="dropdown-menu"],
-            [class*="menu-panel"],
-            [class*="dropdown-content"],
-            [part="menu"] {
-                left: auto !important;
-                right: 0 !important;
-                z-index: 9999 !important;
-            }
-        `
-    ];
-
     connectedCallback() {
         super.connectedCallback();
         this.addEventListener('yenvui-search-changed', e => {
             this.dispatchEvent(new CustomEvent('search-changed', { detail: e.detail, bubbles: true, composed: true }));
         });
-
-        this._toolbarAlignHandler = () => {
-            const dropdowns = this.shadowRoot?.querySelectorAll('yenvui-dropdown, sutram-dropdown, yenvui-filter-dropdown, sutram-filter-dropdown, [class*="dropdown"]');
-            dropdowns?.forEach(d => {
-                d.setAttribute('align', 'right');
-                d.setAttribute('data-fixed-align', 'true');
-                d.align = 'right';
-                if (d.shadowRoot) {
-                    if (!d.shadowRoot.querySelector('#sutram-force-right-style')) {
-                        const st = document.createElement('style');
-                        st.id = 'sutram-force-right-style';
-                        st.textContent = `
-                            :host, :host([align]) { position: relative !important; }
-                            .yv-dropdown-menu, .dropdown-menu, .menu, .dropdown-content, [class*="menu"], [class*="dropdown"], [part="menu"] {
-                                left: auto !important;
-                                right: 0 !important;
-                                z-index: 9999 !important;
-                            }
-                        `;
-                        d.shadowRoot.appendChild(st);
-                    }
-                    const innerMenu = d.shadowRoot.querySelector('.dropdown-menu, .menu, .yv-dropdown-menu, .dropdown-content, [class*="menu"], [class*="dropdown"], [part="menu"]');
-                    if (innerMenu) {
-                        innerMenu.style.left = 'auto';
-                        innerMenu.style.right = '0px';
-                        innerMenu.style.zIndex = '9999';
-                    }
-                }
-            });
-            const directMenus = this.shadowRoot?.querySelectorAll('.dropdown-menu, .menu, .yv-dropdown-menu, .dropdown-content, [class*="menu"], [class*="dropdown"], [part="menu"]');
-            directMenus?.forEach(m => {
-                m.style.left = 'auto';
-                m.style.right = '0px';
-                m.style.zIndex = '9999';
-            });
-        };
-
-        this.shadowRoot?.addEventListener('pointerdown', this._toolbarAlignHandler, { capture: true });
-        this.shadowRoot?.addEventListener('click', this._toolbarAlignHandler, { capture: true });
-    }
-
-    firstUpdated() {
-        if (super.firstUpdated) super.firstUpdated();
-        if (this._toolbarAlignHandler) this._toolbarAlignHandler();
     }
 }
 customElements.define('sutram-toolbar', SutramToolbar);
 
 // 12. Dropdown & Collapsible
-const enhanceDropdownClass = (DropdownClass) => {
-    if (!DropdownClass || DropdownClass._sutramEnhanced) return;
-    DropdownClass._sutramEnhanced = true;
-
-    const origConnected = DropdownClass.prototype.connectedCallback;
-    DropdownClass.prototype.connectedCallback = function() {
-        if (origConnected) origConnected.call(this);
-
-        this._autoAlignListener = () => {
-            let curr = this;
-            let containerRight = window.innerWidth;
-            let isInsideToolbar = false;
-            while (curr) {
-                if (curr.classList && (curr.classList.contains('spatial-col') || curr.classList.contains('col-header') || curr.classList.contains('editor-header') || curr.classList.contains('toolbar-row'))) {
-                    containerRight = curr.getBoundingClientRect().right;
-                    break;
-                }
-                if (curr.tagName && ['SUTRAM-TOOLBAR', 'YENVUI-TOOLBAR', 'INSETU-FILE-TREE', 'SUTRAM-APP-SHELL', 'SUTRAM-WINDOW'].includes(curr.tagName.toUpperCase())) {
-                    containerRight = curr.getBoundingClientRect().right;
-                    if (curr.tagName.toUpperCase().includes('TOOLBAR')) isInsideToolbar = true;
-                    break;
-                }
-                curr = curr.parentElement || (curr.getRootNode ? curr.getRootNode()?.host : null);
-            }
-
-            const rect = this.getBoundingClientRect();
-            const maxRight = Math.min(window.innerWidth, containerRight);
-            const menu = this.shadowRoot?.querySelector('.dropdown-menu, .menu, .yv-dropdown-menu, .dropdown-content, [class*="menu"], [class*="dropdown"], [part="menu"]');
-            const menuWidth = menu?.offsetWidth || 220;
-
-            if (isInsideToolbar || this.hasAttribute('data-fixed-align') || rect.left + menuWidth > maxRight - 10) {
-                this.setAttribute('align', 'right');
-                this.align = 'right';
-                if (menu) {
-                    menu.style.left = 'auto';
-                    menu.style.right = '0px';
-                    menu.style.zIndex = '9999';
-                }
-                if (this.shadowRoot && !this.shadowRoot.querySelector('#sutram-right-align-style')) {
-                    const st = document.createElement('style');
-                    st.id = 'sutram-right-align-style';
-                    st.textContent = `
-                        :host([align="right"]) .yv-dropdown-menu,
-                        :host([align="right"]) .dropdown-menu,
-                        :host([align="right"]) .menu,
-                        :host([align="right"]) .dropdown-content,
-                        :host([align="right"]) [class*="menu"],
-                        :host([align="right"]) [class*="dropdown"],
-                        :host([align="right"]) [part="menu"] {
-                            left: auto !important;
-                            right: 0 !important;
-                            z-index: 9999 !important;
-                        }
-                    `;
-                    this.shadowRoot.appendChild(st);
-                }
-            } else if (!this.hasAttribute('data-fixed-align')) {
-                this.setAttribute('align', 'left');
-                this.align = 'left';
-                if (menu) {
-                    menu.style.left = '0px';
-                    menu.style.right = 'auto';
-                    menu.style.zIndex = '9999';
-                }
-            }
-        };
-
-        this.addEventListener('pointerdown', this._autoAlignListener, { capture: true });
-        this.addEventListener('click', this._autoAlignListener, { capture: true });
-        this.addEventListener('focusin', this._autoAlignListener, { capture: true });
-    };
-
-    const origDisconnected = DropdownClass.prototype.disconnectedCallback;
-    DropdownClass.prototype.disconnectedCallback = function() {
-        if (origDisconnected) origDisconnected.call(this);
-        if (this._autoAlignListener) {
-            this.removeEventListener('pointerdown', this._autoAlignListener, { capture: true });
-            this.removeEventListener('click', this._autoAlignListener, { capture: true });
-            this.removeEventListener('focusin', this._autoAlignListener, { capture: true });
-        }
-    };
-};
-
-enhanceDropdownClass(YenvuiDropdown);
-enhanceDropdownClass(YenvuiFilterDropdown);
-
-export class SutramDropdown extends YenvuiDropdown {
-    static styles = [
-        ...(Array.isArray(YenvuiDropdown.styles) ? YenvuiDropdown.styles : (YenvuiDropdown.styles ? [YenvuiDropdown.styles] : [])),
-        css`
-            :host {
-                position: relative !important;
-                z-index: 50 !important;
-            }
-            :host(:focus-within), :host([open]), :host([active]) {
-                z-index: 1000 !important;
-            }
-            :host([align="right"]) .yv-dropdown-menu,
-            :host([align="right"]) .dropdown-menu,
-            :host([align="right"]) .menu,
-            :host([align="right"]) .dropdown-content,
-            :host([align="right"]) [class*="menu"],
-            :host([align="right"]) [class*="dropdown"],
-            :host([align="right"]) [part="menu"] {
-                left: auto !important;
-                right: 0 !important;
-                z-index: 9999 !important;
-            }
-            :host([align="left"]) .yv-dropdown-menu,
-            :host([align="left"]) .dropdown-menu,
-            :host([align="left"]) .menu,
-            :host([align="left"]) .dropdown-content,
-            :host([align="left"]) [class*="menu"],
-            :host([align="left"]) [class*="dropdown"],
-            :host([align="left"]) [part="menu"] {
-                left: 0 !important;
-                right: auto !important;
-                z-index: 9999 !important;
-            }
-        `
-    ];
-}
+export class SutramDropdown extends YenvuiDropdown {}
 customElements.define('sutram-dropdown', SutramDropdown);
 
-export class SutramFilterDropdown extends YenvuiFilterDropdown {
-    static styles = [
-        ...(Array.isArray(YenvuiFilterDropdown.styles) ? YenvuiFilterDropdown.styles : (YenvuiFilterDropdown.styles ? [YenvuiFilterDropdown.styles] : [])),
-        css`
-            :host {
-                position: relative !important;
-                z-index: 50 !important;
-            }
-            :host(:focus-within), :host([open]), :host([active]) {
-                z-index: 1000 !important;
-            }
-            .yv-dropdown-menu,
-            .dropdown-menu,
-            .menu,
-            .dropdown-content,
-            [class*="dropdown-menu"],
-            [class*="menu-panel"],
-            [class*="dropdown-content"],
-            [part="menu"] {
-                left: auto !important;
-                right: 0 !important;
-                z-index: 9999 !important;
-            }
-        `
-    ];
-}
+export class SutramFilterDropdown extends YenvuiFilterDropdown {}
 if (!customElements.get('sutram-filter-dropdown')) {
     customElements.define('sutram-filter-dropdown', SutramFilterDropdown);
 }
