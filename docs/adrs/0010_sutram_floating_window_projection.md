@@ -1,7 +1,7 @@
 # ADR-0010: Floating Window Projection Layer and Z-Index Management
 
 **Date:** 2026-10-04
-**Status:** Accepted
+**Status:** Superseded by ADR-0011
 
 ## Context
 The Sutram UI chassis previously relied strictly on a 3-column spatial layout (`left`, `center`, `right`) with mobile viewport collapsing. Consumer applications identified a structural requirement for floating, resizable workspaces that exist above the constrained spatial columns without destroying the user's context in the background.

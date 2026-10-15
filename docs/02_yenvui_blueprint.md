@@ -30,7 +30,7 @@ Consuming applications (like inSetu) must strip their global `style.css` down to
 ### The "Dumb Component" Rule & Content Projection
 Components within yenVUI must never know *why* they are rendering data, nor should they handle data persistence or query application registries. yenVUI is strictly limited to **atomic primitives** (cards, modals, buttons, inputs).
 *   **Forbidden:** A card component querying `window.ExtensionRegistry` to determine its own buttons.
-*   **Forbidden:** Complex, domain-specific layouts like `<yenvui-kanban-board>` or `<yenvui-git-diff>`. Extensions remain the architects of their own domain layouts.
+*   **Forbidden:** Complex, domain-specific orchestrators (e.g., a VCS-coupled `<yenvui-git-dashboard>` with branch staging logic). Extensions remain the architects of their own business and VCS workflows, projecting data into agnostic presentation primitives like `<yenvui-diff-viewer>`.
 *   **Mandated:** A polymorphic `<yenvui-card>` that exposes a `<slot name="actions">`. The consuming application iterates over its own registries and declaratively projects standard `<button slot="actions">` elements into the yenVUI layout, which yenVUI styles uniformly. Extensions assemble their views using these atomic "Lego blocks" rather than writing raw HTML and custom CSS.
 *   **Primitive Form & Interactive Controls:** Custom Web Component primitives that encapsulate native HTML controls (such as `<button>` or `<input>`) must explicitly pass through structural attributes (e.g., `type="button|submit"`) and emit normalized custom events (`yenvui-` or `yv-`) rather than intercepting business execution flow.
 ### Bundleless Import Maps & Upstream Delegation

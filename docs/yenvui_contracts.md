@@ -64,6 +64,9 @@ Any replacement library must export the following Custom Elements.
     *   *Properties:* `.icon`, `.text`.
 *   **`<yenvui-spinner>`**: Loading indicator.
     *   *Properties:* `.text`.
+*   **`<yenvui-diff-viewer>`**: Kinetic visual diff viewer for paired hunks and unified streams.
+    *   *Properties:* `.diffText`, `.searchStr`, `.replaceStr`, `.searchLines`, `.replaceLines`, `.leftTitle`, `.rightTitle`, `.mode` (`auto`|`split-side`|`split-stacked`|`interleaved`), `.activeLineIndex`.
+    *   *Events:* `@yenvui-diff-line-selected`, `@yenvui-diff-mode-changed`.
 
 ### Inputs & Filtering
 *   **`<yenvui-search-bar>`**: Filter input.
