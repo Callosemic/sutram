@@ -24,15 +24,18 @@ A compliant chassis must consume and respect the following CSS custom properties
 ## III. Component Interface Matrix
 
 Any replacement library must export the following Custom Elements.
-
 ### Core Layout & Overlays
 *   **`<yenvui-modal>`**: Native `#top-layer` dialog.
     *   *Properties:* `?open`, `.titleText`, `?fullscreen`, `?flush`, `.maxWidth`.
     *   *Events:* `@yenvui-modal-closed`, `@yenvui-modal-closing`.
     *   *Slots:* `body`, `footer`, default.
+*   **`<yenvui-window>`**: Native `<dialog>` grid-constrained spatial window.
+    *   *Properties:* `.titleText`, `.anchorCol` (`'left'`|`'center'`|`'right'`), `.span` (1|2|3), `.z`, `.icon`, `.intent`.
+    *   *Events:* `@yenvui-window-close`, `@yenvui-window-dock`, `@yenvui-window-focus`, `@yenvui-window-drag-start`.
+    *   *Slots:* default.
 *   **`<yenvui-card>`**: Polymorphic catalog container.
     *   *Properties:* `.titleText`, `.descriptionText`, `.detailText`, `.detailPrefix`, `.detailSuffix`, `.icon`, `.intentColor`, `?selected`, `?disableSelection`, `?compact`, `?flush`, `?has-actions`.
-    *   *Events:* `@yenvui-card-select-toggled`.
+    *   *Events:* `@yenvui-card-select-toggled`, `@yenvui-card-clicked`.
     *   *Slots:* `header-tags`, `detail`, `inline-actions`, `actions`, default.
 *   **`<yenvui-card-group>`**: Wraps cards with accordion and horizontal swipe physics.
     *   *Properties:* `?enableEdgeSelection`, `?stacked`, `?accordion`.

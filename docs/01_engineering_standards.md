@@ -12,6 +12,12 @@ The boundary between Sutram and yenVUI is a strict separation of State/Topology 
 *   **Sutram (The Micro-Kernel):** `shared_styles.js` MUST remain a pure, microscopic structural reset (e.g., `box-sizing: border-box`, `scrollbar-width: thin`). It must never leak component-specific layout classes (like `.sub-tab` or `.spinner`).
 *   **yenVUI (The Presentation Chassis):** Host applications are forbidden from defining raw structural CSS or hardcoding hex colors. All visual styling MUST utilize semantic CSS intent variables (`var(--bg)`, `var(--intent-primary)`). Furthermore, component-specific layout rules (padding, margins, transition timings) MUST be strictly encapsulated within the isolated Shadow DOM of the specific component that renders them.
 
+### Substrate Zero-InnerHTML Law
+All components across `yenVUI` and `Sutram` are strictly forbidden from assigning `.innerHTML`. All dynamic content rendering MUST utilize declarative Lit templates (`html````), native text nodes, or CSS mask-image primitives (`<yv-icon>`).
+
+### Monospaced Ligature Suppression Standard
+All monospaced text rendering surfaces (code editors, diff viewers, `<pre>`, `<code>`) MUST explicitly suppress contextual font ligatures using `font-variant-ligatures: none` and `font-feature-settings: "liga" 0, "calt" 0` to preserve 1:1 physical character-to-glyph column positioning.
+
 ---
 
 ## 2. Interaction & Gesture Standards
