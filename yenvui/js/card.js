@@ -562,7 +562,7 @@ export class YenvuiCard extends YenvuiBase {
                 }} style="cursor: pointer; padding: 12px; min-width: 0;">
                     <div class="card-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; gap: 8px;">
                         <div class="card-title" style="display: flex; align-items: center; gap: 6px; font-weight: bold; color: var(--text); font-size: 0.85rem; min-width: 0; overflow: hidden;">
-                            ${this.icon && this.icon.startsWith('<i') ? html`<div style="flex-shrink: 0;" .innerHTML=${this.icon}></div>` : (this.icon ? (/^[a-zA-Z0-9-]+$/.test(this.icon) ? html`<yv-icon name="${this.icon}" style="width: 14px; height: 14px; color: var(--card-intent, var(--intent-primary)); flex-shrink: 0;"></yv-icon>` : html`<span style="flex-shrink: 0;">${this.icon}</span>`) : '')}
+                            ${this.icon ? (/^[a-zA-Z0-9-]+$/.test(this.icon) ? html`<yv-icon name="${this.icon}" style="width: 14px; height: 14px; color: var(--card-intent, var(--intent-primary)); flex-shrink: 0;"></yv-icon>` : html`<span style="flex-shrink: 0;">${this.icon}</span>`) : ''}
                             <yenvui-scrub-track style="flex: 1; min-width: 0;">
                                 ${this.titleText}
                             </yenvui-scrub-track>

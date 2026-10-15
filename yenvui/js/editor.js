@@ -8,7 +8,17 @@ async function loadLanguageExtension(lang) {
         if (lang === 'yaml' || lang === 'yml') return cm.yaml();
         if (lang === 'html' || lang === 'htm') return cm.htmlLang();
         if (lang === 'css') return cm.cssLang();
-        if (lang === 'markdown' || lang === 'md') return cm.markdown();
+        if (lang === 'markdown' || lang === 'md') {
+            const mdSupport = cm.markdown();
+            // Prevent nested HTML language completion from throwing when typing raw <tags> in Markdown
+            const safeMdExtensions = Array.isArray(mdSupport.extensions)
+                ? mdSupport.extensions.filter(ext => {
+                    const str = String(ext?.value || ext || '');
+                    return !str.includes('htmlCompletion') && !str.includes('closeTags');
+                })
+                : [];
+            return cm.LanguageSupport ? new cm.LanguageSupport(mdSupport.language, safeMdExtensions) : mdSupport.language;
+        }
 
         // Stage A (ADR 0032): Attempt importmap resolution first
         try {
@@ -61,6 +71,12 @@ export class YenvuiEditor extends LitElement {
         .cm-scroller { 
             overflow: auto; 
             font-family: var(--font-mono, monospace); 
+            font-variant-ligatures: none;
+            font-feature-settings: "liga" 0, "calt" 0;
+        }
+        .cm-content, .cm-line {
+            font-variant-ligatures: none !important;
+            font-feature-settings: "liga" 0, "calt" 0 !important;
         }
 
         /* Legacy CodeMirror & Dialog Fallbacks */
@@ -296,7 +312,12 @@ export class YenvuiEditor extends LitElement {
                 color: "var(--text-muted)", 
                 borderRight: "1px solid var(--border)" 
             },
-            ".cm-content": { fontFamily: "var(--font-mono, monospace)", fontSize: "13px" },
+            ".cm-content": {
+                fontFamily: "var(--font-mono, monospace)",
+                fontSize: "13px",
+                fontVariantLigatures: "none",
+                fontFeatureSettings: '"liga" 0, "calt" 0'
+            },
             "&.cm-focused .cm-cursor": { borderLeftColor: "var(--text)" },
             "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": { backgroundColor: "rgba(56, 189, 248, 0.35) !important" },
             ".cm-searchMatch": { backgroundColor: "rgba(234, 179, 8, 0.4)" },

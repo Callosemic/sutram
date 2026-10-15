@@ -195,5 +195,45 @@ def test_store_persistence_schema_compliance():
                 for idx, line in enumerate(content.splitlines(), start=1):
                     if legacy_pattern.search(line):
                         violations.append(f"{filepath}:{idx} -> Legacy array persistKeys used. Migrate to Tri-Level persistenceSchema object.")
-
     assert not violations, f"Legacy persistKeys arrays detected. Use Tri-Level persistenceSchema objects:\n" + "\n".join(violations)
+
+def test_window_close_button_compliance():
+    """Ensure YenvuiWindow renders an explicit close button in the header that dispatches yenvui-window-close."""
+    with open('js/window.js', 'r') as f:
+        content = f.read()
+    assert 'close-btn' in content and 'yenvui-window-close' in content, (
+        "js/window.js must render a .close-btn in the window header that dispatches 'yenvui-window-close'."
+    )
+
+def test_editor_ligature_suppression_compliance():
+    """Ensure YenvuiEditor disables contextual font ligatures so multi-slash sequences (// and ///) render 1:1."""
+    with open('js/editor.js', 'r') as f:
+        content = f.read()
+    assert 'font-variant-ligatures: none' in content or 'fontVariantLigatures: "none"' in content, (
+        "js/editor.js must disable font ligatures (font-variant-ligatures: none) to prevent glyph shifting on // and ///."
+    )
+
+def test_lit_template_no_html_comments_in_drag_coordinator():
+    """Ensure drag-coordinator.js does not contain HTML comments inside Lit html`` templates that shift AttributePart indices."""
+    with open('../sutram/js/drag-coordinator.js', 'r') as f:
+        content = f.read()
+    html_blocks = re.findall(r'html`([\s\S]*?)`', content)
+    violations = []
+    for block in html_blocks:
+        if '<!--' in block:
+            violations.append("HTML comment '<!--' found inside Lit html`` template in drag-coordinator.js")
+    assert not violations, "\n".join(violations)
+
+def test_no_inner_html_in_substrate_compliance():
+    """Ensure neither yenVUI nor Sutram components use .innerHTML."""
+    inner_html_pattern = re.compile(r'\.innerHTML\s*=')
+    violations = []
+    for pattern in ['js/**/*.js', '../sutram/js/**/*.js']:
+        for filepath in glob.glob(pattern, recursive=True):
+            with open(filepath, 'r') as f:
+                for idx, line in enumerate(f, start=1):
+                    if line.strip().startswith('//'):
+                        continue
+                    if inner_html_pattern.search(line):
+                        violations.append(f"{filepath}:{idx} -> Banned .innerHTML assignment detected")
+    assert not violations, "Substrate components must not use .innerHTML:\n" + "\n".join(violations)

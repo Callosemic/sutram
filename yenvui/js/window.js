@@ -101,6 +101,16 @@ export class YenvuiWindow extends YenvuiBase {
                         <yv-icon name="${this.icon}" style="width: 14px; height: 14px; color: var(--intent-color, var(--intent-primary));"></yv-icon>
                         ${this.titleText}
                     </div>
+                    <button 
+                        class="window-btn close-btn" 
+                        title="Close Window"
+                        @pointerdown=${(e) => e.stopPropagation()}
+                        @click=${(e) => {
+                            e.stopPropagation();
+                            this.dispatchEvent(new CustomEvent('yenvui-window-close', { bubbles: true, composed: true }));
+                        }}>
+                        <yv-icon name="x" style="width: 16px; height: 16px;"></yv-icon>
+                    </button>
                 </div>
                 <div class="body"><slot></slot></div>
             </dialog>
