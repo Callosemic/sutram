@@ -2,6 +2,45 @@
 
 <!-- version list -->
 
+## v2.2.0 (2026-10-15)
+
+### Chores
+
+- Global workspace sweep
+  ([`84b2076`](https://github.com/Callosemic/sutram/commit/84b20760b859ce9dff6fd6df0ee1691640cd0326))
+
+- Global workspace sweep
+  ([`b4fac68`](https://github.com/Callosemic/sutram/commit/b4fac687bf115cd447295f333957e9f881d9c564))
+
+- Global workspace sweep
+  ([`e827fa5`](https://github.com/Callosemic/sutram/commit/e827fa58697e48ac8f4e9e2c58fbfb34e74ad913))
+
+### Features
+
+- Implement spatial report projection, mru focus backstack, and worker broker
+  ([`4529101`](https://github.com/Callosemic/sutram/commit/45291011377074b0e221df9fcabcef3cd987bd09))
+
+- Implement spatial report projection, mru focus backstack, and worker broker
+  ([`f540442`](https://github.com/Callosemic/sutram/commit/f540442759dad500b24378c604dce43bfeb23703))
+
+- Introduce popout shell variant, shallow equal subscriptions, auto-aligning overlays, and decoupled
+  host hooks
+  ([`e6f9889`](https://github.com/Callosemic/sutram/commit/e6f9889cb8d57f6a4a342082f3a5777b65c1b4c1))
+
+- **yenvui**: Add kinetic diff-viewer primitive, LCS diff-utils, and decouple theme observation
+  ([`63603a0`](https://github.com/Callosemic/sutram/commit/63603a0313b96e4e1f462ac4789ab2ef40704c22))
+
+- **yenvui**: Elevate dropdown overlays to top-layer popover api and standardize spatial geometry
+  tokens
+  ([`5819856`](https://github.com/Callosemic/sutram/commit/581985608c6f44f3bb62ed0b8d9a6cc8954a8e64))
+
+### Refactoring
+
+- Consolidate header css, deduplicate primitive imports, and codify zero prototype mutation
+  guardrail
+  ([`ef0ba29`](https://github.com/Callosemic/sutram/commit/ef0ba29c919b4273772ee2aa6fbb4f4417287190))
+
+
 ## v2.1.0 (2026-10-10)
 
 ### Chores
