@@ -29,8 +29,10 @@ sutram/
 │   │   ├── 0010_sutram_floating_window_projection.md # ADR-0010: Floating window projection layer and z-index management
 │   │   ├── 0011_sutram_context_mixin_and_grid_constrained_windows.md # ADR-0011: SutramContextMixin and grid-constrained spatial window projections
 │   │   ├── 0012_yv_icon_component_and_direct_node_retention.md # ADR-0012: Native yv-icon component and direct Lit element node retention
-│   │   ├── 0013_sutram_dynamic_spatial_ratios_and_light_dom_bem_styles.md # [comment required]
-│   │   └── 0014_sutram_focus_backstack_worker_broker_and_content_visibility.md # [comment required]
+│   │   ├── 0013_sutram_dynamic_spatial_ratios_and_light_dom_bem_styles.md # ADR-0013: Proportional column layout ratios and Light-DOM BEM primitive consolidation
+│   │   ├── 0014_sutram_focus_backstack_worker_broker_and_content_visibility.md # ADR-0014: Focus MRU backstack, singleton worker broker, and content-visibility pruning
+│   │   ├── 0015_sutram_decoupled_host_contracts_popout_shell_and_action_aggregation.md # ADR-0015: Decoupled host contracts, popout shell projection, and action aggregation
+│   │   └── 0016_yenvui_diff_viewer_and_diff_utils.md # [comment required]
 │   └── yenvui_contracts.md         # Interface contract specification and CSS intent tokens for yenVUI presentation chassis
 ├── pyproject.toml                  # Python project metadata and semantic release configuration
 ├── readme.md                       # Master repository architecture map and component reference
@@ -51,14 +53,14 @@ sutram/
 │       ├── sw-core.js              # Abstracted Service Worker core runtime for offline caching and navigation fallbacks
 │       ├── utils.js                # Pure algorithmic utility helpers (fuzzy filter, debounce, coalescedAsync, slugify, time formatting, nativeShareFiles)
 │       ├── wordcount.js            # Ephemeral word count widget decoration plugin for CodeMirror 6
-│       └── workers/                # [comment required]
-│           └── search-worker.js    # [comment required]
+│       └── workers/                # Dedicated off-main-thread Web Worker scripts
+│           └── search-worker.js    # Web Worker for asynchronous fuzzy filtering and directory tree construction
 ├── tests/                          # Automated presentation chassis compliance tests and fitness functions
 │   └── sutram_consumer_linter.py   # Reusable static analysis script for consumer UDF compliance
 └── yenvui/                         # Edge-Native presentation chassis and Web Component UI library
     ├── css/                        # Universal CSS theme tokens and layout resets
     │   ├── theme-tokens.css        # CSS custom property tokens for Dark, Light, and E-Ink brutalist themes
-    │   └── yenvui-primitives.css   # [comment required]
+    │   └── yenvui-primitives.css   # Atomic presentation resets and utility classes
     ├── js/                         # Pure ES module frontend runtime kernel and utilities
     │   ├── async-btn.js            # Agnostic asynchronous action button with status feedback state machine
     │   ├── board.js                # Multi-column container-query responsive layout grid and column container
@@ -66,6 +68,8 @@ sutram/
     │   ├── card.js                 # Polymorphic card primitive with drawer overlay and long-press selection
     │   ├── category-section.js     # Categorized list section wrapper with header action slot
     │   ├── collapsible.js          # Expandable accordion container with semantic intent styling
+    │   ├── diff-utils.js           # Line-by-line diff calculation algorithms and patch formatting utilities
+    │   ├── diff-viewer.js          # Dual-box and interleaved split-pane diff presentation component
     │   ├── drop-zone.js            # Top-layer popover drop overlay and drop target presentation primitives
     │   ├── dropdown.js             # Context popover trigger menus and filter dropdown panels
     │   ├── editor.js               # CodeMirror 6 code editor wrapper with dynamic ESM language loading

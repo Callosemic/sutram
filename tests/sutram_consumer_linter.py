@@ -29,6 +29,7 @@ def run_consumer_lint(target_dir):
     banned_yenvui_tag_pattern = re.compile(r'\byenvui-')
     banned_has_actions_pattern = re.compile(r'\bhas-actions\b')
     subscribe_without_sutram_pattern = re.compile(r'this\.subscribe\s*\(')
+    host_domain_leak_pattern = re.compile(r'\bwindow\.inSetu\b|[\'"]insetu-[a-z0-9-]+[\'"]')
 
     for root, _, files in os.walk(target_dir):
         for file in files:
@@ -90,17 +91,52 @@ def run_consumer_lint(target_dir):
 
                 if banned_has_actions_pattern.search(line):
                     report("BANNED_HAS_ACTIONS_ATTRIBUTE", "The 'has-actions' attribute is deprecated. Card components automatically mount the action tray via the ExtensionRegistry.")
-
                 if subscribe_without_sutram_pattern.search(line) and not extends_sutram_element:
                     report("SUTRAM_ELEMENT_SUBSCRIPTION_MANDATE", "Components using 'this.subscribe()' must extend 'SutramElement' to guarantee automated teardown in disconnectedCallback().")
 
+                if banned_yenvui_tag_pattern.search(line):
+                    report("BANNED_YENVUI_TAG_MANDATE", "Direct usage of 'yenvui-' tag detected. Consume state-aware 'sutram-' primitives or project via HTML slots.")
+
+                if host_domain_leak_pattern.search(line):
+                    report("HOST_DOMAIN_DECOUPLING", "Host domain reference detected (window.inSetu or 'insetu-*'). All host interactions must route through ExtensionRegistry UI hooks.")
+
+    return violations_found
+
+def check_host_domain_decoupling(target_dir="sutram/js"):
+    """
+    Fitness Function: Enforces pure host-neutral Inversion of Control.
+    Verifies that kernel runtime elements (sutram/js, yenvui/js) do not contain
+    hardcoded host globals (e.g., window.inSetu) or host component tags ('insetu-*').
+    """
+    print(f"🔍 Sweeping Host Domain Decoupling (IoC Fitness Function) in {target_dir}...")
+    violations_found = 0
+    host_leak_pattern = re.compile(r'\bwindow\.inSetu\b|[\'"]insetu-[a-z0-9-]+[\'"]')
+
+    for root, _, files in os.walk(target_dir):
+        for file in files:
+            if not file.endswith(".js"):
+                continue
+            filepath = Path(root) / file
+            with open(filepath, "r", encoding="utf-8") as f:
+                for line_num, line in enumerate(f, 1):
+                    if line.strip().startswith("//"):
+                        continue
+                    if host_leak_pattern.search(line):
+                        violations_found += 1
+                        print(f"❌ [VIOLATION: HOST_DOMAIN_DECOUPLING] {filepath.as_posix()}:{line_num}\n   ↳ Host domain reference detected. Route strictly through ExtensionRegistry UI hooks.\n")
     return violations_found
 
 if __name__ == "__main__":
     target = sys.argv[1] if len(sys.argv) > 1 else "."
     violations = run_consumer_lint(target)
+
+    if Path("sutram/js").exists():
+        violations += check_host_domain_decoupling("sutram/js")
+    if Path("yenvui/js").exists():
+        violations += check_host_domain_decoupling("yenvui/js")
+
     if violations == 0:
-        print("✅ SUCCESS: Consumer codebase complies with Sutram UI/UDF standards.")
+        print("✅ SUCCESS: Codebase complies with Sutram UI/UDF standards.")
         sys.exit(0)
     else:
         print(f"❌ FAILED: Found {violations} architectural violations.")
