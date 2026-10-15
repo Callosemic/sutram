@@ -46,6 +46,12 @@ To prevent ghost memory leaks and dangling subscriptions, components extending `
 * **Global DOM Listeners:** Use `this.registerGlobalListener(eventType, targetNode, callback)` and `this.registerOutsideClick(callback)`.
 * **Automatic Disconnection:** All registered subscriptions, intervals, and listeners are automatically torn down within `SutramElement.disconnectedCallback()`.
 
+### Top-Layer Popover API & Viewport Coordinate Anchoring
+Floating menus, dropdowns, and spatial drawers susceptible to CSS `overflow: hidden` or stacking context clipping MUST use the native browser `#top-layer` via HTML5 `popover="manual"`.
+* **State Synchronization:** Components must synchronize popover visibility through `syncTopLayerPopover(triggerEl, popoverEl, isOpen, options)` in `updated(changedProperties)` and ensure clean dismissal (`isOpen = false`) in `disconnectedCallback()`.
+* **Dynamic Anchoring:** Coordinate calculations must route through `anchorTopLayerPopover(triggerEl, popoverEl, options)` supporting `'menu'` (auto-reversing horizontal positioning) and `'column-drawer'` (spatial column bounding).
+* **Viewport Tracking:** When open, components must bind capture-phase listeners (`window.addEventListener('scroll', fn, true)` and `window.addEventListener('resize', fn)`) and unbind them immediately on close or unmount.
+
 ---
 
 ## 4. Iconography & Graphic Dictionary Standard

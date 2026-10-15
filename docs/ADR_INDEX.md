@@ -18,3 +18,4 @@
 * [ADR-0006: Gesture Swipe Axis Locking](./adrs/0006_yenvui_gesture_swipe_axis_locking.md)
 * [ADR-0008: Duck-Typed Selection Contracts for yenVUI Gestures](./adrs/0008_yenvui_duck_typed_selection_contracts.md)
 * [ADR-0016: Zero-Dependency Kinetic Diff Viewer and Intra-Line LCS Diff Utilities](./adrs/0016_yenvui_diff_viewer_and_diff_utils.md)
+* [ADR-0017: Native Top-Layer Popover API Elevation for Context Overlays and Spatial Geometry Design Tokens](./adrs/0017_yenvui_top_layer_popover_anchoring_and_spatial_geometry_tokens.md)

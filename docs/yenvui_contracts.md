@@ -19,6 +19,7 @@ A compliant chassis must consume and respect the following CSS custom properties
 *   **Borders:** `--border`, `--border-dim`
 *   **Typography:** `--text`, `--text-muted`, `--font-mono`
 *   **Semantics:** `--intent-primary`, `--intent-success`, `--intent-danger`, `--intent-warning`, `--intent-highlight`, `--intent-neutral`
+*   **Spatial Grid & Rail Geometry:** `--yv-utility-height`, `--yv-header-height`, `--yv-gutter-x`, `--yv-rail-cell-width`, `--yv-icon-size`, `--yv-icon-gap`
 
 ## III. Component Interface Matrix
 
@@ -69,6 +70,12 @@ Any replacement library must export the following Custom Elements.
     *   *Events:* `@yenvui-diff-line-selected`, `@yenvui-diff-mode-changed`.
 
 ### Inputs & Filtering
+*   **`<yenvui-dropdown>`**: Floating action menu utilizing native `#top-layer` Popover API.
+    *   *Properties:* `.items` (Array of `{id, label, icon, onClick, asyncAction, divider}`), `?open`, `.align` (`'auto'`|`'left'`|`'right'`).
+    *   *Slots:* `trigger`.
+*   **`<yenvui-filter-dropdown>`**: Column-anchored filter panel utilizing native `#top-layer` Popover API.
+    *   *Properties:* `.filterText`, `?open`, `?hasFilters`.
+    *   *Slots:* default (filter panel content).
 *   **`<yenvui-search-bar>`**: Filter input.
     *   *Properties:* `.placeholder`, `.value`.
     *   *Events:* `@yenvui-search-changed`.
