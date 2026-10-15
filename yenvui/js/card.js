@@ -549,6 +549,11 @@ export class YenvuiCard extends YenvuiBase {
 
                 ${!this.disableSelection ? html`<div class="selection-hit-zone" title="Select Item" @click=${(e) => { e.stopPropagation(); this._toggleSelection(); }}></div><div class="selection-strip"></div>` : ''}
                 <div class="content-col" @click=${(e) => {
+                    if (this._isPanning) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        return;
+                    }
                     this.dispatchEvent(new CustomEvent('yenvui-card-clicked', {
                         detail: { filename: this.filename, isSource: true },
                         bubbles: true,

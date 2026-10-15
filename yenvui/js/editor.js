@@ -132,10 +132,16 @@ export class YenvuiEditor extends LitElement {
 
         this._themeListener = () => {
             const theme = document.body.getAttribute('data-theme') || 'dark';
-            this.setAttribute('data-theme', theme);
-            this._updateTheme();
+            if (this.getAttribute('data-theme') !== theme) {
+                this.setAttribute('data-theme', theme);
+                this._updateTheme();
+            }
         };
-        window.addEventListener('insetu:theme-changed', this._themeListener);
+        window.addEventListener('yenvui-theme-changed', this._themeListener);
+        if (typeof MutationObserver !== 'undefined' && document.body) {
+            this._themeObserver = new MutationObserver(() => this._themeListener());
+            this._themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
+        }
         this.setAttribute('data-theme', document.body.getAttribute('data-theme') || 'dark');
 
         setTimeout(() => this._initEditor(), 0);
@@ -143,7 +149,11 @@ export class YenvuiEditor extends LitElement {
 
     disconnectedCallback() {
         super.disconnectedCallback();
-        if (this._themeListener) window.removeEventListener('insetu:theme-changed', this._themeListener);
+        if (this._themeListener) window.removeEventListener('yenvui-theme-changed', this._themeListener);
+        if (this._themeObserver) {
+            this._themeObserver.disconnect();
+            this._themeObserver = null;
+        }
         if (this._view) {
             this._view.destroy();
             this._view = null;
