@@ -32,7 +32,8 @@ sutram/
 │   │   ├── 0013_sutram_dynamic_spatial_ratios_and_light_dom_bem_styles.md # ADR-0013: Proportional column layout ratios and Light-DOM BEM primitive consolidation
 │   │   ├── 0014_sutram_focus_backstack_worker_broker_and_content_visibility.md # ADR-0014: Focus MRU backstack, singleton worker broker, and content-visibility pruning
 │   │   ├── 0015_sutram_decoupled_host_contracts_popout_shell_and_action_aggregation.md # ADR-0015: Decoupled host contracts, popout shell projection, and action aggregation
-│   │   └── 0016_yenvui_diff_viewer_and_diff_utils.md # [comment required]
+│   │   ├── 0016_yenvui_diff_viewer_and_diff_utils.md # [comment required]
+│   │   └── 0017_yenvui_top_layer_popover_anchoring_and_spatial_geometry_tokens.md # [comment required]
 │   └── yenvui_contracts.md         # Interface contract specification and CSS intent tokens for yenVUI presentation chassis
 ├── pyproject.toml                  # Python project metadata and semantic release configuration
 ├── readme.md                       # Master repository architecture map and component reference
