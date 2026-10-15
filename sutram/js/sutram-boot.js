@@ -16,22 +16,66 @@
     // =========================================================================
     // 2. Define yv-icon Micro-Primitive (SVG Sprite Renderer)
     // =========================================================================
+    window.SutramIcons = window.SutramIcons || {};
+    if (!window.SutramIcons['construction']) {
+        window.SutramIcons['construction'] = '<rect x="2" y="6" width="20" height="8" rx="1"/><path d="M17 14v7"/><path d="M7 14v7"/><path d="M17 3v3"/><path d="M7 3v3"/><path d="M10 14 2.3 6.3"/><path d="m14 6 7.7 7.7"/><path d="m8 6 8 8"/>';
+    }
+    const _iconMaskCache = new Map();
+
+    function getIconMaskUrl(name, strokeWidth) {
+        if (!name) return 'none';
+        const cacheKey = `${name}:${strokeWidth}`;
+        if (_iconMaskCache.has(cacheKey)) {
+            return _iconMaskCache.get(cacheKey);
+        }
+        const rawMarkup = window.SutramIcons ? (window.SutramIcons[name] || '') : '';
+        if (!rawMarkup) return 'none';
+        const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round">${rawMarkup}</svg>`;
+        const encoded = svgStr
+            .replace(/"/g, "'")
+            .replace(/%/g, '%25')
+            .replace(/#/g, '%23')
+            .replace(/</g, '%3C')
+            .replace(/>/g, '%3E');
+        const maskUrl = `url("data:image/svg+xml;utf8,${encoded}")`;
+        _iconMaskCache.set(cacheKey, maskUrl);
+        return maskUrl;
+    }
+
     class YvIcon extends HTMLElement {
+        static get observedAttributes() { return ['name', 'stroke-width']; }
         connectedCallback() {
-            this.style.display = 'inline-flex';
-            this.style.alignItems = 'center';
-            this.style.justifyContent = 'center';
+            this.style.display = 'inline-block';
+            this.style.verticalAlign = 'middle';
             this.style.flexShrink = '0';
+            this.style.backgroundColor = 'currentColor';
+            this.style.maskRepeat = 'no-repeat';
+            this.style.webkitMaskRepeat = 'no-repeat';
+            this.style.maskPosition = 'center';
+            this.style.webkitMaskPosition = 'center';
+            this.style.maskSize = 'contain';
+            this.style.webkitMaskSize = 'contain';
             if (!this.style.width && !this.style.height) {
                 this.style.width = '16px';
                 this.style.height = '16px';
             }
-            const name = this.getAttribute('name');
-            const paths = window.SutramIcons ? (window.SutramIcons[name] || '') : '';
-            this.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 100%; height: 100%; display: block;">' + paths + '</svg>';
+            this._renderIcon();
         }
-}
-customElements.define('yv-icon', YvIcon);
+        attributeChangedCallback(attrName, oldVal, newVal) {
+            if (oldVal !== newVal && this.isConnected) {
+                this._renderIcon();
+            }
+        }
+        _renderIcon() {
+            const name = this.getAttribute('name');
+            const strokeWidth = this.getAttribute('stroke-width') || '2';
+            const maskUrl = getIconMaskUrl(name, strokeWidth);
+            this.style.maskImage = maskUrl;
+            this.style.webkitMaskImage = maskUrl;
+            this.style.backgroundColor = maskUrl === 'none' ? 'transparent' : 'currentColor';
+        }
+    }
+    customElements.define('yv-icon', YvIcon);
 
     // =========================================================================
     // 3. Trigger Stage 2

@@ -308,19 +308,25 @@ export class SutramAppShell extends SutramElement {
     }
     _handlePointerDown(e, entity, sourceCol, originType = 'subtab') {
         let sourceRect = null;
+        const trackEl = this.shadowRoot.querySelector('.spatial-track');
+        const trackRect = trackEl ? trackEl.getBoundingClientRect() : { top: 38, height: window.innerHeight - 68 };
+
         if (sourceCol === 'window') {
             const path = e.composedPath();
             const winNode = path.find(n => n.tagName && n.tagName.toLowerCase() === 'sutram-window');
             if (winNode && winNode.parentElement) {
                 const r = winNode.parentElement.getBoundingClientRect();
-                sourceRect = { left: r.left, top: 0, width: r.width, height: window.innerHeight };
+                sourceRect = { left: r.left, top: r.top, width: r.width, height: r.height };
             }
         } else if (sourceCol) {
             const colNode = this.shadowRoot.querySelector(`.spatial-col[data-col-id="${sourceCol}"]`);
             if (colNode) {
                 const r = colNode.getBoundingClientRect();
-                sourceRect = { left: r.left, top: 0, width: r.width, height: window.innerHeight };
+                sourceRect = { left: r.left, top: r.top, width: r.width, height: r.height };
             }
+        }
+        if (!sourceRect) {
+            sourceRect = { left: 0, top: trackRect.top, width: window.innerWidth, height: trackRect.height };
         }
 
         const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
@@ -386,10 +392,33 @@ export class SutramAppShell extends SutramElement {
                                     const nextActive = updatedLayout.columns[nextCol]?.active || '';
                                     this._updateUrlHash(nextCol, nextActive);
                                 });
-                            } else if (targetZone === 'window') {
+                            } else if (targetZone === 'popout') {
+                                const registry = window.ExtensionRegistry || ExtensionRegistry;
+                                const handledByHook = registry?.executeUIHook
+                                    ? registry.executeUIHook('sutram:popout-projection', entity.id)
+                                    : false;
+                                if (!handledByHook) {
+                                    const hashParts = window.location.hash.replace(/^#\/?/, '').split('/');
+                                    const activeWs = hashParts[0] || 'default';
+                                    const targetCol = (sourceCol && sourceCol !== 'window') ? sourceCol : (layout.focusedColumn || 'center');
+                                    const popoutUrl = `${window.location.pathname}?popout=true#/${encodeURIComponent(activeWs)}/${encodeURIComponent(targetCol)}/${encodeURIComponent(entity.id)}`;
+                                    window.open(popoutUrl, '_blank', 'popup=yes,width=850,height=900');
+                                    if (sourceCol === 'window') layout.closeWindow(entity.id);
+                                    else if (sourceCol) layout.unpinFromColumn(sourceCol, entity.id);
+                                    layout.evictProjection(entity.id);
+                                }
+                            } else if (targetZone === 'window' || targetZone === 'mode-window') {
+                                const targetAnchor = (sourceCol && sourceCol !== 'window') ? sourceCol : (entity.anchorCol || layout.focusedColumn || 'center');
+                                if (sourceCol && sourceCol !== 'window') layout.unpinFromColumn(sourceCol, entity.id);
+                                layout.openWindow(entity, targetAnchor, 1);
+                            } else if (targetZone === 'mode-tab' && !entity?.windowOnly) {
+                                const destCol = (sourceCol && sourceCol !== 'window') ? sourceCol : (entity.anchorCol || layout.focusedColumn || 'center');
                                 if (sourceCol === 'window') layout.closeWindow(entity.id);
-                                else if (sourceCol) layout.unpinFromColumn(sourceCol, entity.id);
-                                layout.openWindow(entity, layout.focusedColumn || 'center', 1);
+                                if (!layout.columns[destCol]?.pinned?.some(p => p.id === entity.id)) {
+                                    layout.pinToColumn(destCol, entity);
+                                }
+                                layout.setActiveProjection(destCol, entity.id);
+                                layout.setFocusedColumn(destCol);
                             } else if (targetZone.startsWith('span-')) {
                                 const parts = targetZone.split('-');
                                 const span = parseInt(parts[1], 10);
@@ -921,7 +950,13 @@ export class SutramAppShell extends SutramElement {
                 } catch (e) {
                     node = document.createElement('div');
                     node.style.cssText = "padding: 15px; color: var(--intent-danger); font-family: monospace; display: flex; align-items: center; gap: 6px;";
-                    node.innerHTML = `<yv-icon name="alert-triangle" style="width: 14px; height: 14px;"></yv-icon><span>Failed to initialize &lt;${componentTag}&gt;</span>`;
+                    const iconEl = document.createElement('yv-icon');
+                    iconEl.setAttribute('name', 'alert-triangle');
+                    iconEl.style.width = '14px';
+                    iconEl.style.height = '14px';
+                    const textEl = document.createElement('span');
+                    textEl.textContent = `Failed to initialize <${componentTag}>`;
+                    node.replaceChildren(iconEl, textEl);
                 }
             }
             if (subId && node.dataset) node.dataset.subId = subId;
@@ -978,14 +1013,30 @@ export class SutramAppShell extends SutramElement {
             const focusedCol = this._spatialState?.focusedColumn || 'center';
             const colState = this._spatialState?.columns?.[focusedCol];
             const activeId = hashSubId || colState?.active || (colState?.pinned?.[0]?.id);
-
             let activeSlot = subSlots.find(s => s.id === activeId || (!activeId.includes(':') && s.rawId === activeId));
             let singleNode = null;
 
             if (activeSlot) {
-                singleNode = getDynamicNode(activeSlot.component, activeSlot.id);
+                if (activeSlot.allow_popout) {
+                    singleNode = getDynamicNode(activeSlot.component, activeSlot.id);
+                } else {
+                    singleNode = html`
+                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 40px; text-align: center; color: var(--text-muted); box-sizing: border-box; font-family: var(--font-mono, monospace);">
+                            <yv-icon name="alert-triangle" style="width: 36px; height: 36px; color: var(--intent-warning); margin-bottom: 16px;"></yv-icon>
+                            <h3 style="margin: 0 0 8px 0; color: var(--text); font-size: 1.1rem;">Unsupported Pop-Out View</h3>
+                            <p style="margin: 0; max-width: 440px; font-size: 0.85rem; line-height: 1.5;">The projection <strong>${activeSlot.label || activeSlot.id}</strong> is not permitted to run in an ephemeral pop-out window.</p>
+                        </div>
+                    `;
+                }
             } else if (activeId) {
-                singleNode = getDynamicNode('insetu-editor-projection', activeId);
+                const customEditor = typeof registry.resolveCustomEditor === 'function'
+                    ? registry.resolveCustomEditor(activeId)
+                    : null;
+                const hookComponent = registry?.executeUIHook
+                    ? registry.executeUIHook('sutram:resolve-editor-component', activeId)
+                    : null;
+                const targetComponent = customEditor?.component || hookComponent || 'sutram-editor';
+                singleNode = getDynamicNode(targetComponent, activeId);
             }
 
             const popoutHtml = html`

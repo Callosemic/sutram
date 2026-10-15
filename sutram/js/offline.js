@@ -36,11 +36,18 @@ export class SutramDB {
         });
         return this._dbPromise;
     }
+    static _normalizeCacheKey(scopeId, filepath) {
+        let clean = String(filepath || '').replace(/([?&])t=\d+&?/, '$1').replace(/[?&]$/, '');
+        clean = clean.replace(/file=vfs%3A%2F%2F/i, 'file=').replace(/^vfs:\/\//i, '');
+        return `${scopeId}::${clean}`;
+    }
+
     static async cacheVFSBlob(scopeId, filepath, blob) {
         const db = await this.getDB();
+        const key = this._normalizeCacheKey(scopeId, filepath);
         return new Promise((resolve, reject) => {
             const tx = db.transaction('vfs_cache', 'readwrite');
-            tx.objectStore('vfs_cache').put({ blob, ts: Date.now() }, `${scopeId}::${filepath}`);
+            tx.objectStore('vfs_cache').put({ blob, ts: Date.now() }, key);
             tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
         });
@@ -48,9 +55,10 @@ export class SutramDB {
 
     static async deleteVFSBlob(scopeId, filepath) {
         const db = await this.getDB();
+        const key = this._normalizeCacheKey(scopeId, filepath);
         return new Promise((resolve, reject) => {
             const tx = db.transaction('vfs_cache', 'readwrite');
-            tx.objectStore('vfs_cache').delete(`${scopeId}::${filepath}`);
+            tx.objectStore('vfs_cache').delete(key);
             tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
         });
@@ -58,9 +66,10 @@ export class SutramDB {
 
     static async getVFSBlob(scopeId, filepath) {
         const db = await this.getDB();
+        const key = this._normalizeCacheKey(scopeId, filepath);
         return new Promise((resolve) => {
             const tx = db.transaction('vfs_cache', 'readwrite');
-            const req = tx.objectStore('vfs_cache').get(`${scopeId}::${filepath}`);
+            const req = tx.objectStore('vfs_cache').get(key);
             req.onsuccess = () => {
                 const data = req.result;
                 if (!data) return resolve(null);
@@ -71,7 +80,7 @@ export class SutramDB {
                 } else if (data.blob) {
                     // Update access timestamp for true LRU execution
                     data.ts = Date.now();
-                    tx.objectStore('vfs_cache').put(data, `${scopeId}::${filepath}`);
+                    tx.objectStore('vfs_cache').put(data, key);
                     resolve(data.blob);
                 } else {
                     resolve(null);
@@ -356,10 +365,18 @@ export class OfflineHttpProvider {
             this.onError("Payload must be stringified or FormData (which is unsupported offline).", url);
             return new Response(JSON.stringify({ error: "Invalid offline payload format." }), { status: 503, statusText: "Service Unavailable" });
         }
-
         try {
             const collapseKey = options.collapseKey || null;
             const headers = options.plainHeaders || {};
+            if (method === 'POST' && url.endsWith('/fs/save') && typeof bodyString === 'string') {
+                try {
+                    const parsed = JSON.parse(bodyString);
+                    if (parsed.filepath && parsed.content !== undefined) {
+                        const fetchUrl = `/api/${scopeId}/fs/fetch?file=${encodeURIComponent(parsed.filepath)}`;
+                        await SutramDB.cacheVFSBlob(scopeId, fetchUrl, new Blob([parsed.content], { type: 'text/plain;charset=utf-8' }));
+                    }
+                } catch (e) {}
+            }
             await SutramDB.enqueueMutation(scopeId, url, method, headers, bodyString, collapseKey);
             const count = await SutramDB.getOutboxCount(scopeId);
 
@@ -493,4 +510,119 @@ export class OutboxReconciler {
             }
         }
     }
+}
+
+export async function purgeSutramCaches() {
+    if ('caches' in window) {
+        try {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(k => caches.delete(k)));
+        } catch (e) {}
+    }
+    if ('serviceWorker' in navigator) {
+        try {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (const reg of regs) await reg.unregister();
+        } catch (e) {}
+    }
+}
+
+export function bootSutramServiceWorker(options = {}) {
+    const {
+        swUrl = '/sw.js',
+        staticPathPrefix = '/static/',
+        excludePathPrefix = '/api/',
+        isReconciling = () => false,
+        subscribeReconciling = null,
+        onStatus = null,
+        onLog = null,
+        onError = null
+    } = options;
+
+    if (!('serviceWorker' in navigator)) {
+        if (onError) {
+            onError("Offline mode disabled: Service Workers require a secure context (HTTPS or localhost).");
+        }
+        return;
+    }
+
+    const hadControllerOnBoot = Boolean(navigator.serviceWorker.controller);
+    let isFirstInstall = !hadControllerOnBoot;
+    let reloadScheduled = false;
+
+    const warmDynamicBootAssets = () => {
+        try {
+            const resources = window.performance.getEntriesByType('resource');
+            const urlsToCache = resources
+                .filter(r => r.name.includes(staticPathPrefix) && (!excludePathPrefix || !r.name.includes(excludePathPrefix)))
+                .map(r => r.name);
+
+            urlsToCache.forEach(url => fetch(url, { priority: 'low' }).catch(() => {}));
+            if (onLog) {
+                onLog(`First install: Warmed SW cache with ${urlsToCache.length} dynamic boot assets.`, 'success');
+            }
+        } catch (e) {}
+    };
+
+    const scheduleFirstInstallReload = () => {
+        if (reloadScheduled) return;
+        reloadScheduled = true;
+        warmDynamicBootAssets();
+        console.log('SW installed for the first time. Hydrating dynamic module cache...');
+        setTimeout(() => window.location.reload(), 500);
+    };
+
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (isFirstInstall) {
+            isFirstInstall = false;
+            scheduleFirstInstallReload();
+        }
+    });
+
+    const trackInstallingWorker = (worker) => {
+        if (!worker) return;
+        worker.addEventListener('statechange', () => {
+            if (worker.state === 'installed') {
+                if (hadControllerOnBoot) {
+                    if (isReconciling()) {
+                        console.log('New update deferred until outbox drains...');
+                        window.addEventListener('sutram-sync-complete', () => {
+                            worker.postMessage({ type: 'SKIP_WAITING' });
+                            window.location.reload();
+                        }, { once: true });
+                    } else {
+                        console.log('New update available. Refreshing...');
+                        worker.postMessage({ type: 'SKIP_WAITING' });
+                        window.location.reload();
+                    }
+                } else {
+                    scheduleFirstInstallReload();
+                }
+            }
+        });
+    };
+
+    navigator.serviceWorker.register(swUrl).then(reg => {
+        if (onStatus) onStatus("Service Worker Active", 3000);
+
+        if (reg.installing) {
+            trackInstallingWorker(reg.installing);
+        } else if (!hadControllerOnBoot && (reg.waiting || reg.active)) {
+            scheduleFirstInstallReload();
+        }
+
+        reg.addEventListener('updatefound', () => {
+            trackInstallingWorker(reg.installing);
+        });
+
+        if (typeof subscribeReconciling === 'function') {
+            subscribeReconciling((isRec) => {
+                if (navigator.serviceWorker.controller) {
+                    navigator.serviceWorker.controller.postMessage({ type: 'SET_RECONCILING', value: isRec });
+                }
+            });
+        }
+    }).catch(err => {
+        if (onError) onError("SW Registration Failed: " + err.message);
+    });
 }

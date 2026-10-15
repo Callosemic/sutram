@@ -321,9 +321,25 @@ export const ExtensionRegistry = {
     getExtension: function(extName) {
         return this._manifests.get(extName);
     },
-
     hasExtension: function(extName) {
         return this._manifests.has(extName);
+    },
+
+    resolveCustomEditor: function(filepath) {
+        if (!filepath) return null;
+        for (const [extName, manifest] of this._manifests.entries()) {
+            if (this._filterPredicate && !this._filterPredicate(extName)) continue;
+            if (Array.isArray(manifest.customEditors)) {
+                for (const ed of manifest.customEditors) {
+                    try {
+                        if (typeof ed.match === 'function' && ed.match(filepath)) {
+                            return { ...ed, extName };
+                        }
+                    } catch (e) {}
+                }
+            }
+        }
+        return null;
     },
 
     setTabOrder: function(newOrder = []) {

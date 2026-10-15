@@ -644,7 +644,12 @@ export class SutramGenericSettingsModal extends SutramElement {
                                 ${field.type === 'boolean' 
                                     ? html`<div style="display: flex; align-items: center; gap: 10px;"><label style="font-size: 0.95rem; color: var(--text); font-weight: bold; margin: 0; cursor: pointer;">${displayLabel}</label>${inputHtml}</div>` 
                                     : html`<label style="font-size: 0.85rem; color: var(--text-muted); font-weight: bold;">${displayLabel}</label>${inputHtml}`}
-                                ${field.html_desc ? html`<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: -2px;" .innerHTML=${field.html_desc}></div>` : (field.description || field.desc ? html`<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: -2px;">${field.description || field.desc}</div>` : '')}
+                                ${field.description || field.desc ? html`<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: -2px;">${field.description || field.desc}</div>` : ''}
+                                ${Array.isArray(field.intent_legend) ? html`
+                                    <div style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 10px; font-family: var(--font-mono); font-size: 0.75rem; font-weight: bold;">
+                                        ${field.intent_legend.map(intent => html`<span style="color: var(--intent-${intent});">● ${intent}</span>`)}
+                                    </div>
+                                ` : ''}
                             </div>
                         `;
                     })}
@@ -1065,6 +1070,16 @@ export class SutramCard extends SutramContextMixin(YenvuiCard) {
         });
     }
     updated(changedProperties) {
+        if (changedProperties.has('icon') || changedProperties.has('entityData')) {
+            const isDirtyCard = Boolean(
+                this.entityData?.needs_recompile ||
+                this.entityData?.is_dirty ||
+                this.entityData?.outdated
+            );
+            if (isDirtyCard && (!this.icon || this.icon === 'alert-triangle' || this.icon === 'package')) {
+                this.icon = 'construction';
+            }
+        }
         super.updated(changedProperties);
         if (changedProperties.has('entityData') || changedProperties.has('filename')) {
             if (this.selectionStoreKey && this.selectionStoreKey !== 'none') {
