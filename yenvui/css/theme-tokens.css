@@ -34,10 +34,17 @@
     --btn: var(--intent-primary);
     --btn-hover: #4f46e5;
     --console-bg: #05070a;
-
     /* Dynamic Color-Mix Intensities */
     --intent-bg-mix: 15%;
     --header-bg-mix: 20%;
+
+    /* --- SPATIAL GRID & RAIL GEOMETRY TOKENS --- */
+    --yv-utility-height: 38px;
+    --yv-header-height: 44px;
+    --yv-gutter-x: 12px;
+    --yv-rail-cell-width: 44px;
+    --yv-icon-size: 14px;
+    --yv-icon-gap: 8px;
 }
 
 /* ==========================================================================

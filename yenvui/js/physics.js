@@ -1,9 +1,6 @@
 // sutram/yenvui/js/physics.js
 
 /**
- * Traverses Shadow DOM boundaries to find the deepest element at given coordinates.
- */
-/**
 * Centralized event path resolution helper. Handles shadow DOM piercing,
 * composedPath fallbacks, and synthetic events safely.
 */
@@ -37,6 +34,107 @@ export function getEventTarget(e, selector = null) {
         if (el && el.closest && el.closest(selector)) return el.closest(selector);
     }
     return null;
+}
+/**
+* Computes and applies true viewport coordinates for a #top-layer popover element.
+* Supports 'menu' (floating dropdowns with auto left/right flip) and 'column-drawer'
+* (full-width column filter panels aligned to the enclosing spatial column).
+*/
+export function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) {
+    if (!triggerEl || !popoverEl) return;
+    const mode = options.mode || 'menu';
+    const align = options.align || 'auto';
+    const offset = options.offset ?? 4;
+
+    const triggerRect = triggerEl.getBoundingClientRect();
+
+    let curr = triggerEl;
+    let colEl = null;
+    let headerEl = null;
+
+    while (curr) {
+        if (curr.classList) {
+            if (!headerEl && (curr.classList.contains('toolbar-row') || curr.classList.contains('sticky-header') || curr.classList.contains('col-header') || curr.classList.contains('editor-header'))) {
+                headerEl = curr;
+            }
+            if (curr.classList.contains('spatial-col')) {
+                colEl = curr;
+                break;
+            }
+        }
+        if (curr.tagName && ['SUTRAM-WINDOW', 'SUTRAM-APP-SHELL'].includes(curr.tagName.toUpperCase())) {
+            if (!colEl) colEl = curr;
+            break;
+        }
+        curr = curr.parentElement || (curr.getRootNode ? curr.getRootNode()?.host : null);
+    }
+
+    const colRect = colEl
+        ? colEl.getBoundingClientRect()
+        : (headerEl ? headerEl.getBoundingClientRect() : { left: 0, right: window.innerWidth, width: window.innerWidth });
+
+    if (mode === 'column-drawer') {
+        const rowBottom = headerEl ? headerEl.getBoundingClientRect().bottom : triggerRect.bottom;
+        const left = Math.max(0, colRect.left);
+        const right = Math.min(window.innerWidth, colRect.right);
+        const width = Math.max(200, right - left);
+
+        popoverEl.style.position = 'fixed';
+        popoverEl.style.margin = '0';
+        popoverEl.style.inset = 'auto';
+        popoverEl.style.top = `${Math.round(rowBottom)}px`;
+        popoverEl.style.left = `${Math.round(left)}px`;
+        popoverEl.style.right = 'auto';
+        popoverEl.style.width = `${Math.round(width)}px`;
+        return;
+    }
+
+    // Floating Menu Mode ('menu')
+    const maxRight = Math.min(window.innerWidth, colRect.right || window.innerWidth);
+    const minLeft = Math.max(0, colRect.left || 0);
+    const spaceOnRight = maxRight - triggerRect.left;
+    const containerWidth = maxRight - minLeft;
+    const isInRightHalf = containerWidth > 0 && (triggerRect.left - minLeft) > (containerWidth * 0.5);
+    const estimatedWidth = options.estimatedWidth || 220;
+
+    const shouldAlignRight = align === 'right' || (align === 'auto' && (spaceOnRight < estimatedWidth + 12 || isInRightHalf));
+
+    popoverEl.style.position = 'fixed';
+    popoverEl.style.margin = '0';
+    popoverEl.style.inset = 'auto';
+    popoverEl.style.top = `${Math.round(triggerRect.bottom + offset)}px`;
+
+    if (shouldAlignRight) {
+        const rightPx = Math.max(4, window.innerWidth - triggerRect.right);
+        popoverEl.style.right = `${Math.round(rightPx)}px`;
+        popoverEl.style.left = 'auto';
+    } else {
+        const leftPx = Math.max(4, triggerRect.left);
+        popoverEl.style.left = `${Math.round(leftPx)}px`;
+        popoverEl.style.right = 'auto';
+    }
+}
+
+/**
+* Promotes or dismisses a popover element in the browser's #top-layer and synchronizes its anchor coordinates.
+*/
+export function syncTopLayerPopover(triggerEl, popoverEl, isOpen, options = {}) {
+    if (!popoverEl) return;
+    if (isOpen) {
+        if (typeof popoverEl.showPopover === 'function') {
+            if (popoverEl.getAttribute('popover') !== 'manual') {
+                popoverEl.setAttribute('popover', 'manual');
+            }
+            if (!popoverEl.matches(':popover-open')) {
+                try { popoverEl.showPopover(); } catch (e) {}
+            }
+        }
+        anchorTopLayerPopover(triggerEl, popoverEl, options);
+    } else {
+        if (typeof popoverEl.hidePopover === 'function' && popoverEl.matches(':popover-open')) {
+            try { popoverEl.hidePopover(); } catch (e) {}
+        }
+    }
 }
 
 export function getDeepElementFromPoint(x, y, selector = null) {
