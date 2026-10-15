@@ -25,7 +25,7 @@ import { YenvuiLabel } from '../../yenvui/js/label.js';
 import { YenvuiDropdown } from '../../yenvui/js/dropdown.js';
 import { YenvuiScrubTrack } from '../../yenvui/js/yenvui-base.js';
 import { sharedStyles } from './shared_styles.js';
-import { buildFileTree, SutramWorker } from './utils.js';
+import { buildFileTree, resolveDirectoryState, SutramWorker } from './utils.js';
 
 import '../../yenvui/js/async-btn.js';
 import '../../yenvui/js/status-bar.js';
@@ -50,6 +50,8 @@ import '../../yenvui/js/tag.js';
 import '../../yenvui/js/label.js';
 import { YenvuiScrollView } from '../../yenvui/js/scroll-view.js';
 import '../../yenvui/js/scroll-view.js';
+import { YenvuiDiffViewer } from '../../yenvui/js/diff-viewer.js';
+import '../../yenvui/js/diff-viewer.js';
 import '/static/vendor/lit/lit-virtualizer.min.js';
 
 // 0. Universal Virtualized List
@@ -323,17 +325,13 @@ export class SutramSelectionTray extends SutramElement {
         const itemsArray = Array.from(this.selectedItems.values());
         let totalSize = 0;
         let hasUnknown = false;
+        const registry = window.ExtensionRegistry;
         itemsArray.forEach(item => {
-            if (item.data?.size_bytes) {
-                totalSize += item.data.size_bytes;
+            const resolvedBytes = item.data?.size_bytes || (registry?.executeUIHook ? registry.executeUIHook('sutram:resolve-item-size', item.data) : null);
+            if (resolvedBytes) {
+                totalSize += resolvedBytes;
             } else {
-                const path = item.data?.filepath || item.data?.folderpath || item.data?.id;
-                const manifest = window.inSetu?.stores?.App?.getState()?.manifest;
-                if (manifest?.ctx?.[path]?.meta?.size_bytes) {
-                    totalSize += manifest.ctx[path].meta.size_bytes;
-                } else {
-                    hasUnknown = true;
-                }
+                hasUnknown = true;
             }
         });
 
@@ -343,17 +341,27 @@ export class SutramSelectionTray extends SutramElement {
         } else if (hasUnknown) {
             sizeDisplay = 'Calculated on compile';
         }
-
         let batchActions = [];
-        const registry = window.ExtensionRegistry;
-        if (registry && registry._manifests) {
-            registry._manifests.forEach(config => {
-                if (config.batchActions) {
-                    config.batchActions.forEach(act => {
-                        if (act.match(itemsArray)) batchActions.push(act);
-                    });
-                }
-            });
+        if (registry) {
+            if (typeof registry.getAggregatableActions === 'function') {
+                batchActions = registry.getAggregatableActions(itemsArray, { group: 'share' });
+            }
+            // Backward-compatibility fallback for extensions still using legacy batchActions
+            if (registry._manifests) {
+                registry._manifests.forEach(config => {
+                    if (config.batchActions) {
+                        config.batchActions.forEach(act => {
+                            if (!batchActions.some(b => b.id === act.id) && act.match(itemsArray)) {
+                                batchActions.push({
+                                    ...act,
+                                    onClick: act.onClick ? (e) => act.onClick(itemsArray, e) : null,
+                                    asyncAction: act.asyncAction ? (e) => act.asyncAction(itemsArray, e) : null
+                                });
+                            }
+                        });
+                    }
+                });
+            }
         }
         batchActions.sort((a, b) => (a.order || 99) - (b.order || 99));
 
@@ -379,11 +387,7 @@ export class SutramSelectionTray extends SutramElement {
                     ${itemsArray.map(item => {
                         const name = item.data?.titleText || item.data?.filepath?.split('/').pop() || 'Unknown Item';
                         const path = item.data?.filepath || item.data?.folderpath || item.data?.id || '';
-                        let sizeBytes = item.data?.size_bytes;
-                        if (!sizeBytes) {
-                            const manifest = window.inSetu?.stores?.App?.getState()?.manifest;
-                            sizeBytes = manifest?.ctx?.[path]?.meta?.size_bytes;
-                        }
+                        const sizeBytes = item.data?.size_bytes || (registry?.executeUIHook ? registry.executeUIHook('sutram:resolve-item-size', item.data) : null);
                         const sizeText = sizeBytes ? `${Math.round(sizeBytes / 1024)} kb` : '';
                         return html`
                         <div class="tray-item">
@@ -407,8 +411,8 @@ export class SutramSelectionTray extends SutramElement {
                             variant="${act.variant || 'tinted'}"
                             ?emphasis=${act.emphasis}
                             .onClick=${async (e) => {
-                                if (act.asyncAction) await act.asyncAction(itemsArray, e);
-                                else if (act.onClick) act.onClick(itemsArray, e);
+                                if (act.asyncAction) await act.asyncAction(e);
+                                else if (act.onClick) act.onClick(e);
                             }}>
                         </sutram-async-btn>
                     `)}
@@ -504,31 +508,24 @@ export class SutramFolderBrowser extends LitElement {
         }));
     }
     render() {
-        let current = this._treeData || {};
-        for (const p of this.currentPath) {
-            if (current[p]) {
-                current = current[p];
-            } else {
-                current = this._treeData || {};
-                this.currentPath = [];
-                break;
-            }
+        const { validPath, entries } = resolveDirectoryState(this._treeData, this.currentPath, { hideFiles: true });
+        if (validPath.length !== (this.currentPath || []).length) {
+            this.currentPath = validPath;
         }
 
-        const keys = Object.keys(current).filter(k => k !== '_isFile' && !current[k]._isFile).sort((a, b) => a.localeCompare(b));
         return html`
             <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; overflow: hidden;">
-                <sutram-btn intent="neutral" icon="corner-left-up" label="Up" ?disabled=${this.currentPath.length === 0} @click=${() => this._setPath(this.currentPath.slice(0, -1))}></sutram-btn>
+                <sutram-btn intent="neutral" icon="corner-left-up" label="Up" ?disabled=${validPath.length === 0} @click=${() => this._setPath(validPath.slice(0, -1))}></sutram-btn>
                 <yenvui-scrub-track style="flex: 1; min-width: 0; font-family: monospace; color: var(--text); opacity: 0.7; font-size: 0.9rem;">
-                    /${this.currentPath.join('/')}
+                    /${validPath.join('/')}
                 </yenvui-scrub-track>
             </div>
             <div style="flex: 1; overflow-y: auto;">
-                ${keys.length === 0 ? html`<div style="color: var(--text-muted); font-style: italic; font-size: 0.9rem; margin-top: 10px;">No sub-folders available.</div>` : keys.map(key => html`
+                ${entries.length === 0 ? html`<div style="color: var(--text-muted); font-style: italic; font-size: 0.9rem; margin-top: 10px;">No sub-folders available.</div>` : entries.map(node => html`
                     <div class="yv-interactive-row" style="padding: 8px 10px; cursor: pointer; display: flex; align-items: center; border-radius: 4px; margin-bottom: 4px;" 
-                        @click=${() => this._setPath([...this.currentPath, key])}>
+                        @click=${() => this._setPath([...validPath, node.name])}>
                         <yv-icon name="folder" style="width: 16px; height: 16px; color: var(--intent-warning); margin-right: 8px;"></yv-icon>
-                        <span style="color: var(--text); font-size: 0.9rem; font-weight: bold;">${key}</span>
+                        <span style="color: var(--text); font-size: 0.9rem; font-weight: bold;">${node.name}</span>
                     </div>
                 `)}
             </div>
@@ -815,7 +812,6 @@ export class SutramEntityActions extends SutramElement {
             if (act.asyncAction) return await act.asyncAction(this.entityData, e);
             if (act.onClick) return act.onClick(this.entityData, e);
         };
-
         if (this.variant === 'menu-bar') {
             const groups = { file: [], edit: [], share: [], tools: [] };
             actions.forEach(act => {
@@ -831,12 +827,33 @@ export class SutramEntityActions extends SutramElement {
             const groupLabels = { file: 'File', edit: 'Edit', share: 'Share', tools: 'Tools' };
             const groupIcons = { file: 'file-text', edit: 'edit-3', share: 'share-2', tools: 'wrench' };
 
+            const checkDropdownAlign = (e) => {
+                const dd = e.currentTarget;
+                if (!dd) return;
+                const rect = dd.getBoundingClientRect();
+                const container = dd.closest('.spatial-col, sutram-app-shell, .editor-header') || document.body;
+                const containerRight = container.getBoundingClientRect ? container.getBoundingClientRect().right : window.innerWidth;
+                const maxRight = Math.min(window.innerWidth, containerRight);
+                const estimatedWidth = 220;
+                if (rect.left + estimatedWidth > maxRight - 10) {
+                    dd.setAttribute('align', 'right');
+                    dd.align = 'right';
+                } else {
+                    dd.setAttribute('align', 'left');
+                    dd.align = 'left';
+                }
+            };
+
             return html`
                 <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
                     ${Object.keys(groups).map(g => {
                         if (groups[g].length === 0) return '';
                         return html`
-                            <sutram-dropdown .items=${groups[g]} align="left">
+                            <sutram-dropdown 
+                                .items=${groups[g]} 
+                                align="left"
+                                @pointerdown=${checkDropdownAlign}
+                                @click=${checkDropdownAlign}>
                                 <button slot="trigger" class="sync-btn" style="background: transparent; color: var(--text); border: 1px solid var(--border); padding: 6px 10px;">
                                     <yv-icon name="${groupIcons[g]}" style="width: 14px; height: 14px; margin-right: 4px;"></yv-icon> <span>${groupLabels[g]}</span>
                                 </button>
@@ -1181,22 +1198,237 @@ customElements.define('sutram-scrub-track', SutramScrubTrack);
 
 export class SutramScrollView extends YenvuiScrollView {}
 customElements.define('sutram-scroll-view', SutramScrollView);
-
 export class SutramToolbar extends YenvuiToolbar {
+    static styles = [
+        ...(Array.isArray(YenvuiToolbar.styles) ? YenvuiToolbar.styles : (YenvuiToolbar.styles ? [YenvuiToolbar.styles] : [])),
+        css`
+            :host {
+                position: relative;
+                z-index: 25;
+            }
+            yenvui-dropdown, sutram-dropdown, yenvui-filter-dropdown, sutram-filter-dropdown, [class*="dropdown"] {
+                position: relative !important;
+                z-index: 50 !important;
+            }
+            .yv-dropdown-menu,
+            .dropdown-menu,
+            .menu,
+            .dropdown-content,
+            [class*="dropdown-menu"],
+            [class*="menu-panel"],
+            [class*="dropdown-content"],
+            [part="menu"] {
+                left: auto !important;
+                right: 0 !important;
+                z-index: 9999 !important;
+            }
+        `
+    ];
+
     connectedCallback() {
         super.connectedCallback();
         this.addEventListener('yenvui-search-changed', e => {
             this.dispatchEvent(new CustomEvent('search-changed', { detail: e.detail, bubbles: true, composed: true }));
         });
+
+        this._toolbarAlignHandler = () => {
+            const dropdowns = this.shadowRoot?.querySelectorAll('yenvui-dropdown, sutram-dropdown, yenvui-filter-dropdown, sutram-filter-dropdown, [class*="dropdown"]');
+            dropdowns?.forEach(d => {
+                d.setAttribute('align', 'right');
+                d.setAttribute('data-fixed-align', 'true');
+                d.align = 'right';
+                if (d.shadowRoot) {
+                    if (!d.shadowRoot.querySelector('#sutram-force-right-style')) {
+                        const st = document.createElement('style');
+                        st.id = 'sutram-force-right-style';
+                        st.textContent = `
+                            :host, :host([align]) { position: relative !important; }
+                            .yv-dropdown-menu, .dropdown-menu, .menu, .dropdown-content, [class*="menu"], [class*="dropdown"], [part="menu"] {
+                                left: auto !important;
+                                right: 0 !important;
+                                z-index: 9999 !important;
+                            }
+                        `;
+                        d.shadowRoot.appendChild(st);
+                    }
+                    const innerMenu = d.shadowRoot.querySelector('.dropdown-menu, .menu, .yv-dropdown-menu, .dropdown-content, [class*="menu"], [class*="dropdown"], [part="menu"]');
+                    if (innerMenu) {
+                        innerMenu.style.left = 'auto';
+                        innerMenu.style.right = '0px';
+                        innerMenu.style.zIndex = '9999';
+                    }
+                }
+            });
+            const directMenus = this.shadowRoot?.querySelectorAll('.dropdown-menu, .menu, .yv-dropdown-menu, .dropdown-content, [class*="menu"], [class*="dropdown"], [part="menu"]');
+            directMenus?.forEach(m => {
+                m.style.left = 'auto';
+                m.style.right = '0px';
+                m.style.zIndex = '9999';
+            });
+        };
+
+        this.shadowRoot?.addEventListener('pointerdown', this._toolbarAlignHandler, { capture: true });
+        this.shadowRoot?.addEventListener('click', this._toolbarAlignHandler, { capture: true });
+    }
+
+    firstUpdated() {
+        if (super.firstUpdated) super.firstUpdated();
+        if (this._toolbarAlignHandler) this._toolbarAlignHandler();
     }
 }
 customElements.define('sutram-toolbar', SutramToolbar);
 
 // 12. Dropdown & Collapsible
-export class SutramDropdown extends YenvuiDropdown {}
+const enhanceDropdownClass = (DropdownClass) => {
+    if (!DropdownClass || DropdownClass._sutramEnhanced) return;
+    DropdownClass._sutramEnhanced = true;
+
+    const origConnected = DropdownClass.prototype.connectedCallback;
+    DropdownClass.prototype.connectedCallback = function() {
+        if (origConnected) origConnected.call(this);
+
+        this._autoAlignListener = () => {
+            let curr = this;
+            let containerRight = window.innerWidth;
+            let isInsideToolbar = false;
+            while (curr) {
+                if (curr.classList && (curr.classList.contains('spatial-col') || curr.classList.contains('col-header') || curr.classList.contains('editor-header') || curr.classList.contains('toolbar-row'))) {
+                    containerRight = curr.getBoundingClientRect().right;
+                    break;
+                }
+                if (curr.tagName && ['SUTRAM-TOOLBAR', 'YENVUI-TOOLBAR', 'INSETU-FILE-TREE', 'SUTRAM-APP-SHELL', 'SUTRAM-WINDOW'].includes(curr.tagName.toUpperCase())) {
+                    containerRight = curr.getBoundingClientRect().right;
+                    if (curr.tagName.toUpperCase().includes('TOOLBAR')) isInsideToolbar = true;
+                    break;
+                }
+                curr = curr.parentElement || (curr.getRootNode ? curr.getRootNode()?.host : null);
+            }
+
+            const rect = this.getBoundingClientRect();
+            const maxRight = Math.min(window.innerWidth, containerRight);
+            const menu = this.shadowRoot?.querySelector('.dropdown-menu, .menu, .yv-dropdown-menu, .dropdown-content, [class*="menu"], [class*="dropdown"], [part="menu"]');
+            const menuWidth = menu?.offsetWidth || 220;
+
+            if (isInsideToolbar || this.hasAttribute('data-fixed-align') || rect.left + menuWidth > maxRight - 10) {
+                this.setAttribute('align', 'right');
+                this.align = 'right';
+                if (menu) {
+                    menu.style.left = 'auto';
+                    menu.style.right = '0px';
+                    menu.style.zIndex = '9999';
+                }
+                if (this.shadowRoot && !this.shadowRoot.querySelector('#sutram-right-align-style')) {
+                    const st = document.createElement('style');
+                    st.id = 'sutram-right-align-style';
+                    st.textContent = `
+                        :host([align="right"]) .yv-dropdown-menu,
+                        :host([align="right"]) .dropdown-menu,
+                        :host([align="right"]) .menu,
+                        :host([align="right"]) .dropdown-content,
+                        :host([align="right"]) [class*="menu"],
+                        :host([align="right"]) [class*="dropdown"],
+                        :host([align="right"]) [part="menu"] {
+                            left: auto !important;
+                            right: 0 !important;
+                            z-index: 9999 !important;
+                        }
+                    `;
+                    this.shadowRoot.appendChild(st);
+                }
+            } else if (!this.hasAttribute('data-fixed-align')) {
+                this.setAttribute('align', 'left');
+                this.align = 'left';
+                if (menu) {
+                    menu.style.left = '0px';
+                    menu.style.right = 'auto';
+                    menu.style.zIndex = '9999';
+                }
+            }
+        };
+
+        this.addEventListener('pointerdown', this._autoAlignListener, { capture: true });
+        this.addEventListener('click', this._autoAlignListener, { capture: true });
+        this.addEventListener('focusin', this._autoAlignListener, { capture: true });
+    };
+
+    const origDisconnected = DropdownClass.prototype.disconnectedCallback;
+    DropdownClass.prototype.disconnectedCallback = function() {
+        if (origDisconnected) origDisconnected.call(this);
+        if (this._autoAlignListener) {
+            this.removeEventListener('pointerdown', this._autoAlignListener, { capture: true });
+            this.removeEventListener('click', this._autoAlignListener, { capture: true });
+            this.removeEventListener('focusin', this._autoAlignListener, { capture: true });
+        }
+    };
+};
+
+enhanceDropdownClass(YenvuiDropdown);
+enhanceDropdownClass(YenvuiFilterDropdown);
+
+export class SutramDropdown extends YenvuiDropdown {
+    static styles = [
+        ...(Array.isArray(YenvuiDropdown.styles) ? YenvuiDropdown.styles : (YenvuiDropdown.styles ? [YenvuiDropdown.styles] : [])),
+        css`
+            :host {
+                position: relative !important;
+                z-index: 50 !important;
+            }
+            :host(:focus-within), :host([open]), :host([active]) {
+                z-index: 1000 !important;
+            }
+            :host([align="right"]) .yv-dropdown-menu,
+            :host([align="right"]) .dropdown-menu,
+            :host([align="right"]) .menu,
+            :host([align="right"]) .dropdown-content,
+            :host([align="right"]) [class*="menu"],
+            :host([align="right"]) [class*="dropdown"],
+            :host([align="right"]) [part="menu"] {
+                left: auto !important;
+                right: 0 !important;
+                z-index: 9999 !important;
+            }
+            :host([align="left"]) .yv-dropdown-menu,
+            :host([align="left"]) .dropdown-menu,
+            :host([align="left"]) .menu,
+            :host([align="left"]) .dropdown-content,
+            :host([align="left"]) [class*="menu"],
+            :host([align="left"]) [class*="dropdown"],
+            :host([align="left"]) [part="menu"] {
+                left: 0 !important;
+                right: auto !important;
+                z-index: 9999 !important;
+            }
+        `
+    ];
+}
 customElements.define('sutram-dropdown', SutramDropdown);
 
-export class SutramFilterDropdown extends YenvuiFilterDropdown {}
+export class SutramFilterDropdown extends YenvuiFilterDropdown {
+    static styles = [
+        ...(Array.isArray(YenvuiFilterDropdown.styles) ? YenvuiFilterDropdown.styles : (YenvuiFilterDropdown.styles ? [YenvuiFilterDropdown.styles] : [])),
+        css`
+            :host {
+                position: relative !important;
+                z-index: 50 !important;
+            }
+            :host(:focus-within), :host([open]), :host([active]) {
+                z-index: 1000 !important;
+            }
+            .yv-dropdown-menu,
+            .dropdown-menu,
+            .menu,
+            .dropdown-content,
+            [class*="dropdown-menu"],
+            [class*="menu-panel"],
+            [class*="dropdown-content"],
+            [part="menu"] {
+                left: auto !important;
+                right: 0 !important;
+                z-index: 9999 !important;
+            }
+        `
+    ];
+}
 if (!customElements.get('sutram-filter-dropdown')) {
     customElements.define('sutram-filter-dropdown', SutramFilterDropdown);
 }
@@ -1470,3 +1702,7 @@ export class SutramReportProjection extends SutramElement {
     }
 }
 customElements.define('sutram-report-projection', SutramReportProjection);
+
+// 17. Synchronized Dual-Box & Interleaved Diff Viewer
+export class SutramDiffViewer extends SutramContextMixin(YenvuiDiffViewer) {}
+customElements.define('sutram-diff-viewer', SutramDiffViewer);

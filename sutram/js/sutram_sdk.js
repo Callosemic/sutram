@@ -4,6 +4,7 @@ import { LitElement, html } from 'lit';
 import { createStore } from 'zustand/vanilla';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { getEventPath, getEventTarget } from '../../yenvui/js/physics.js';
+import { shallowEqual } from './utils.js';
 export function createSutramStore(name, initialState, persistenceSchema = {}, getScopeId = () => 'default', prefix = 'sutram') {
     const store = createStore(
         devtools(
@@ -136,8 +137,7 @@ export const SutramContextMixin = (SuperClass) => class extends SuperClass {
             });
         }
     }
-
-    subscribe(storeOrName, selectorOrListener, listener = undefined) {
+    subscribe(storeOrName, selectorOrListener, listener = undefined, equalityFn = shallowEqual) {
         let store = storeOrName;
         if (typeof storeOrName === 'string') {
             store = window.Sutram?.stores?.[storeOrName] || 
@@ -151,9 +151,17 @@ export const SutramContextMixin = (SuperClass) => class extends SuperClass {
                     const lateStore = window.Sutram?.stores?.[pendingKey];
                     if (lateStore) {
                         clearInterval(checkInterval);
-                        activeUnsub = listener ? lateStore.subscribe(selectorOrListener, listener) : lateStore.subscribe(selectorOrListener);
-                        if (!listener && typeof selectorOrListener === 'function' && typeof lateStore.getState === 'function') {
-                            try { selectorOrListener(lateStore.getState()); } catch (e) {}
+                        activeUnsub = listener
+                            ? lateStore.subscribe(selectorOrListener, listener, { equalityFn })
+                            : lateStore.subscribe(selectorOrListener);
+                        if (typeof lateStore.getState === 'function') {
+                            try {
+                                if (listener && typeof selectorOrListener === 'function') {
+                                    listener(selectorOrListener(lateStore.getState()));
+                                } else if (!listener && typeof selectorOrListener === 'function') {
+                                    selectorOrListener(lateStore.getState());
+                                }
+                            } catch (e) {}
                         }
                     }
                 }, 20);
@@ -172,7 +180,9 @@ export const SutramContextMixin = (SuperClass) => class extends SuperClass {
             console.warn(`[SutramElement] Attempted to subscribe to an uninitialized store in <${this.tagName ? this.tagName.toLowerCase() : 'element'}>.`);
             return () => {};
         }
-        const unsub = listener ? store.subscribe(selectorOrListener, listener) : store.subscribe(selectorOrListener);
+        const unsub = listener
+            ? store.subscribe(selectorOrListener, listener, { equalityFn })
+            : store.subscribe(selectorOrListener);
         if (!listener && typeof selectorOrListener === 'function' && typeof store.getState === 'function') {
             try { selectorOrListener(store.getState()); } catch (e) {}
         }
@@ -339,7 +349,26 @@ export const ExtensionRegistry = {
                         else pCol = 'right';
                     }
 
-                    return { ...s, slot: slotType, extName, preferredColumn: pCol || 'center' };
+                    const isSubNav = slotType === 'slots:sub-navigation';
+                    const rawId = s.rawId || s.id || '';
+                    const isUriOrCustom = rawId.includes('://') || rawId.startsWith('vfs:') || rawId.startsWith('ctx:') || rawId.startsWith('virtual:');
+                    const isAlreadyScoped = rawId.startsWith(`${extName}:`);
+                    const scopedId = (isSubNav && !isUriOrCustom && !isAlreadyScoped) ? `${extName}:${rawId}` : rawId;
+
+                    let scopedTargetSub = s.targetSub;
+                    if (s.targetSub && !s.targetSub.includes(':') && !s.targetSub.startsWith(`${extName}:`)) {
+                        scopedTargetSub = `${extName}:${s.targetSub}`;
+                    }
+
+                    return {
+                        ...s,
+                        id: scopedId,
+                        rawId: rawId,
+                        targetSub: scopedTargetSub,
+                        slot: slotType,
+                        extName,
+                        preferredColumn: pCol || 'center'
+                    };
                 }));
             }
         });
@@ -390,13 +419,14 @@ export const ExtensionRegistry = {
         Object.keys(this.uiHooks).forEach(zone => {
             this.uiHooks[zone] = this.uiHooks[zone].filter(cb => cb._extName !== extName);
         });
-
         if (config.entityActions) {
             config.entityActions.forEach(act => {
                 act.extName = extName;
-                const target = act.targetEntity;
-                if (!this._entityActions.has(target)) this._entityActions.set(target, []);
-                this._entityActions.get(target).push(act);
+                const targets = act.targetEntities || (act.targetEntity ? [act.targetEntity] : []);
+                targets.forEach(target => {
+                    if (!this._entityActions.has(target)) this._entityActions.set(target, []);
+                    this._entityActions.get(target).push(act);
+                });
             });
         }
         if (config.uiHooks) {
@@ -436,10 +466,17 @@ export const ExtensionRegistry = {
     getEntityActions: function(compoundType, data) {
         if (!compoundType) return [];
         const types = compoundType.split(':');
+        if (!types.includes(compoundType)) types.push(compoundType);
         const combined = [];
+        const seen = new Set();
         types.forEach(type => {
             if (this._entityActions.has(type)) {
-                combined.push(...this._entityActions.get(type));
+                this._entityActions.get(type).forEach(act => {
+                    if (!act.bulkOnly && !seen.has(act.id)) {
+                        seen.add(act.id);
+                        combined.push(act);
+                    }
+                });
             }
         });
         return combined
@@ -458,6 +495,111 @@ export const ExtensionRegistry = {
                 return !act.match || act.match(data);
             })
             .sort((a, b) => (a.order || 99) - (b.order || 99));
+    },
+    getAggregatableActions: function(selectedItems, options = {}) {
+        if (!selectedItems) return [];
+        const items = Array.isArray(selectedItems) ? selectedItems : Array.from(selectedItems.values());
+        if (items.length === 0) return [];
+
+        const { group = null } = options;
+        const candidateGroups = new Map();
+
+        const registerCandidate = (act) => {
+            if (!act.bulkable) return;
+            if (group && act.group !== group) return;
+            const dedupeKey = act.bulkGroupKey || act.id;
+            if (!candidateGroups.has(dedupeKey)) {
+                candidateGroups.set(dedupeKey, []);
+            }
+            const groupList = candidateGroups.get(dedupeKey);
+            if (!groupList.some(a => a.id === act.id)) {
+                groupList.push(act);
+            }
+        };
+
+        items.forEach(item => {
+            const types = (item.entityType || '').split(':');
+            types.forEach(t => {
+                if (this._entityActions.has(t)) {
+                    this._entityActions.get(t).forEach(registerCandidate);
+                }
+            });
+        });
+
+        if (this._entityActions.has('*')) {
+            this._entityActions.get('*').forEach(registerCandidate);
+        }
+
+        const aggregated = [];
+        candidateGroups.forEach((groupActions, dedupeKey) => {
+            const leadAction = groupActions.find(a => typeof a.bulkAction === 'function' || typeof a.bulkOnClick === 'function') || groupActions[0];
+            if (this._filterPredicate && leadAction.extName && !this._filterPredicate(leadAction.extName)) {
+                return;
+            }
+            const allMatch = items.every(item => {
+                const types = (item.entityType || '').split(':');
+                return groupActions.some(act => {
+                    const targetMatches = types.some(t => {
+                        if (act.targetEntities && (act.targetEntities.includes(t) || act.targetEntities.includes('*'))) return true;
+                        if (act.targetEntity && (act.targetEntity.split(':').includes(t) || act.targetEntity === '*')) return true;
+                        return false;
+                    });
+                    if (!targetMatches) return false;
+                    return typeof act.match === 'function' ? act.match(item.data) : true;
+                });
+            });
+
+            if (allMatch) {
+                const count = items.length;
+                const baseLabel = typeof leadAction.label === 'function' ? leadAction.label(items[0]?.data) : leadAction.label;
+                const dynamicLabel = typeof leadAction.bulkLabel === 'function' 
+                    ? leadAction.bulkLabel(items) 
+                    : (leadAction.bulkLabel || `${baseLabel} (${count})`);
+
+                const isVfsBound = groupActions.some(a => a.vfsBound);
+                const hasSyncClick = typeof leadAction.bulkOnClick === 'function';
+
+                aggregated.push({
+                    id: `bulk-${dedupeKey}`,
+                    label: dynamicLabel,
+                    icon: typeof leadAction.icon === 'function' ? leadAction.icon(items[0]?.data) : (leadAction.icon || ''),
+                    intent: typeof leadAction.intent === 'function' ? leadAction.intent(items[0]?.data) : (leadAction.intent || 'primary'),
+                    variant: leadAction.variant || 'tinted',
+                    emphasis: !!leadAction.emphasis,
+                    group: leadAction.group || 'file',
+                    order: leadAction.order || 50,
+                    vfsBound: isVfsBound,
+                    onClick: hasSyncClick ? (e) => leadAction.bulkOnClick(items, e) : null,
+                    asyncAction: hasSyncClick ? null : async (e) => {
+                        const executeDirect = async () => {
+                            if (typeof leadAction.bulkAction === 'function') {
+                                return await leadAction.bulkAction(items, e);
+                            }
+                            for (const item of items) {
+                                const types = (item.entityType || '').split(':');
+                                const handler = groupActions.find(act => {
+                                    return types.some(t => (act.targetEntities && (act.targetEntities.includes(t) || act.targetEntities.includes('*'))) || (act.targetEntity && (act.targetEntity.split(':').includes(t) || act.targetEntity === '*')));
+                                }) || leadAction;
+
+                                if (typeof handler.asyncAction === 'function') {
+                                    await handler.asyncAction(item.data, e);
+                                } else if (typeof handler.onClick === 'function') {
+                                    handler.onClick(item.data, e);
+                                }
+                            }
+                        };
+
+                        if (isVfsBound && typeof this.executeEntityAction === 'function') {
+                            const syntheticPayload = items.map(i => i.data);
+                            return await this.executeEntityAction({ ...leadAction, vfsBound: true, asyncAction: executeDirect }, syntheticPayload, e);
+                        }
+                        return await executeDirect();
+                    }
+                });
+            }
+        });
+
+        return aggregated.sort((a, b) => (a.order || 99) - (b.order || 99));
     },
     executeUIHook: function(zone, data) {
         if (this.uiHooks[zone]) {

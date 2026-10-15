@@ -220,6 +220,9 @@ export class SutramDragCoordinator extends SutramElement {
         super.updated(changedProperties);
         if (changedProperties.has('dragState')) {
             this._dropZonesCache = null; // Invalidate cache when drag layout shifts
+            if (this.dragState?.active && this.dragState.currentX !== undefined && this.dragState.currentY !== undefined) {
+                this.updatePointer(this.dragState.currentX, this.dragState.currentY);
+            }
         }
     }
 
@@ -378,7 +381,7 @@ export class SutramDragCoordinator extends SutramElement {
 
                 </div>
                 <!-- Floating Cursor Node (Hardware Accelerated) -->
-                <div class="drag-floater">
+                <div class="drag-floater" style="transform: translate3d(${currentX || 0}px, ${currentY || 0}px, 0) translate(-50%, -50%);">
                     <yv-icon name="${entity?.icon || 'component'}" style="width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"></yv-icon> ${entity?.label || entity?.id || 'Dragging'}
                 </div>
             </yenvui-drop-overlay>

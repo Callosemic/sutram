@@ -15,6 +15,46 @@ export function cleanCodeArtifacts(text) {
     result = result.replace(/<\/?(?:span|cite)[^>]*>/gi, '');
     return result;
 }
+export function shallowEqual(a, b) {
+    if (Object.is(a, b)) return true;
+    if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) {
+        return false;
+    }
+    if (Array.isArray(a) && Array.isArray(b)) {
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+            if (!Object.is(a[i], b[i])) return false;
+        }
+        return true;
+    }
+    if (a instanceof Set && b instanceof Set) {
+        if (a.size !== b.size) return false;
+        for (const val of a) {
+            if (!b.has(val)) return false;
+        }
+        return true;
+    }
+    if (a instanceof Map && b instanceof Map) {
+        if (a.size !== b.size) return false;
+        for (const [k, v] of a) {
+            if (!b.has(k) || !Object.is(v, b.get(k))) return false;
+        }
+        return true;
+    }
+    if (a.constructor !== Object || b.constructor !== Object) {
+        return false;
+    }
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+    for (let i = 0; i < keysA.length; i++) {
+        const key = keysA[i];
+        if (!Object.prototype.hasOwnProperty.call(b, key) || !Object.is(a[key], b[key])) {
+            return false;
+        }
+    }
+    return true;
+}
 
 export function normalizeAccentText(str) {
     if (!str) return '';
@@ -219,26 +259,103 @@ export function bindGhostDrag(e, label, icon = '📄', payloadData = {}) {
     }
     e.dataTransfer.effectAllowed = 'copyMove';
 }
-
 export function buildFileTree(files) {
-    const tree = {};
-    files.forEach(filepath => {
-        const parts = filepath.split('/');
-        let current = tree;
+    const root = {
+        id: '',
+        name: '',
+        type: 'directory',
+        fullPath: '',
+        parentPath: '',
+        children: {}
+    };
+
+    (files || []).forEach(rawPath => {
+        if (!rawPath || typeof rawPath !== 'string') return;
+        const isExplicitDir = rawPath.endsWith('/') || rawPath.endsWith('\\');
+        const clean = rawPath.replace(/\\/g, '/').replace(/^vfs:\/\//, '').replace(/^\/+/, '').replace(/\/+$/, '');
+        if (!clean) return;
+
+        const parts = clean.split('/').filter(Boolean);
+        let cursor = root;
+        let accumPath = '';
+
         for (let i = 0; i < parts.length; i++) {
             const part = parts[i];
-            if (i === parts.length - 1) {
-                current[part] = {
-                    _isFile: true,
-                    fullPath: filepath
-                };
+            const parentPath = accumPath;
+            accumPath = accumPath ? `${accumPath}/${part}` : part;
+            const isLast = (i === parts.length - 1);
+
+            if (!cursor.children) {
+                cursor.children = {};
+            }
+
+            if (isLast && !isExplicitDir) {
+                if (!cursor.children[part]) {
+                    cursor.children[part] = {
+                        id: accumPath,
+                        name: part,
+                        type: 'file',
+                        fullPath: accumPath,
+                        parentPath
+                    };
+                }
             } else {
-                if (!current[part]) current[part] = {};
-                current = current[part];
+                if (!cursor.children[part] || cursor.children[part].type !== 'directory') {
+                    cursor.children[part] = {
+                        id: accumPath,
+                        name: part,
+                        type: 'directory',
+                        fullPath: accumPath,
+                        parentPath,
+                        children: cursor.children[part]?.children || {}
+                    };
+                }
+                cursor = cursor.children[part];
             }
         }
     });
-    return tree;
+
+    return root;
+}
+
+export function resolveDirectoryState(treeRoot, currentPath = [], options = {}) {
+    const { hideFiles = false, ignoreDotKeep = true } = options;
+    if (!treeRoot || typeof treeRoot !== 'object') {
+        return { validPath: [], entries: [] };
+    }
+
+    const rootNode = treeRoot.type === 'directory' && treeRoot.children
+        ? treeRoot
+        : { id: '', name: '', type: 'directory', fullPath: '', parentPath: '', children: treeRoot.children || {} };
+
+    let cursor = rootNode;
+    const validPath = [];
+
+    for (const segment of (currentPath || [])) {
+        if (cursor && cursor.type === 'directory' && cursor.children && cursor.children[segment]?.type === 'directory') {
+            cursor = cursor.children[segment];
+            validPath.push(segment);
+        } else {
+            break;
+        }
+    }
+
+    const rawChildren = Object.values(cursor?.children || {});
+    const entries = rawChildren
+        .filter(node => {
+            if (!node || typeof node !== 'object' || !node.name) return false;
+            if (node.type === 'file') {
+                if (hideFiles) return false;
+                if (ignoreDotKeep && (node.name === '.gitkeep' || node.name === '.keep')) return false;
+            }
+            return true;
+        })
+        .sort((a, b) => {
+            if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+            return a.name.localeCompare(b.name);
+        });
+
+    return { validPath, entries };
 }
 
 export function timeAgo(timestamp) {
