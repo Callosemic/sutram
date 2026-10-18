@@ -259,7 +259,7 @@ export function bindGhostDrag(e, label, icon = '📄', payloadData = {}) {
     }
     e.dataTransfer.effectAllowed = 'copyMove';
 }
-export function buildFileTree(files) {
+export function buildFileTree(files, stripPrefix = '') {
     const root = {
         id: '',
         name: '',
@@ -268,21 +268,44 @@ export function buildFileTree(files) {
         parentPath: '',
         children: {}
     };
+    const normStrip = stripPrefix ? stripPrefix.replace(/\\/g, '/').replace(/\/+$/, '') + '/' : '';
 
     (files || []).forEach(rawPath => {
         if (!rawPath || typeof rawPath !== 'string') return;
-        const isExplicitDir = rawPath.endsWith('/') || rawPath.endsWith('\\');
-        const clean = rawPath.replace(/\\/g, '/').replace(/^vfs:\/\//, '').replace(/^\/+/, '').replace(/\/+$/, '');
-        if (!clean) return;
+        const normRaw = rawPath.replace(/\\/g, '/').trim();
+        const isExplicitDir = normRaw.endsWith('/');
 
-        const parts = clean.split('/').filter(Boolean);
+        let fullUri = normRaw.replace(/\/+$/, '');
+        if (!fullUri.includes('://')) {
+            fullUri = `vfs://${fullUri.replace(/^\/+/, '')}`;
+        }
+
+        const isWs = fullUri.startsWith('ws://');
+        let visualRel = fullUri;
+        let baseAccumUri = '';
+
+        if (normStrip && fullUri.startsWith(normStrip)) {
+            visualRel = fullUri.slice(normStrip.length);
+            baseAccumUri = normStrip.replace(/\/+$/, '');
+        } else {
+            const schemeMatch = fullUri.match(/^([a-zA-Z0-9_-]+:\/\/)(.*)$/);
+            if (schemeMatch) {
+                baseAccumUri = schemeMatch[1].replace(/\/+$/, '');
+                visualRel = schemeMatch[2].replace(/^\/+/, '');
+            }
+        }
+
+        if (!visualRel) return;
+        const parts = visualRel.split('/').filter(Boolean);
         let cursor = root;
-        let accumPath = '';
+        let accumPath = baseAccumUri;
+        const accumSegments = [];
 
         for (let i = 0; i < parts.length; i++) {
-            const part = parts[i];
+            const part = (isWs && i === 0 && !normStrip) ? `🌐 ${parts[i]}` : parts[i];
+            accumSegments.push(part);
             const parentPath = accumPath;
-            accumPath = accumPath ? `${accumPath}/${part}` : part;
+            accumPath = accumPath.endsWith('://') ? `${accumPath}${parts[i]}` : `${accumPath}/${parts[i]}`;
             const isLast = (i === parts.length - 1);
 
             if (!cursor.children) {
@@ -296,6 +319,7 @@ export function buildFileTree(files) {
                         name: part,
                         type: 'file',
                         fullPath: accumPath,
+                        treePath: [...accumSegments],
                         parentPath
                     };
                 }
@@ -306,6 +330,7 @@ export function buildFileTree(files) {
                         name: part,
                         type: 'directory',
                         fullPath: accumPath,
+                        treePath: [...accumSegments],
                         parentPath,
                         children: cursor.children[part]?.children || {}
                     };

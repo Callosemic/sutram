@@ -393,20 +393,8 @@ export class SutramAppShell extends SutramElement {
                                     this._updateUrlHash(nextCol, nextActive);
                                 });
                             } else if (targetZone === 'popout') {
-                                const registry = window.ExtensionRegistry || ExtensionRegistry;
-                                const handledByHook = registry?.executeUIHook
-                                    ? registry.executeUIHook('sutram:popout-projection', entity.id)
-                                    : false;
-                                if (!handledByHook) {
-                                    const hashParts = window.location.hash.replace(/^#\/?/, '').split('/');
-                                    const activeWs = hashParts[0] || 'default';
-                                    const targetCol = (sourceCol && sourceCol !== 'window') ? sourceCol : (layout.focusedColumn || 'center');
-                                    const popoutUrl = `${window.location.pathname}?popout=true#/${encodeURIComponent(activeWs)}/${encodeURIComponent(targetCol)}/${encodeURIComponent(entity.id)}`;
-                                    window.open(popoutUrl, '_blank', 'popup=yes,width=850,height=900');
-                                    if (sourceCol === 'window') layout.closeWindow(entity.id);
-                                    else if (sourceCol) layout.unpinFromColumn(sourceCol, entity.id);
-                                    layout.evictProjection(entity.id);
-                                }
+                                const targetCol = (sourceCol && sourceCol !== 'window') ? sourceCol : (layout.focusedColumn || 'center');
+                                layout.popoutProjection(entity.id, { originCol: targetCol });
                             } else if (targetZone === 'window' || targetZone === 'mode-window') {
                                 const targetAnchor = (sourceCol && sourceCol !== 'window') ? sourceCol : (entity.anchorCol || layout.focusedColumn || 'center');
                                 if (sourceCol && sourceCol !== 'window') layout.unpinFromColumn(sourceCol, entity.id);
@@ -1004,15 +992,19 @@ export class SutramAppShell extends SutramElement {
         // GC: Overwrite the active nodes map with only the nodes requested during this render cycle
         // Detached nodes will fall out of scope and be collected by the browser.
         const isPopout = this.variant === 'popout';
-
         if (isPopout) {
             const hash = typeof window !== 'undefined' ? window.location.hash.replace(/^#\/?/, '') : '';
             const hashParts = hash ? hash.split('/').map(decodeURIComponent) : [];
-            const hashSubId = hashParts.length >= 3 ? hashParts.slice(2).join('/') : '';
+            let activeId = '';
+            if (hashParts.length >= 4 && hashParts[2] === 'editor') {
+                activeId = hashParts.slice(3).join('/');
+            } else if (hashParts.length >= 3) {
+                activeId = hashParts.slice(2).join('/');
+            }
 
             const focusedCol = this._spatialState?.focusedColumn || 'center';
             const colState = this._spatialState?.columns?.[focusedCol];
-            const activeId = hashSubId || colState?.active || (colState?.pinned?.[0]?.id);
+            activeId = activeId || colState?.active || (colState?.pinned?.[0]?.id);
             let activeSlot = subSlots.find(s => s.id === activeId || (!activeId.includes(':') && s.rawId === activeId));
             let singleNode = null;
 

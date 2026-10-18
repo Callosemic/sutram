@@ -749,6 +749,21 @@ clearSelection: () => SelectionStore.setState({ selectedItems: new Map() })
 export const EnvironmentStore = createSutramStore('Environment', {
     isOffline: false
 });
+
+const _activePopoutWindows = new Map();
+const _lastPopoutFocusTs = new Map();
+const _layoutBus = (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel('sutram_layout_bus') : null;
+
+export function canUseMultiWindowPopout() {
+    if (typeof window === 'undefined') return false;
+    if (new URLSearchParams(window.location.search).get('popout') === 'true') return false;
+    if (window.navigator?.standalone === true) return false;
+    const isCoarsePointer = window.matchMedia?.('(pointer: coarse)').matches;
+    const isCompactScreen = window.innerWidth < 768;
+    if (isCoarsePointer && isCompactScreen) return false;
+    return true;
+}
+
 export const LayoutStore = createSutramStore('Layout', {
     columns: {
         left: { active: null, pinned: [], history: [] },
@@ -953,8 +968,207 @@ export const LayoutStore = createSutramStore('Layout', {
                 window.dispatchEvent(new CustomEvent('sutram-evict-projection', { detail: { id }, bubbles: true, composed: true }));
             });
         }
+    },
+    canPopout: () => canUseMultiWindowPopout(),
+    focusPopout: (id, scopeId = null) => {
+        if (!id || typeof window === 'undefined') return false;
+        if (new URLSearchParams(window.location.search).get('popout') === 'true') return false;
+        const scope = scopeId || (window.location.hash.replace(/^#\/?/, '').split('/')[0] || 'default');
+        const key = `${scope}::${id}`;
+        const win = _activePopoutWindows.get(key);
+        if (win) {
+            if (!win.closed) {
+                const now = Date.now();
+                const lastAttempt = _lastPopoutFocusTs.get(key) || 0;
+                _lastPopoutFocusTs.set(key, now);
+
+                // Double-click recall escape hatch for OS window managers that block window.focus()
+                if (now - lastAttempt < 3500) {
+                    _activePopoutWindows.delete(key);
+                    _lastPopoutFocusTs.delete(key);
+                    try { win.close(); } catch (e) {}
+                    StatusStore.getState().setStatus(`↙️ Re-docked ${id.split('/').pop()} into main window`, 2500);
+                    return false;
+                }
+                try {
+                    win.focus();
+                    StatusStore.getState().setStatus(`↗️ Open in pop-out window (click again to recall here)`, 3000);
+                    return true;
+                } catch (e) {}
+            }
+            _activePopoutWindows.delete(key);
+            _lastPopoutFocusTs.delete(key);
+        }
+        return false;
+    },
+    clearPopout: (id, scopeId = null) => {
+        if (!id) return;
+        const scope = scopeId || (window.location.hash.replace(/^#\/?/, '').split('/')[0] || 'default');
+        _activePopoutWindows.delete(`${scope}::${id}`);
+        _lastPopoutFocusTs.delete(`${scope}::${id}`);
+    },
+    popoutProjection: async (id, options = {}) => {
+        if (!id || typeof window === 'undefined') return false;
+        const registry = window.ExtensionRegistry || ExtensionRegistry;
+        const normId = (registry?.executeUIHook && registry.executeUIHook('sutram:normalize-projection-id', id)) || id;
+        const scope = options.scopeId || (window.location.hash.replace(/^#\/?/, '').split('/')[0] || 'default');
+
+        if (LayoutStore.getState().focusPopout(normId, scope) || LayoutStore.getState().focusPopout(id, scope)) {
+            return true;
+        }
+
+        if (!canUseMultiWindowPopout()) {
+            const fallbackHandled = registry?.executeUIHook && registry.executeUIHook('sutram:popout-fallback', normId);
+            if (!fallbackHandled) {
+                StatusStore.getState().setStatus(`🔍 Multi-window pop-outs are not supported in this display mode.`, 2500);
+            }
+            return false;
+        }
+
+        const layoutState = LayoutStore.getState();
+        let originCol = options.originCol || layoutState.focusedColumn || 'center';
+        ['left', 'center', 'right'].forEach(col => {
+            const pinned = layoutState.columns[col]?.pinned || [];
+            if (pinned.some(p => p.id === normId || p.id === id)) {
+                originCol = col;
+            }
+        });
+        const winMatch = (layoutState.windows || []).find(w => w.id === normId || w.id === id);
+        if (winMatch && winMatch.anchorCol) {
+            originCol = winMatch.anchorCol;
+        }
+
+        const customUrl = registry?.executeUIHook && registry.executeUIHook('sutram:build-popout-url', { id: normId, colId: originCol, scopeId: scope });
+        const targetUrl = customUrl || `${window.location.pathname}?popout=true#/${encodeURIComponent(scope)}/${encodeURIComponent(originCol)}/${encodeURIComponent(normId)}`;
+
+        // Acquire WindowProxy synchronously inside user gesture before any async pre-save hook
+        const preSavePromise = registry?.executeUIHook ? registry.executeUIHook('sutram:before-popout', normId) : null;
+        const isAsyncPreSave = Boolean(preSavePromise && typeof preSavePromise.then === 'function');
+
+        const childWin = window.open(isAsyncPreSave ? 'about:blank' : targetUrl, '_blank', 'popup=yes,width=850,height=900');
+        if (!childWin) {
+            ToastStore.getState().addToast("Pop-out window was blocked by your browser. Please allow pop-ups for this site.", "warning");
+            return false;
+        }
+
+        _activePopoutWindows.set(`${scope}::${normId}`, childWin);
+        _activePopoutWindows.set(`${scope}::${id}`, childWin);
+
+        if (isAsyncPreSave) {
+            try { await preSavePromise; } catch (e) {}
+            if (!childWin.closed) {
+                childWin.location.replace(targetUrl);
+            }
+        }
+
+        ['left', 'center', 'right'].forEach(col => {
+            const pinned = LayoutStore.getState().columns[col]?.pinned || [];
+            pinned.forEach(p => {
+                if (p.id === normId || p.id === id) {
+                    LayoutStore.getState().unpinFromColumn(col, p.id);
+                }
+            });
+        });
+        LayoutStore.getState().closeWindow(normId);
+        if (id !== normId) LayoutStore.getState().closeWindow(id);
+        LayoutStore.getState().evictProjection(normId);
+        if (id !== normId) LayoutStore.getState().evictProjection(id);
+
+        const nextState = LayoutStore.getState();
+        const activeCol = nextState.focusedColumn || 'center';
+        const nextActiveId = nextState.columns[activeCol]?.active || '';
+        const nextHash = (registry?.executeUIHook && registry.executeUIHook('sutram:resolve-route-hash', { colId: activeCol, subId: nextActiveId })) || `#/${encodeURIComponent(scope)}/${activeCol}/${encodeURIComponent(nextActiveId)}`;
+        if (window.location.hash !== nextHash) {
+            window.history.replaceState(null, '', nextHash);
+        }
+        return true;
+    },
+    dockInProjection: async (id = null) => {
+        if (typeof window === 'undefined') return;
+        const hash = window.location.hash.replace(/^#\/?/, '');
+        const parts = hash.split('/').map(decodeURIComponent);
+        const scope = parts[0] || 'default';
+        const colId = ['left', 'center', 'right'].includes(parts[1]) ? parts[1] : 'center';
+        const targetId = id || (parts.length >= 4 && parts[2] === 'editor' ? parts.slice(3).join('/') : parts.slice(2).join('/'));
+        if (!targetId) return;
+
+        const registry = window.ExtensionRegistry || ExtensionRegistry;
+        const preSavePromise = registry?.executeUIHook ? registry.executeUIHook('sutram:before-dock-in', targetId) : null;
+        if (preSavePromise && typeof preSavePromise.then === 'function') {
+            try { await preSavePromise; } catch (e) {}
+        }
+
+        let hostAlive = false;
+        if (_layoutBus) {
+            const pongHandler = (ev) => {
+                if (ev.data?.type === 'presence_pong') hostAlive = true;
+            };
+            _layoutBus.addEventListener('message', pongHandler);
+            _layoutBus.postMessage({ type: 'presence_ping' });
+            await new Promise(r => setTimeout(r, 120));
+            _layoutBus.removeEventListener('message', pongHandler);
+        }
+
+        if (hostAlive && _layoutBus) {
+            _layoutBus.postMessage({
+                type: 'dock_projection',
+                data: { scopeId: scope, id: targetId, colId }
+            });
+            window.close();
+        } else {
+            // Self-healing fallback: If host window was closed, upgrade this pop-out into the full workbench shell
+            window.location.href = `${window.location.pathname}#/${encodeURIComponent(scope)}/${encodeURIComponent(colId)}/${encodeURIComponent(targetId)}`;
+        }
     }
 }, {
     sessionSync: ['columns', 'focusHistory', 'capacity', 'mobileViewportIndex', 'windows', 'layoutRatios'],
     localSync: ['columns', 'focusHistory', 'layoutRatios']
 });
+
+if (typeof window !== 'undefined' && _layoutBus) {
+    const isPopoutWindow = new URLSearchParams(window.location.search).get('popout') === 'true';
+    if (isPopoutWindow) {
+        window.addEventListener('pagehide', () => {
+            const hash = window.location.hash.replace(/^#\/?/, '');
+            const parts = hash.split('/').map(decodeURIComponent);
+            const scope = parts[0] || 'default';
+            const targetId = (parts.length >= 4 && parts[2] === 'editor') ? parts.slice(3).join('/') : parts.slice(2).join('/');
+            if (targetId) {
+                _layoutBus.postMessage({ type: 'popout_closed', data: { scopeId: scope, id: targetId } });
+            }
+        });
+    } else {
+        _layoutBus.addEventListener('message', (ev) => {
+            const { type, data } = ev.data || {};
+            if (type === 'presence_ping') {
+                _layoutBus.postMessage({ type: 'presence_pong' });
+            } else if (type === 'popout_closed') {
+                LayoutStore.getState().clearPopout(data?.id, data?.scopeId);
+            } else if (type === 'dock_projection') {
+                const currentScope = window.location.hash.replace(/^#\/?/, '').split('/')[0] || 'default';
+                if (data?.scopeId && data.scopeId !== currentScope) return;
+                const targetId = data?.id;
+                const colId = ['left', 'center', 'right'].includes(data?.colId) ? data.colId : 'center';
+                if (!targetId) return;
+
+                LayoutStore.getState().clearPopout(targetId, currentScope);
+                const layout = LayoutStore.getState();
+                layout.setFocusedColumn(colId);
+
+                const registry = window.ExtensionRegistry || ExtensionRegistry;
+                const slots = registry?.getLayoutSlots?.() || [];
+                const matchingSlot = slots.find(s => s.id === targetId || s.rawId === targetId);
+                if (matchingSlot) {
+                    if (!layout.columns[colId]?.pinned?.some(p => p.id === matchingSlot.id)) {
+                        layout.pinToColumn(colId, matchingSlot);
+                    }
+                    layout.setActiveProjection(colId, matchingSlot.id);
+                    layout.setFocusedColumn(colId);
+                } else if (registry?.executeUIHook) {
+                    registry.executeUIHook('sutram:restore-docked-projection', { id: targetId, colId, scopeId: currentScope });
+                }
+                window.focus();
+            }
+        });
+    }
+}

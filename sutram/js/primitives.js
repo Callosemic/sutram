@@ -103,7 +103,6 @@ export class SutramAsyncBtn extends SutramContextMixin(YenvuiAsyncBtn) {
             this._originalIcon = this.icon;
         }
     }
-
     _updateState() {
         if (this._isOfflineReadOnly) {
             if (this.label !== 'Offline') this._originalLabel = this.label;
@@ -116,6 +115,51 @@ export class SutramAsyncBtn extends SutramContextMixin(YenvuiAsyncBtn) {
             if (this._originalIcon !== undefined) this.icon = this._originalIcon;
             this.disabled = false;
         }
+    }
+
+    async _handleClick(e) {
+        if (this.disabled || this.status === 'loading') {
+            if (e) {
+                e.stopPropagation();
+                e.preventDefault();
+            }
+            return;
+        }
+
+        // Declarative Background Job Execution via domain-agnostic ExtensionRegistry bridge
+        if (this.jobRoute && typeof window.ExtensionRegistry?.executeJobAction === 'function') {
+            this.status = 'loading';
+            try {
+                const payload = typeof this.jobPayload === 'function' ? await this.jobPayload(e) : (this.jobPayload || {});
+                const jobRunner = window.ExtensionRegistry.executeJobAction(this.jobRoute, payload, {
+                    onProgress: (msg, jobObj) => {
+                        if (this.onJobProgress) this.onJobProgress(msg, jobObj);
+                    },
+                    onComplete: (data) => {
+                        this.status = 'success';
+                        if (this.onJobComplete) this.onJobComplete(data);
+                        setTimeout(() => { this.status = 'idle'; }, 2000);
+                    },
+                    onError: (err) => {
+                        this.status = 'error';
+                        if (this.onJobError) this.onJobError(err);
+                        setTimeout(() => { this.status = 'idle'; }, 2000);
+                    }
+                });
+                await jobRunner(e);
+                return;
+            } catch (err) {
+                this.status = 'error';
+                if (typeof this.onJobError === 'function') {
+                    try { this.onJobError(err); } catch (_) {}
+                }
+                console.error('[SutramAsyncBtn] Job dispatch error:', err);
+                setTimeout(() => { this.status = 'idle'; }, 2000);
+                return;
+            }
+        }
+
+        return super._handleClick(e);
     }
 }
 customElements.define('sutram-async-btn', SutramAsyncBtn);
@@ -1323,11 +1367,10 @@ export class SutramSelectorModal extends SutramElement {
         if (!this.open) return html``;
 
         const filtered = this._filteredItems || [];
-
         return html`
             <sutram-modal ?open=${true} titleText=${this.titleText} @sutram-modal-closed=${() => { this.open = false; this.dispatchEvent(new CustomEvent('selector-closed')); }}>
                 <div slot="body" style="display: flex; flex-direction: column; flex: 1; overflow: hidden; min-height: 300px;">
-                    <input type="text" placeholder="Search..." .value=${this._searchQuery} @input=${e => this._searchQuery = e.target.value} style="width: 100%; padding: 10px; font-weight: bold; box-sizing: border-box; background: var(--input-bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; margin-bottom: 10px; flex-shrink: 0;">
+                    <sutram-input placeholder="Search..." ?flush=${true} .value=${this._searchQuery} @sutram-input-changed=${e => this._searchQuery = e.detail.value} style="width: 100%; margin-bottom: 10px; flex-shrink: 0;"></sutram-input>
                     <div style="display: flex; flex-direction: column; gap: 5px; flex: 1; overflow-y: auto; padding-bottom: 15px;">
                         ${filtered.length === 0 ? html`<span style="color: var(--text-muted); font-style: italic;">No matches found.</span>` : filtered.map(item => {
                             const displayText = typeof item === 'string' ? item : (item.label || item);

@@ -412,7 +412,10 @@ export class SutramDragCoordinator extends SutramElement {
 
         // Fallback rect if the source extraction failed natively
         const rect = sourceRect || { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
-        const isPopoutable = Boolean(
+        const envSupportsPopout = window.Sutram?.stores?.Layout?.getState()?.canPopout
+            ? window.Sutram.stores.Layout.getState().canPopout()
+            : true;
+        const isPopoutable = envSupportsPopout && Boolean(
             entity?.allow_popout ||
             (entity?.id && window.ExtensionRegistry?.resolveCustomEditor?.(entity.id)) ||
             (entity?.id && window.ExtensionRegistry?.executeUIHook?.('sutram:is-popoutable', entity.id)) ||
