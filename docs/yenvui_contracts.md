@@ -44,10 +44,9 @@ Any replacement library must export the following Custom Elements.
     *   *Events:* `@yenvui-tab-selected`.
 *   **`<yenvui-board>` & `<yenvui-column>`**: Multi-column container-query grids.
     *   *Column Properties:* `.titleText`, `.intentColor`.
-
 ### Interactive Controls
 *   **`<yenvui-async-btn>`**: Action button with visual state feedback.
-    *   *Properties:* `.label`, `.loadingLabel`, `.successLabel`, `.errorLabel`, `.intent`, `.status` (`idle`|`loading`|`success`|`error`), `?disabled`, `?active`.
+    *   *Properties:* `.label`, `.loadingLabel`, `.successLabel`, `.errorLabel`, `.intent`, `.variant`, `.size`, `?emphasis`, `.status` (`idle`|`loading`|`success`|`error`), `?disabled`, `?active`, `.jobRoute`, `.jobPayload`, `.onJobComplete`, `.onJobProgress`, `.onJobError`.
     *   *Events:* `@yv-click`.
 *   **`<yenvui-editor>`**: CodeMirror 6 text editor.
     *   *Properties:* `.value`, `?readOnly`, `.language`, `?writingMode`, `.customExtensions`.

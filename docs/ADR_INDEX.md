@@ -21,3 +21,4 @@
 * [ADR-0017: Native Top-Layer Popover API Elevation for Context Overlays and Spatial Geometry Design Tokens](./adrs/0017_yenvui_top_layer_popover_anchoring_and_spatial_geometry_tokens.md)
 * [ADR-0018: Spatial Drag HUD Coordinator, CSS Mask-Image Icon Primitive, and Offline Cache Write-Through](./adrs/0018_spatial_drag_hud_css_mask_icons_and_offline_write_through.md)
 * [ADR-0019: CodeMirror Tag Completion Defense, Font Ligature Suppression, and Substrate InnerHTML Elimination](./adrs/0019_codemirror_tag_completion_defense_ligature_suppression_and_innerhtml_ban.md)
+* [ADR-0020: Multi-Window Popout Lifecycle, BroadcastChannel IPC Synchronization, and Declarative Job Runner](./adrs/0020_multi_window_popout_lifecycle_broadcast_channel_and_declarative_job_runner.md)

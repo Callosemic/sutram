@@ -14,9 +14,11 @@ The boundary between Sutram and yenVUI is a strict separation of State/Topology 
 
 ### Substrate Zero-InnerHTML Law
 All components across `yenVUI` and `Sutram` are strictly forbidden from assigning `.innerHTML`. All dynamic content rendering MUST utilize declarative Lit templates (`html````), native text nodes, or CSS mask-image primitives (`<yv-icon>`).
-
 ### Monospaced Ligature Suppression Standard
 All monospaced text rendering surfaces (code editors, diff viewers, `<pre>`, `<code>`) MUST explicitly suppress contextual font ligatures using `font-variant-ligatures: none` and `font-feature-settings: "liga" 0, "calt" 0` to preserve 1:1 physical character-to-glyph column positioning.
+
+### Substrate Input Control Standardization
+Presentation components, workspace overlays, and modals MUST NOT render raw, un-encapsulated HTML form controls (`<input>`, `<textarea>`, `<select>`). All user input and parameter entry MUST utilize standardized substrate primitives (`<sutram-input>`, `<sutram-textarea>`, `<sutram-select>`, `<sutram-toggle>`) binding to `@sutram-input-changed` events. This guarantees uniform design token inheritance, focus trapping, and theme-neutral high-contrast compliance.
 
 ---
 
@@ -29,6 +31,12 @@ All custom drag, swipe, spatial reordering, or long-press interactions MUST util
 * **Axis Locking:** Explicitly configure `lockAxis` (`'horizontal'`, `'vertical'`, or `'both'`) to prevent interference with native vertical document scrolling.
 * **OS Navigation Defeat:** `YenvuiGestureController` automatically intercepts horizontal drag sequences originating near viewport boundaries to defeat mobile browser edge-swipe back-navigation.
 * **Automated Cleanup:** Drag handles and gesture listeners attached via `YenvuiGestureController` automatically unbind global `pointermove` and `pointerup` handlers when gestures complete or cancel.
+
+### Multi-Window Popout Lifecycle & Popup Blocker Defense
+External window projections (ejected editor surfaces or diagnostic panels) MUST conform to the synchronous allocation protocol:
+* **Synchronous WindowProxy Allocation:** `window.open('about:blank', ...)` MUST execute synchronously within the direct user pointer gesture before awaiting any asynchronous pre-save hooks (`sutram:before-popout`). Asynchronous operations must resolve after allocation, redirecting the child window via `childWin.location.replace(targetUrl)`. Calling `window.open` after an `await` boundary is strictly prohibited.
+* **Capability Gating:** Popout triggers and HUD drop zones MUST be gated behind `canUseMultiWindowPopout()`, automatically deactivating on standalone PWAs and compact touch-primary viewports (`pointer: coarse` with viewport width < 768px).
+* **Double-Click Recall Escape Hatch:** Re-triggering a projection that is already active in a popped-out window twice within 3,500ms MUST close the external window and re-dock the projection locally into the user's active column focus.
 
 ---
 
@@ -57,6 +65,15 @@ Floating menus, dropdowns, and spatial drawers susceptible to CSS `overflow: hid
 * **State Synchronization:** Components must synchronize popover visibility through `syncTopLayerPopover(triggerEl, popoverEl, isOpen, options)` in `updated(changedProperties)` and ensure clean dismissal (`isOpen = false`) in `disconnectedCallback()`.
 * **Dynamic Anchoring:** Coordinate calculations must route through `anchorTopLayerPopover(triggerEl, popoverEl, options)` supporting `'menu'` (auto-reversing horizontal positioning) and `'column-drawer'` (spatial column bounding).
 * **Viewport Tracking:** When open, components must bind capture-phase listeners (`window.addEventListener('scroll', fn, true)` and `window.addEventListener('resize', fn)`) and unbind them immediately on close or unmount.
+
+### Multi-Window BroadcastChannel IPC Synchronization
+Cross-window state coordination across detached popout surfaces and the host application shell MUST flow through a singleton `_layoutBus = new BroadcastChannel('sutram_layout_bus')`:
+* **Presence Ping/Pong & Self-Healing Docking:** Child windows re-docking into the workbench (`dockInProjection`) must issue a `presence_ping` and await a `presence_pong` (120ms timeout). If the host window is active, the projection emits `dock_projection` and closes the child window. If the host has closed, the child window MUST self-heal by upgrading itself into the full workbench shell (`window.location.href = ...`).
+* **Pagehide Disposal Tracking:** External popout windows MUST dispatch `popout_closed` upon `pagehide` to clean up active window handles and focus timestamps in the host `LayoutStore`.
+* **Microtask Eviction Deferred Broadcast:** Eviction dispatches (`sutram-evict-projection`) must be scheduled via `queueMicrotask` to ensure synchronous callers finish inspecting buffer and uncommitted form state prior to store teardown.
+
+### Declarative Background Job Execution
+Long-running asynchronous actions attached to action buttons (`<sutram-async-btn>`) MUST NOT implement ad-hoc promise loops. Buttons declaring a `jobRoute` attribute must route execution through `ExtensionRegistry.executeJobAction`, delegating `onProgress`, `onComplete`, and `onError` callbacks to manage button state machine transitions (`idle` → `loading` → `success` / `error`) automatically.
 
 ---
 
