@@ -68,7 +68,12 @@ export class YenvuiAsyncBtn extends YenvuiBase {
         btntype: { type: String },
         onClick: { type: Object },
         disabled: { type: Boolean },
-        active: { type: Boolean }
+        active: { type: Boolean },
+        jobRoute: { type: String },
+        jobPayload: { type: Object },
+        onJobComplete: { type: Object },
+        onJobProgress: { type: Object },
+        onJobError: { type: Object }
     };
 
     createRenderRoot() { return this; }
@@ -86,6 +91,11 @@ export class YenvuiAsyncBtn extends YenvuiBase {
         this.btntype = 'button';
         this.disabled = false;
         this.active = false;
+        this.jobRoute = '';
+        this.jobPayload = null;
+        this.onJobComplete = null;
+        this.onJobProgress = null;
+        this.onJobError = null;
     }
 
     async _handleClick(e) {
