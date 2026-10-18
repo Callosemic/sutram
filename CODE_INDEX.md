@@ -35,7 +35,8 @@ sutram/
 │   │   ├── 0016_yenvui_diff_viewer_and_diff_utils.md # ADR-0016: Kinetic diff-viewer primitive, LCS diff utilities, and theme-neutral observation
 │   │   ├── 0017_yenvui_top_layer_popover_anchoring_and_spatial_geometry_tokens.md # ADR-0017: Top-layer popover anchoring engine and standardized spatial geometry tokens
 │   │   ├── 0018_spatial_drag_hud_css_mask_icons_and_offline_write_through.md # ADR-0018: Spatial drag HUD coordinator, CSS mask-image icon primitive, and offline cache write-through
-│   │   └── 0019_codemirror_tag_completion_defense_ligature_suppression_and_innerhtml_ban.md # [comment required]
+│   │   ├── 0019_codemirror_tag_completion_defense_ligature_suppression_and_innerhtml_ban.md # ADR-0019: CodeMirror tag completion defense, ligature suppression, and innerHTML ban
+│   │   └── 0020_multi_window_popout_lifecycle_broadcast_channel_and_declarative_job_runner.md # ADR-0020: Multi-window popout lifecycle, BroadcastChannel IPC synchronization, and declarative job runner
 │   └── yenvui_contracts.md         # Interface contract specification and CSS intent tokens for yenVUI presentation chassis
 ├── pyproject.toml                  # Python project metadata and semantic release configuration
 ├── readme.md                       # Master repository architecture map and component reference
