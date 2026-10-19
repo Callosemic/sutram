@@ -37,8 +37,7 @@ export class SutramDB {
         return this._dbPromise;
     }
     static _normalizeCacheKey(scopeId, filepath) {
-        let clean = String(filepath || '').replace(/([?&])t=\d+&?/, '$1').replace(/[?&]$/, '');
-        clean = clean.replace(/file=vfs%3A%2F%2F/i, 'file=').replace(/^vfs:\/\//i, '');
+        const clean = String(filepath || '').replace(/([?&])t=\d+&?/, '$1').replace(/[?&]$/, '');
         return `${scopeId}::${clean}`;
     }
 

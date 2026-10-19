@@ -1,9 +1,15 @@
 // sutram/js/utils.js
 // Pure mathematical and string manipulation algorithms
-
 export function cleanCodeArtifacts(text) {
     if (!text || typeof text !== 'string') return '';
     let result = text;
+    const firstDollar = result.indexOf('$');
+    const lastDollar = result.lastIndexOf('$');
+    if (firstDollar !== -1 && lastDollar > firstDollar && result.includes('\\vert{}')) {
+        result = result.slice(0, firstDollar + 1)
+            + result.slice(firstDollar + 1, lastDollar).replace(/\\vert\{\}/g, '|')
+            + result.slice(lastDollar);
+    }
     result = result.replace(/\{\{\s*(.)\s*\*\s*(\d+)\s*\}\}/g, (_, char, count) => char.repeat(parseInt(count, 10)));
     result = result.replace(/\{\{\s*triple(.)\s*\}\}/g, (_, char) => char.repeat(3));
     result = result.replace(/_(?:[^_\n]_){3,}/g, (match) => match.replace(/_/g, ''));

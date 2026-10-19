@@ -41,38 +41,42 @@
         _iconMaskCache.set(cacheKey, maskUrl);
         return maskUrl;
     }
-
     class YvIcon extends HTMLElement {
-        static get observedAttributes() { return ['name', 'stroke-width']; }
+        static get observedAttributes() { return ['name', 'stroke-width', 'style']; }
         connectedCallback() {
-            this.style.display = 'inline-block';
-            this.style.verticalAlign = 'middle';
-            this.style.flexShrink = '0';
-            this.style.backgroundColor = 'currentColor';
-            this.style.maskRepeat = 'no-repeat';
-            this.style.webkitMaskRepeat = 'no-repeat';
-            this.style.maskPosition = 'center';
-            this.style.webkitMaskPosition = 'center';
-            this.style.maskSize = 'contain';
-            this.style.webkitMaskSize = 'contain';
-            if (!this.style.width && !this.style.height) {
-                this.style.width = '16px';
-                this.style.height = '16px';
-            }
             this._renderIcon();
         }
         attributeChangedCallback(attrName, oldVal, newVal) {
+            if (this._updatingStyle) return;
             if (oldVal !== newVal && this.isConnected) {
                 this._renderIcon();
             }
         }
         _renderIcon() {
-            const name = this.getAttribute('name');
-            const strokeWidth = this.getAttribute('stroke-width') || '2';
-            const maskUrl = getIconMaskUrl(name, strokeWidth);
-            this.style.maskImage = maskUrl;
-            this.style.webkitMaskImage = maskUrl;
-            this.style.backgroundColor = maskUrl === 'none' ? 'transparent' : 'currentColor';
+            this._updatingStyle = true;
+            try {
+                const name = this.getAttribute('name');
+                const strokeWidth = this.getAttribute('stroke-width') || '2';
+                const maskUrl = getIconMaskUrl(name, strokeWidth);
+                if (!this.style.display) this.style.display = 'inline-block';
+                if (!this.style.verticalAlign) this.style.verticalAlign = 'middle';
+                if (!this.style.flexShrink) this.style.flexShrink = '0';
+                if (!this.style.width && !this.style.height) {
+                    this.style.width = '16px';
+                    this.style.height = '16px';
+                }
+                this.style.maskRepeat = 'no-repeat';
+                this.style.webkitMaskRepeat = 'no-repeat';
+                this.style.maskPosition = 'center';
+                this.style.webkitMaskPosition = 'center';
+                this.style.maskSize = 'contain';
+                this.style.webkitMaskSize = 'contain';
+                this.style.maskImage = maskUrl;
+                this.style.webkitMaskImage = maskUrl;
+                this.style.backgroundColor = maskUrl === 'none' ? 'transparent' : 'currentColor';
+            } finally {
+                this._updatingStyle = false;
+            }
         }
     }
     customElements.define('yv-icon', YvIcon);

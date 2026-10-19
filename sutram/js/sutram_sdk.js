@@ -324,7 +324,6 @@ export const ExtensionRegistry = {
     hasExtension: function(extName) {
         return this._manifests.has(extName);
     },
-
     resolveCustomEditor: function(filepath) {
         if (!filepath) return null;
         for (const [extName, manifest] of this._manifests.entries()) {
@@ -340,6 +339,36 @@ export const ExtensionRegistry = {
             }
         }
         return null;
+    },
+
+    getRepoConfigOptions: function() {
+        const options = [];
+        for (const [extName, manifest] of this._manifests.entries()) {
+            if (this._filterPredicate && !this._filterPredicate(extName)) continue;
+            if (Array.isArray(manifest.repoConfigOptions)) {
+                manifest.repoConfigOptions.forEach(opt => {
+                    if (opt && typeof opt.component === 'function') {
+                        options.push({ ...opt, extName });
+                    }
+                });
+            }
+        }
+        return options.sort((a, b) => (a.order || 50) - (b.order || 50));
+    },
+
+    getBucketConfigOptions: function() {
+        const options = [];
+        for (const [extName, manifest] of this._manifests.entries()) {
+            if (this._filterPredicate && !this._filterPredicate(extName)) continue;
+            if (Array.isArray(manifest.bucketConfigOptions)) {
+                manifest.bucketConfigOptions.forEach(opt => {
+                    if (opt && typeof opt.component === 'function') {
+                        options.push({ ...opt, extName });
+                    }
+                });
+            }
+        }
+        return options.sort((a, b) => (a.order || 50) - (b.order || 50));
     },
 
     setTabOrder: function(newOrder = []) {
@@ -411,12 +440,11 @@ export const ExtensionRegistry = {
     },
     async loadBatches(batches = []) {
         this.isBooting = true;
-        const bootTs = window.SUTRAM_BOOT_TS || (window.SUTRAM_BOOT_TS = Date.now());
         for (const batchUrls of batches) {
             if (!Array.isArray(batchUrls) || batchUrls.length === 0) continue;
             await Promise.all(
                 batchUrls.map(url => 
-                    import(/* webpackIgnore: true */ `${url}?v=${bootTs}`)
+                    import(/* webpackIgnore: true */ url)
                         .catch(e => console.error(`[Sutram] Failed to load module [${url}]:`, e))
                 )
             );

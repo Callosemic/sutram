@@ -405,8 +405,10 @@ export class SutramSelectionTray extends SutramElement {
                 </div>
                 <div class="tray-items">
                     ${itemsArray.map(item => {
-                        const name = item.data?.titleText || item.data?.filepath?.split('/').pop() || 'Unknown Item';
-                        const path = item.data?.filepath || item.data?.folderpath || item.data?.id || '';
+                        const rawPath = item.data?.filepath || item.data?.folderpath || item.data?.id || '';
+                        const cleanPath = String(rawPath).replace(/\/+$/, '');
+                        const name = item.data?.titleText || cleanPath.split('/').pop() || 'Unknown Item';
+                        const toggleKey = item.key || rawPath;
                         const sizeBytes = item.data?.size_bytes || (registry?.executeUIHook ? registry.executeUIHook('sutram:resolve-item-size', item.data) : null);
                         const sizeText = sizeBytes ? `${Math.round(sizeBytes / 1024)} kb` : '';
                         return html`
@@ -415,9 +417,9 @@ export class SutramSelectionTray extends SutramElement {
                                 <div class="tray-item-title">
                                     <div style="display: flex; align-items: center; gap: 8px;"><span class="pack-tag">PACK</span> ${name}</div>${sizeText ? html`<span style="color: var(--text-muted); font-weight: normal; font-size: 0.85rem; font-family: monospace;">${sizeText}</span>` : ''}
                                 </div>
-                                <div class="tray-item-path">${path}</div>
+                                <div class="tray-item-path">${rawPath}</div>
                             </div>
-                            <button class="btn-sm" style="background: transparent; color: var(--text-muted); border: none; font-size: 1.2rem; cursor: pointer; padding: 4px;" @click=${() => SelectionStore.getState().toggleSelection(path, item.entityType, item.data)}>✕</button>
+                            <button class="btn-sm" style="background: transparent; color: var(--text-muted); border: none; font-size: 1.2rem; cursor: pointer; padding: 4px;" @click=${() => SelectionStore.getState().toggleSelection(toggleKey, item.entityType, item.data)}>✕</button>
                         </div>
                     `})}
                 </div>
@@ -574,15 +576,371 @@ export class SutramWindow extends SutramContextMixin(YenvuiWindow) {
     }
 }
 customElements.define('sutram-window', SutramWindow);
+// 8. Generic Settings Form & Modal Engine
+export class SutramSettingsForm extends SutramElement {
+    static properties = {
+        extName: { type: String },
+        schema: { type: Array },
+        formData: { type: Object },
+        repos: { type: Array },
+        selectedRepo: { type: String },
+        filterQuery: { type: String },
+        hideSaveButton: { type: Boolean },
+        _jsonBuffers: { type: Object }
+    };
+    static styles = [sharedStyles, css`
+        :host { display: flex; flex-direction: column; gap: 14px; width: 100%; box-sizing: border-box; }
+        .field-card {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 14px 16px;
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .field-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .intent-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 10px;
+            margin-top: 4px;
+        }
+        .intent-row {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            background: var(--bg);
+            padding: 8px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+    `];
 
-// 8. Generic Settings Engine
+    constructor() {
+        super();
+        this.extName = '';
+        this.schema = [];
+        this.formData = {};
+        this.repos = [];
+        this.selectedRepo = '';
+        this.filterQuery = '';
+        this.hideSaveButton = false;
+        this._jsonBuffers = {};
+    }
+
+    willUpdate(changedProperties) {
+        if (changedProperties.has('extName') || changedProperties.has('selectedRepo')) {
+            this._jsonBuffers = {};
+        }
+    }
+
+    _emitFormMutation(nextForm) {
+        this.formData = nextForm;
+        this.dispatchEvent(new CustomEvent('sutram-settings-form-changed', {
+            detail: { extName: this.extName, formData: this.formData, repo: this.selectedRepo },
+            bubbles: true,
+            composed: true
+        }));
+        this.requestUpdate();
+    }
+    async triggerSave(e) {
+        const hasRepoScope = (this.schema || []).some(f => f && f.type !== 'hidden' && f.scope === 'repo');
+        const targetRepo = hasRepoScope ? (this.selectedRepo || (this.repos && this.repos[0]) || '') : '';
+        return new Promise((resolve, reject) => {
+            this.dispatchEvent(new CustomEvent('sutram-settings-save', {
+                detail: {
+                    extName: this.extName,
+                    schema: this.schema,
+                    formData: this.formData,
+                    repo: targetRepo,
+                    resolve,
+                    reject,
+                    originalEvent: e
+                },
+                bubbles: true,
+                composed: true
+            }));
+        });
+    }
+    _renderScopeBadge(field) {
+        const badges = [];
+        if (field.secure) {
+            badges.push(html`<sutram-tag text="secure" intent="warning"></sutram-tag>`);
+        }
+        const scope = field.scope || 'workspace';
+        if (scope === 'daemon') {
+            badges.push(html`<sutram-tag text="daemon" intent="neutral"></sutram-tag>`);
+        } else if (scope === 'repo') {
+            badges.push(html`<sutram-tag text="repo" intent="highlight"></sutram-tag>`);
+        } else {
+            badges.push(html`<sutram-tag text="workspace" intent="primary"></sutram-tag>`);
+        }
+        return html`<div style="display: inline-flex; gap: 6px; align-items: center;">${badges}</div>`;
+    }
+
+    render() {
+        const registry = window.ExtensionRegistry;
+        const manifest = registry?._manifests?.get(this.extName);
+        const settingsActions = (manifest?.settingsActions || []).filter(act => !act.id.endsWith('_generic_settings'));
+        const q = (this.filterQuery || '').trim().toLowerCase();
+
+        const visibleSchema = (this.schema || []).filter(field => {
+            if (!field || field.type === 'hidden') return false;
+            if (!q) return true;
+            const hay = [field.label, field.title, field.id, field.description, field.desc].filter(Boolean).join(' ').toLowerCase();
+            return hay.includes(q);
+        });
+
+        const hasRepoFields = (this.schema || []).some(f => f && f.type !== 'hidden' && f.scope === 'repo');
+        const activeRepo = this.selectedRepo || (this.repos && this.repos[0]) || '';
+        const repoMissing = hasRepoFields && (!this.repos || this.repos.length === 0);
+
+        return html`
+            ${hasRepoFields ? html`
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; background: color-mix(in srgb, var(--intent-highlight) 10%, var(--input-bg)); border: 1px solid color-mix(in srgb, var(--intent-highlight) 35%, var(--border)); border-radius: 8px; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: bold; color: var(--text);">
+                        <yv-icon name="package" style="width: 16px; height: 16px; color: var(--intent-highlight);"></yv-icon>
+                        <span>Target Repository Scope</span>
+                    </div>
+                    ${repoMissing ? html`
+                        <span style="font-size: 0.8rem; color: var(--intent-warning); font-style: italic;">
+                            Add a repository in Workspace Manager to configure repository-scoped settings.
+                        </span>
+                    ` : html`
+                        <sutram-select
+                            .value=${activeRepo}
+                            .options=${(this.repos || []).map(r => ({ value: r, label: r }))}
+                            ?flush=${true}
+                            style="min-width: 200px; margin: 0;"
+                            @sutram-input-changed=${(e) => {
+                                this.selectedRepo = e.detail.value;
+                                this.dispatchEvent(new CustomEvent('sutram-settings-repo-changed', {
+                                    detail: { extName: this.extName, repo: e.detail.value },
+                                    bubbles: true,
+                                    composed: true
+                                }));
+                            }}>
+                        </sutram-select>
+                    `}
+                </div>
+            ` : ''}
+
+            ${!q ? settingsActions.map(act => html`
+                <div class="field-card">
+                    <div class="field-header">
+                        <span style="font-size: 0.95rem; color: var(--text); font-weight: bold; display: flex; align-items: center; gap: 8px;">
+                            ${act.icon ? (/^[a-zA-Z0-9-]+$/.test(act.icon) ? html`<yv-icon name="${act.icon}" style="width: 15px; height: 15px; color: var(--intent-primary);"></yv-icon>` : act.icon) : ''}
+                            <span>${act.label}</span>
+                        </span>
+                        <sutram-async-btn label="Open Panel" icon="external-link" intent="primary" size="sm" .onClick=${async (e) => {
+                            this.dispatchEvent(new CustomEvent('sutram-settings-custom-action', { detail: { action: act, originalEvent: e }, bubbles: true, composed: true }));
+                            if (act.onClick) await act.onClick(e);
+                        }}></sutram-async-btn>
+                    </div>
+                </div>
+            `) : ''}
+
+            ${visibleSchema.map(field => {
+                const isRepoFieldDisabled = field.scope === 'repo' && repoMissing;
+                const val = this.formData && this.formData[field.id] !== undefined ? this.formData[field.id] : field.default;
+                const displayLabel = field.title || field.label || field.id;
+                let inputHtml = '';
+
+                if (field.type === 'action') {
+                    inputHtml = html`
+                        <sutram-async-btn
+                            label=${field.button_label || field.label || 'Execute Action'}
+                            intent=${field.intent || 'primary'}
+                            ?disabled=${isRepoFieldDisabled}
+                            .onClick=${async (e) => {
+                                return new Promise((resolve, reject) => {
+                                    this.dispatchEvent(new CustomEvent('sutram-settings-action', {
+                                        detail: { extName: this.extName, field, resolve, reject, originalEvent: e },
+                                        bubbles: true,
+                                        composed: true
+                                    }));
+                                });
+                            }}>
+                        </sutram-async-btn>
+                    `;
+                } else if (field.type === 'boolean') {
+                    inputHtml = html`
+                        <sutram-toggle
+                            .checked=${!!val}
+                            ?disabled=${isRepoFieldDisabled}
+                            ?flush=${true}
+                            @sutram-input-changed=${e => this._emitFormMutation({ ...this.formData, [field.id]: e.detail.value })}>
+                        </sutram-toggle>
+                    `;
+                } else if (field.type === 'select') {
+                    const options = (field.options || []).map(opt => ({
+                        value: opt.value !== undefined ? opt.value : opt,
+                        label: opt.label || opt.title || opt.value || opt
+                    }));
+                    inputHtml = html`
+                        <sutram-select
+                            .value=${val ?? ''}
+                            .options=${options}
+                            ?disabled=${isRepoFieldDisabled}
+                            ?flush=${true}
+                            @sutram-input-changed=${e => this._emitFormMutation({ ...this.formData, [field.id]: e.detail.value })}>
+                        </sutram-select>
+                    `;
+                } else if (field.type === 'number') {
+                    inputHtml = html`
+                        <sutram-input
+                            type="number"
+                            .value=${val !== undefined && val !== null && !Number.isNaN(val) ? String(val) : ''}
+                            ?disabled=${isRepoFieldDisabled}
+                            ?flush=${true}
+                            @sutram-input-changed=${e => {
+                                const raw = e.detail.value;
+                                const parsed = raw === '' ? '' : Number(raw);
+                                this._emitFormMutation({ ...this.formData, [field.id]: Number.isNaN(parsed) ? (field.default ?? 0) : parsed });
+                            }}>
+                        </sutram-input>
+                    `;
+                } else if (field.type === 'intent_map') {
+                    const intents = Array.isArray(field.intent_legend) && field.intent_legend.length > 0
+                        ? field.intent_legend
+                        : ['primary', 'success', 'warning', 'danger', 'highlight', 'neutral'];
+                    const mapObj = (typeof val === 'object' && val !== null) ? val : (field.default || {});
+                    inputHtml = html`
+                        <div class="intent-grid">
+                            ${intents.map(intentKey => {
+                                const arr = Array.isArray(mapObj[intentKey]) ? mapObj[intentKey] : [];
+                                return html`
+                                    <div class="intent-row">
+                                        <span style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: bold; color: var(--intent-${intentKey}); display: flex; align-items: center; gap: 6px;">
+                                            ● ${intentKey.toUpperCase()}
+                                        </span>
+                                        <sutram-input
+                                            .value=${arr.join(', ')}
+                                            placeholder="Comma-separated keywords..."
+                                            ?disabled=${isRepoFieldDisabled}
+                                            ?flush=${true}
+                                            @sutram-input-changed=${e => {
+                                                const nextList = e.detail.value.split(',').map(s => s.trim()).filter(Boolean);
+                                                const nextMap = { ...mapObj, [intentKey]: nextList };
+                                                this._emitFormMutation({ ...this.formData, [field.id]: nextMap });
+                                            }}>
+                                        </sutram-input>
+                                    </div>
+                                `;
+                            })}
+                        </div>
+                    `;
+                } else if (field.type === 'string_list') {
+                    const listVal = Array.isArray(val) ? val.join(', ') : (val || '');
+                    inputHtml = html`
+                        <sutram-input
+                            .value=${listVal}
+                            placeholder=${field.placeholder || 'Comma-separated values...'}
+                            ?disabled=${isRepoFieldDisabled}
+                            ?flush=${true}
+                            @sutram-input-changed=${e => {
+                                const arr = e.detail.value.split(',').map(s => s.trim()).filter(Boolean);
+                                this._emitFormMutation({ ...this.formData, [field.id]: arr });
+                            }}>
+                        </sutram-input>
+                    `;
+                } else if (field.type === 'object' || field.type === 'json' || (typeof val === 'object' && val !== null)) {
+                    const strVal = this._jsonBuffers[field.id] !== undefined
+                        ? this._jsonBuffers[field.id]
+                        : (typeof val === 'object' && val !== null ? JSON.stringify(val, null, 2) : (val || ''));
+                    inputHtml = html`
+                        <sutram-textarea
+                            .value=${strVal}
+                            .monospace=${true}
+                            .minRows=${4}
+                            ?disabled=${isRepoFieldDisabled}
+                            ?flush=${true}
+                            @sutram-input-changed=${e => {
+                                this._jsonBuffers = { ...this._jsonBuffers, [field.id]: e.detail.value };
+                                try {
+                                    const parsed = JSON.parse(e.detail.value);
+                                    this._emitFormMutation({ ...this.formData, [field.id]: parsed });
+                                } catch (err) {
+                                    this.requestUpdate();
+                                }
+                            }}>
+                        </sutram-textarea>
+                    `;
+                } else {
+                    const isMaskedSecret = field.secure && val === '••••••••';
+                    const inputType = field.type === 'password' || field.secure ? 'password' : 'text';
+                    inputHtml = html`
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <sutram-input
+                                type="${inputType}"
+                                style="flex: 1; margin: 0;"
+                                .value=${val ?? ''}
+                                placeholder=${field.secure ? 'Enter secret key...' : (field.placeholder || '')}
+                                ?disabled=${isRepoFieldDisabled}
+                                ?flush=${true}
+                                @sutram-input-changed=${e => this._emitFormMutation({ ...this.formData, [field.id]: e.detail.value })}>
+                            </sutram-input>
+                            ${isMaskedSecret ? html`
+                                <sutram-tag text="✓ Configured" intent="success"></sutram-tag>
+                                <sutram-btn
+                                    size="sm"
+                                    intent="danger"
+                                    label="Clear"
+                                    style="margin: 0;"
+                                    @click=${() => this._emitFormMutation({ ...this.formData, [field.id]: '' })}>
+                                </sutram-btn>
+                            ` : ''}
+                        </div>
+                    `;
+                }
+
+                return html`
+                    <div class="field-card">
+                        <div class="field-header">
+                            <label style="font-size: 0.9rem; color: var(--text); font-weight: bold; margin: 0;">${displayLabel}</label>
+                            ${this._renderScopeBadge(field)}
+                        </div>
+                        ${inputHtml}
+                        ${field.description || field.desc ? html`
+                            <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;">
+                                ${field.description || field.desc}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            })}
+
+            ${!this.hideSaveButton && visibleSchema.some(f => f.type !== 'action') ? html`
+                <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
+                    <sutram-async-btn
+                        label="Save ${manifest?.name || this.extName} Settings"
+                        icon="save"
+                        intent="primary"
+                        style="width: 100%;"
+                        .onClick=${(e) => this.triggerSave(e)}>
+                    </sutram-async-btn>
+                </div>
+            ` : ''}
+        `;
+    }
+}
+customElements.define('sutram-settings-form', SutramSettingsForm);
+
 export class SutramGenericSettingsModal extends SutramElement {
     static properties = {
         open: { type: Boolean, reflect: true },
         extName: { type: String },
         schema: { type: Array },
         formData: { type: Object },
-        _jsonBuffers: { type: Object }
+        repos: { type: Array },
+        selectedRepo: { type: String }
     };
     static styles = [sharedStyles, css`:host { display: contents; }`];
 
@@ -592,114 +950,54 @@ export class SutramGenericSettingsModal extends SutramElement {
         this.extName = '';
         this.schema = [];
         this.formData = {};
-        this._jsonBuffers = {};
+        this.repos = [];
+        this.selectedRepo = '';
     }
 
-    openModal(extName, schema, formData) {
+    openModal(extName, schema, formData, repos = [], selectedRepo = '') {
         this.extName = extName;
         this.schema = schema || [];
         this.formData = formData || {};
-        this._jsonBuffers = {};
+        this.repos = repos || [];
+        this.selectedRepo = selectedRepo || (this.repos[0] || '');
         this.open = true;
         this.requestUpdate();
     }
-    saveSettings(e) {
-        const btn = e.target;
-        const orig = btn.innerText;
-        btn.innerText = 'Saving...';
 
-        this.dispatchEvent(new CustomEvent('sutram-settings-save', {
-            detail: { extName: this.extName, formData: this.formData, btn, origText: orig },
-            bubbles: true,
-            composed: true
-        }));
-    }
     render() {
         if (!this.open) return html``;
-
         const registry = window.ExtensionRegistry;
         const manifest = registry?._manifests?.get(this.extName);
         const title = (manifest?.name || this.extName) + ' Settings';
-        const settingsActions = manifest?.settingsActions || [];
 
         return html`
-            <yenvui-modal  
-                ?open=${true} 
-                titleText=${title}  
-                ?fullscreen=${true} 
-                ?transparent=${true}
-                style="--modal-backdrop: transparent; --modal-backdrop-filter: none;"
-                @yenvui-modal-closed=${() => this.open = false}>
-                ${settingsActions.filter(act => !act.id.endsWith('_generic_settings')).map(act => html`
-                        <div style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; padding: 15px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px;">
-                            <label style="font-size: 0.95rem; color: var(--text); font-weight: bold;">${act.icon || ''} ${act.label}</label>
-                            <span style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px;">Click to open the dedicated configuration panel.</span>
-                            <sutram-async-btn label="Open Editor" intent="primary" .onClick=${async (e) => {
-                                this.open = false;
-                                if (act.onClick) await act.onClick(e);
-                            }}></sutram-async-btn>
-                        </div>
-                    `)}
-
-                    ${this.schema.map(field => {
-                        if (field.type === 'hidden') return '';
-
-                        const val = this.formData[field.id] !== undefined ? this.formData[field.id] : field.default;
-                        let inputHtml = '';
-                        if (field.type === 'action') {
-                            inputHtml = html`
-                                <sutram-async-btn
-                                    label=${field.button_label || field.label || 'Execute Action'}
-                                    intent=${field.intent || 'primary'}
-                                    .onClick=${async (e) => {
-                                        return new Promise((resolve, reject) => {
-                                            this.dispatchEvent(new CustomEvent('sutram-settings-action', {
-                                                detail: { extName: this.extName, field, resolve, reject, originalEvent: e },
-                                                bubbles: true,
-                                                composed: true
-                                            }));
-                                        });
-                                    }}>
-                                </sutram-async-btn>
-                            `;
-                        } else if (field.type === 'boolean') {
-                            inputHtml = html`<sutram-toggle .checked=${!!val} @sutram-input-changed=${e => { this.formData = {...this.formData, [field.id]: e.detail.value}; this.requestUpdate(); }} ?flush=${true} style="margin-top: 4px;"></sutram-toggle>`;
-                        } else if (field.type === 'select') {
-                            const options = (field.options || []).map(opt => ({ value: opt.value !== undefined ? opt.value : opt, label: opt.label || opt.title || opt.value || opt }));
-                            inputHtml = html`<sutram-select .value=${val} .options=${options} @sutram-input-changed=${e => { this.formData = {...this.formData, [field.id]: e.detail.value}; this.requestUpdate(); }} ?flush=${true}></sutram-select>`;
-                        } else if (field.type === 'number') {
-                            inputHtml = html`<sutram-input type="number" .value=${val} @sutram-input-changed=${e => { this.formData = {...this.formData, [field.id]: parseFloat(e.detail.value)}; this.requestUpdate(); }} ?flush=${true}></sutram-input>`;
-                        } else if (field.type === 'object' || field.type === 'json' || (typeof val === 'object' && val !== null)) {
-                            const strVal = this._jsonBuffers[field.id] !== undefined ? this._jsonBuffers[field.id] : (typeof val === 'object' && val !== null ? JSON.stringify(val, null, 2) : val);
-                            inputHtml = html`<sutram-textarea .value=${strVal} .monospace=${true} .minRows=${4} @sutram-input-changed=${e => {
-                                this._jsonBuffers = { ...this._jsonBuffers, [field.id]: e.detail.value };
-                                try {
-                                    this.formData = {...this.formData, [field.id]: JSON.parse(e.detail.value)};
-                                } catch(err) {}
-                                this.requestUpdate();
-                            }} ?flush=${true}></sutram-textarea>`;
-                        } else {
-                            const inputType = field.type === 'password' ? 'password' : 'text';
-                            inputHtml = html`<sutram-input type="${inputType}" .value=${val} @sutram-input-changed=${e => { this.formData = {...this.formData, [field.id]: e.detail.value}; this.requestUpdate(); }} ?flush=${true}></sutram-input>`;
-                        }
-                        const displayLabel = field.title || field.label || field.id;
-                        return html`
-                            <div style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px;">
-                                ${field.type === 'boolean' 
-                                    ? html`<div style="display: flex; align-items: center; gap: 10px;"><label style="font-size: 0.95rem; color: var(--text); font-weight: bold; margin: 0; cursor: pointer;">${displayLabel}</label>${inputHtml}</div>` 
-                                    : html`<label style="font-size: 0.85rem; color: var(--text-muted); font-weight: bold;">${displayLabel}</label>${inputHtml}`}
-                                ${field.description || field.desc ? html`<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: -2px;">${field.description || field.desc}</div>` : ''}
-                                ${Array.isArray(field.intent_legend) ? html`
-                                    <div style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 10px; font-family: var(--font-mono); font-size: 0.75rem; font-weight: bold;">
-                                        ${field.intent_legend.map(intent => html`<span style="color: var(--intent-${intent});">● ${intent}</span>`)}
-                                    </div>
-                                ` : ''}
-                            </div>
-                        `;
-                    })}
-                <button slot="footer" style="background: var(--intent-primary); color: white;" @click=${this.saveSettings}>
-                    Save Settings
-                </button>
+            <yenvui-modal
+                ?open=${true}
+                titleText=${title}
+                ?fullscreen=${true}
+                @yenvui-modal-closed=${(e) => { if (e.target === e.currentTarget) this.open = false; }}>
+                <div slot="body">
+                    <sutram-settings-form
+                        .extName=${this.extName}
+                        .schema=${this.schema}
+                        .formData=${this.formData}
+                        .repos=${this.repos}
+                        .selectedRepo=${this.selectedRepo}
+                        ?hideSaveButton=${true}
+                        @sutram-settings-form-changed=${(e) => { this.formData = e.detail.formData; }}>
+                    </sutram-settings-form>
+                </div>
+                <sutram-async-btn
+                    slot="footer"
+                    label="Save Settings"
+                    icon="save"
+                    intent="primary"
+                    .onClick=${async (e) => {
+                        const formEl = this.shadowRoot.querySelector('sutram-settings-form');
+                        if (formEl) await formEl.triggerSave(e);
+                        this.open = false;
+                    }}>
+                </sutram-async-btn>
             </yenvui-modal>
         `;
     }
@@ -1054,9 +1352,8 @@ export class SutramCard extends SutramContextMixin(YenvuiCard) {
         this.entityData = {};
         this.selectionStoreKey = 'Selection';
     }
-
     _getId() {
-        return this.entityData?.filepath || this.entityData?.id || this.filename;
+        return this.entityData?.filepath || this.entityData?.folderpath || this.entityData?.id || this.filename;
     }
     _getStore() {
         if (this.selectionStoreKey === 'Selection') return SelectionStore;
