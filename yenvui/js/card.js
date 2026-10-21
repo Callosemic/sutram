@@ -28,13 +28,18 @@ export class YenvuiCard extends YenvuiBase {
             position: relative;
             touch-action: pan-x pan-y;
             content-visibility: var(--card-content-visibility, auto);
-            contain-intrinsic-size: auto 76px;
+            contain-intrinsic-size: var(--card-contain-intrinsic-size, auto 76px);
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
         }
         :host([compact]) {
-            contain-intrinsic-size: auto 42px;
+            contain-intrinsic-size: var(--card-contain-intrinsic-size, auto 42px);
         }
-        :host([_overlayactive]) {
+        :host([_overlayactive]),
+        :host-context(lit-virtualizer),
+        :host-context(sutram-virtual-list) {
             content-visibility: visible;
+            contain-intrinsic-size: none;
         }
         .card-wrapper {
             touch-action: pan-x pan-y;
@@ -292,8 +297,8 @@ export class YenvuiCard extends YenvuiBase {
         }
         :host-context([data-theme="e-ink"]):host([selected]) .card-wrapper,
         :host-context([data-theme="e-ink"]):host([_overlayactive]) .card-wrapper {
-            border: 2px solid #ec4899 !important;
-            box-shadow: 3px 4px 0 #eab308 !important; /* Yellow Bottom Shadow on Selected */
+            border: 2px solid var(--intent-danger, #ec4899) !important;
+            box-shadow: 3px 4px 0 var(--intent-warning, #eab308) !important;
         }
 
         :host-context([data-theme="e-ink"]) .selection-strip {
@@ -302,18 +307,18 @@ export class YenvuiCard extends YenvuiBase {
         :host-context([data-theme="e-ink"]):host([selected]) .selection-strip,
         :host-context([data-theme="e-ink"]):host([_overlayactive]) .selection-strip {
             border-left-width: 14px !important;
-            border-left-color: #ec4899 !important; /* Hot Pink thick slab */
+            border-left-color: var(--intent-danger, #ec4899) !important;
         }
 
         :host-context([data-theme="e-ink"]) .action-grip-rail {
-            background: #8b5cf6 !important;
-            border-left: 2px solid #000000 !important;
-            color: #ffffff !important;
+            background: var(--intent-primary, #8b5cf6) !important;
+            border-left: 2px solid var(--border, #000000) !important;
+            color: var(--bg, #ffffff) !important;
             font-weight: 900 !important;
         }
         :host-context([data-theme="e-ink"]):host([selected]) .action-grip-rail,
         :host-context([data-theme="e-ink"]):host([_overlayactive]) .action-grip-rail {
-            background: #ec4899 !important;
+            background: var(--intent-danger, #ec4899) !important;
         }
 
         :host-context([data-theme="e-ink"]) .actions-tray {
@@ -382,6 +387,19 @@ export class YenvuiCard extends YenvuiBase {
     `;
     constructor() {
         super();
+        this.titleText = '';
+        this.detailText = '';
+        this.detailPrefix = '';
+        this.detailSuffix = '';
+        this.descriptionText = '';
+        this.statusText = '';
+        this.icon = '';
+        this.intentColor = '';
+        this.intent = '';
+        this.disableSelection = false;
+        this.compact = false;
+        this.flush = false;
+        this.stale = false;
         this._overlayActive = false;
         this._hasActions = false;
         this.selected = false;

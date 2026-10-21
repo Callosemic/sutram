@@ -164,8 +164,8 @@ export class YenvuiCollapsible extends YenvuiBase {
                 this.open = !this.open;
                 this.dispatchEvent(new CustomEvent('yenvui-collapsible-toggled', {
                     detail: { open: this.open },
-                    bubbles: true,
-                    composed: true
+                    bubbles: false,
+                    composed: false
                 }));
             }}>
                 <span class="title intent-${this.intent}">${this.titleText}</span>

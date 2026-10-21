@@ -104,7 +104,7 @@ export class YenvuiDropTarget extends YenvuiBase {
         }
         :host([hovered]) .intent-danger {
             background: color-mix(in srgb, var(--intent-danger) 20%, var(--pane-bg));
-            color: white;
+            color: var(--text-light, #ffffff);
         }
         :host([intent="danger"]) { 
             height: 80px; 

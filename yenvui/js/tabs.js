@@ -88,11 +88,11 @@ export class YenvuiTabs extends YenvuiBase {
             border-bottom: 1px solid var(--border);
         }
         :host([data-theme="e-ink"]:not([variant="sub"])) .tabs-header-wrap {
-            border-bottom: 2px solid #d946ef !important; /* Fuchsia header separator */
+            border-bottom: 2px solid var(--intent-highlight, #d946ef) !important; /* Fuchsia header separator */
         }
         /* E-Ink High Contrast Overrides */
         :host([data-theme="e-ink"]) .tab-btn {
-            color: #000000 !important;
+            color: var(--text, #000000) !important;
             font-weight: 600 !important;
             border: 2px solid transparent;
             transition: none !important;
@@ -101,14 +101,14 @@ export class YenvuiTabs extends YenvuiBase {
             background: transparent !important;
         }
         :host([data-theme="e-ink"]) .tab-btn.active {
-            background: #ffffff !important;
-            color: #000000 !important;
-            border: 2px solid #3b82f6 !important;
-            box-shadow: 3px -3px 0 #10b981 !important;
+            background: var(--bg, #ffffff) !important;
+            color: var(--text, #000000) !important;
+            border: 2px solid var(--intent-neutral, #3b82f6) !important;
+            box-shadow: 3px -3px 0 var(--intent-success, #10b981) !important;
         }
         :host([data-theme="e-ink"][variant="sub"]) .tab-btn.active {
             border: none !important;
-            border-bottom: 4px solid #f97316 !important;
+            border-bottom: 4px solid var(--intent-warning, #f97316) !important;
             box-shadow: none !important;
             background: transparent !important;
         }

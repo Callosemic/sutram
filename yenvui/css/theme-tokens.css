@@ -127,7 +127,9 @@
     UNIVERSAL RESETS & SCROLLBARS (Vacuumed from Hosts)
     ========================================================================== */
 * { 
-   box-sizing: border-box; 
+   box-sizing: border-box;
+   -webkit-text-size-adjust: 100%;
+   text-size-adjust: 100%;
 }
 [data-theme="e-ink"] * {
    -webkit-tap-highlight-color: transparent !important;
@@ -146,6 +148,8 @@ body, html {
    overscroll-behavior: none;
    touch-action: pan-y;
    line-height: 1.6;
+   -webkit-text-size-adjust: 100%;
+   text-size-adjust: 100%;
    display: flex; 
    flex-direction: column; 
 }

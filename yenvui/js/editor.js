@@ -26,10 +26,12 @@ async function loadLanguageExtension(lang) {
             const fn = langMod[lang] || langMod.default;
             if (typeof fn === 'function') return fn();
         } catch (importErr) {
-            // Stage A Fallback: Trigger host-injected JIT vendorization provider
-            if (typeof window.Sutram?.vendorizeLanguage === 'function') {
+            // Stage A Fallback: Trigger host-injected JIT vendorization provider via ExtensionRegistry hook or Sutram bridge
+            const vendorizePromise = (window.ExtensionRegistry?.executeUIHook && window.ExtensionRegistry.executeUIHook('sutram:vendorize-language', lang))
+                || (typeof window.Sutram?.vendorizeLanguage === 'function' ? window.Sutram.vendorizeLanguage(lang) : null);
+            if (vendorizePromise) {
                 try {
-                    const vendorPath = await window.Sutram.vendorizeLanguage(lang);
+                    const vendorPath = await vendorizePromise;
                     if (vendorPath) {
                         const staticMod = await import(/* webpackIgnore: true */ vendorPath);
                         const fn = staticMod[lang] || staticMod.default;
@@ -98,8 +100,8 @@ export class YenvuiEditor extends LitElement {
         .CodeMirror-dialog input:focus {
             border-color: var(--intent-primary) !important;
         }
-        .CodeMirror-search-match { background: #f59e0b; color: #000; }
-        .CodeMirror-search-hint { color: #888; font-style: italic; }
+        .CodeMirror-search-match { background: var(--intent-warning, #f59e0b); color: var(--bg-deep, #000000); }
+        .CodeMirror-search-hint { color: var(--text-muted, #888888); font-style: italic; }
 
         .EasyMDEContainer { flex: 1; display: flex; flex-direction: column; min-height: 0; }
         .EasyMDEContainer .CodeMirror {
@@ -175,15 +177,52 @@ export class YenvuiEditor extends LitElement {
             this._view = null;
         }
     }
+    _applyMinimalDiff(currentDoc, targetValue, preserveViewport = true) {
+        if (!this._view || currentDoc === targetValue) return;
+        let start = 0;
+        const minLen = Math.min(currentDoc.length, targetValue.length);
+        while (start < minLen && currentDoc.charCodeAt(start) === targetValue.charCodeAt(start)) {
+            start++;
+        }
+        let oldEnd = currentDoc.length;
+        let newEnd = targetValue.length;
+        while (oldEnd > start && newEnd > start && currentDoc.charCodeAt(oldEnd - 1) === targetValue.charCodeAt(newEnd - 1)) {
+            oldEnd--;
+            newEnd--;
+        }
+        const insertSlice = targetValue.slice(start, newEnd);
+        const delta = insertSlice.length - (oldEnd - start);
+        const mapPos = (pos) => {
+            if (pos <= start) return pos;
+            if (pos >= oldEnd) return Math.max(0, Math.min(targetValue.length, pos + delta));
+            return Math.max(start, Math.min(start + insertSlice.length, pos));
+        };
+        const sel = this._view.state.selection?.main;
+        const nextSelection = (preserveViewport && sel)
+            ? { anchor: mapPos(sel.anchor), head: mapPos(sel.head) }
+            : { anchor: 0, head: 0 };
+
+        const scrollDOM = this._view.scrollDOM;
+        const prevScrollTop = (preserveViewport && scrollDOM) ? scrollDOM.scrollTop : null;
+        this._view.dispatch({
+            changes: { from: start, to: oldEnd, insert: insertSlice },
+            selection: nextSelection
+        });
+        if (prevScrollTop !== null && scrollDOM) {
+            requestAnimationFrame(() => {
+                if (this._view?.scrollDOM) this._view.scrollDOM.scrollTop = prevScrollTop;
+            });
+        }
+    }
+
     updated(changedProperties) {
         if (this._view && this._EditorView) {
             if (changedProperties.has('value')) {
                 const currentDoc = this._view.state.doc.toString();
                 const targetValue = this.value || '\n';
+                const isInitialLoad = currentDoc === 'Loading...' || currentDoc === '\n';
                 if (currentDoc !== this.value && currentDoc !== targetValue) {
-                    this._view.dispatch({
-                        changes: { from: 0, to: currentDoc.length, insert: targetValue }
-                    });
+                    this._applyMinimalDiff(currentDoc, targetValue, !isInitialLoad);
                 }
             }
             if (changedProperties.has('readOnly') && this.readOnlyConf) {
@@ -208,11 +247,27 @@ export class YenvuiEditor extends LitElement {
             }
         }
     }
-
     async _updateWritingMode() {
         if (!this._view || !this.writingModeConf) return;
         if (this.writingMode) {
-            const { EditorView, keymap, EditorSelection } = await import('codemirror-core');
+            const { EditorView, keymap, EditorSelection, Prec, syntaxTree, isolateHistory } = await import('codemirror-core');
+
+            const isInCodeContext = (state, pos) => {
+                try {
+                    if (typeof syntaxTree === 'function') {
+                        let node = syntaxTree(state).resolveInner(pos, -1);
+                        while (node) {
+                            if (/Code|Fenced|HTML|URL|Link/i.test(node.name)) return true;
+                            node = node.parent;
+                        }
+                    }
+                } catch (_) {}
+                const lineText = state.doc.lineAt(pos).text;
+                const beforeOnLine = lineText.slice(0, pos - state.doc.lineAt(pos).from);
+                const backtickCount = (beforeOnLine.match(/`/g) || []).length;
+                return backtickCount % 2 === 1;
+            };
+
             const toggleWrap = (view, symbol) => {
                 const { state, dispatch } = view;
                 const changes = state.changeByRange(range => {
@@ -247,15 +302,130 @@ export class YenvuiEditor extends LitElement {
                 ".cm-scroller .cm-line": { maxWidth: "720px" },
                 ".cm-gutters": { display: "none" }
             });
-            const markdownShortcuts = keymap.of([
+            const proseSmartTypography = EditorView.inputHandler.of((view, from, to, text) => {
+                if (from !== to || isInCodeContext(view.state, from)) return false;
+
+                // 1. Third hyphen after an em-dash (— + -) -> restore "---" (Markdown horizontal rule / YAML frontmatter)
+                if (text === '-' && from >= 1 && view.state.sliceDoc(from - 1, from) === '—') {
+                    view.dispatch({
+                        changes: { from: from - 1, to, insert: '---' },
+                        selection: { anchor: from + 2 },
+                        userEvent: 'input.type'
+                    });
+                    return true;
+                }
+                // 2. Double hyphen (-- -> —) committed as two steps so Backspace/Undo restores "--"
+                if (text === '-' && from >= 1 && view.state.sliceDoc(from - 1, from) === '-') {
+                    const prevBefore = from >= 2 ? view.state.sliceDoc(from - 2, from - 1) : '';
+                    if (prevBefore !== '-') {
+                        const historyAnnotation = typeof isolateHistory?.of === 'function' ? [isolateHistory.of("full")] : [];
+                        view.dispatch({
+                            changes: { from, to, insert: '-' },
+                            selection: { anchor: from + 1 },
+                            userEvent: 'input.type',
+                            annotations: historyAnnotation
+                        });
+                        view.dispatch({
+                            changes: { from: from - 1, to: from + 1, insert: '—' },
+                            selection: { anchor: from },
+                            userEvent: 'input.complete',
+                            annotations: historyAnnotation
+                        });
+                        return true;
+                    }
+                }
+                return false;
+            });
+
+            const handleProseEnter = (view) => {
+                const { state } = view;
+                const range = state.selection.main;
+                if (!range.empty || isInCodeContext(state, range.head)) return false;
+
+                const line = state.doc.lineAt(range.head);
+                const textBeforeCursor = line.text.slice(0, range.head - line.from);
+
+                // Match task lists: "- [ ] ", "- [x] ", "* [ ] "
+                const taskMatch = textBeforeCursor.match(/^(\s*)([-*+])\s+\[([ xX])\]\s+(.*)$/);
+                if (taskMatch) {
+                    const [, indent, bullet, , content] = taskMatch;
+                    if (!content.trim() && range.head === line.to) {
+                        // Empty task item -> clear marker and exit list
+                        view.dispatch({
+                            changes: { from: line.from, to: line.to, insert: '' },
+                            selection: { anchor: line.from },
+                            userEvent: 'input'
+                        });
+                        return true;
+                    }
+                    const insertStr = `\n${indent}${bullet} [ ] `;
+                    view.dispatch({
+                        changes: { from: range.head, to: range.head, insert: insertStr },
+                        selection: { anchor: range.head + insertStr.length },
+                        scrollIntoView: true,
+                        userEvent: 'input'
+                    });
+                    return true;
+                }
+
+                // Match unordered lists: "- ", "* ", "+ "
+                const bulletMatch = textBeforeCursor.match(/^(\s*)([-*+])\s+(.*)$/);
+                if (bulletMatch) {
+                    const [, indent, bullet, content] = bulletMatch;
+                    if (!content.trim() && range.head === line.to) {
+                        view.dispatch({
+                            changes: { from: line.from, to: line.to, insert: '' },
+                            selection: { anchor: line.from },
+                            userEvent: 'input'
+                        });
+                        return true;
+                    }
+                    const insertStr = `\n${indent}${bullet} `;
+                    view.dispatch({
+                        changes: { from: range.head, to: range.head, insert: insertStr },
+                        selection: { anchor: range.head + insertStr.length },
+                        scrollIntoView: true,
+                        userEvent: 'input'
+                    });
+                    return true;
+                }
+
+                // Match ordered lists: "1. ", "2) "
+                const orderedMatch = textBeforeCursor.match(/^(\s*)(\d+)([.)])\s+(.*)$/);
+                if (orderedMatch) {
+                    const [, indent, numStr, delim, content] = orderedMatch;
+                    if (!content.trim() && range.head === line.to) {
+                        view.dispatch({
+                            changes: { from: line.from, to: line.to, insert: '' },
+                            selection: { anchor: line.from },
+                            userEvent: 'input'
+                        });
+                        return true;
+                    }
+                    const nextNum = parseInt(numStr, 10) + 1;
+                    const insertStr = `\n${indent}${nextNum}${delim} `;
+                    view.dispatch({
+                        changes: { from: range.head, to: range.head, insert: insertStr },
+                        selection: { anchor: range.head + insertStr.length },
+                        scrollIntoView: true,
+                        userEvent: 'input'
+                    });
+                    return true;
+                }
+
+                return false;
+            };
+
+            const proseKeymap = (typeof Prec?.high === 'function' ? Prec.high : (x => x))(keymap.of([
+                { key: "Enter", run: handleProseEnter },
                 { key: "Mod-b", run: (v) => toggleWrap(v, "**") },
                 { key: "Mod-i", run: (v) => toggleWrap(v, "*") },
                 { key: "Mod-`", run: (v) => toggleWrap(v, "`") }
-            ]);
+            ]));
 
             this._view.dispatch({
                 effects: [
-                    this.writingModeConf.reconfigure([writingTheme, markdownShortcuts]),
+                    this.writingModeConf.reconfigure([writingTheme, proseSmartTypography, proseKeymap]),
                     this.attributesConf.reconfigure(this._EditorView.contentAttributes.of({ spellcheck: "true", autocorrect: "on", autocapitalize: "on" }))
                 ]
             });
@@ -439,9 +609,7 @@ export class YenvuiEditor extends LitElement {
             const original = state.doc.toString();
             const transformed = transformFn(original);
             if (transformed !== original) {
-                dispatch({
-                    changes: { from: 0, to: original.length, insert: transformed }
-                });
+                this._applyMinimalDiff(original, transformed, true);
                 return true;
             }
         } else {

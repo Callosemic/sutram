@@ -1,7 +1,10 @@
 // sutram/yenvui/js/shared_styles.js
 import { css } from 'lit';
-
 export const sharedStyles = css`
+    :host, * {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+    }
     /* --- CUSTOM ELEMENT HOST STRUCTURAL REPAIRS --- */
     yenvui-btn, sutram-btn, yenvui-async-btn, sutram-async-btn {
         display: inline-flex;
