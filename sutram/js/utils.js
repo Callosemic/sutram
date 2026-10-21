@@ -1,5 +1,164 @@
 // sutram/js/utils.js
 // Pure mathematical and string manipulation algorithms
+function _computeLcsDiffHunks(baseLines, targetLines) {
+    const n = baseLines.length;
+    const m = targetLines.length;
+    let prefix = 0;
+    while (prefix < n && prefix < m && baseLines[prefix] === targetLines[prefix]) {
+        prefix++;
+    }
+    let bEnd = n;
+    let tEnd = m;
+    while (bEnd > prefix && tEnd > prefix && baseLines[bEnd - 1] === targetLines[tEnd - 1]) {
+        bEnd--;
+        tEnd--;
+    }
+    if (prefix === bEnd && prefix === tEnd) return [];
+
+    const bMid = baseLines.slice(prefix, bEnd);
+    const tMid = targetLines.slice(prefix, tEnd);
+    const bLen = bMid.length;
+    const tLen = tMid.length;
+
+    // Fallback to single middle hunk if matrix exceeds interactive memory bounds
+    if (bLen * tLen > 250000) {
+        return [{ baseStart: prefix, baseEnd: bEnd, rep: tMid }];
+    }
+
+    const dp = Array.from({ length: bLen + 1 }, () => new Int32Array(tLen + 1));
+    for (let i = bLen - 1; i >= 0; i--) {
+        for (let j = tLen - 1; j >= 0; j--) {
+            if (bMid[i] === tMid[j]) {
+                dp[i][j] = 1 + dp[i + 1][j + 1];
+            } else {
+                dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+            }
+        }
+    }
+
+    const hunks = [];
+    let i = 0;
+    let j = 0;
+    while (i < bLen || j < tLen) {
+        if (i < bLen && j < tLen && bMid[i] === tMid[j]) {
+            i++;
+            j++;
+        } else {
+            const hBaseStart = i;
+            const hTargetStart = j;
+            while (i < bLen || j < tLen) {
+                if (i < bLen && j < tLen && bMid[i] === tMid[j]) break;
+                if (j === tLen || (i < bLen && dp[i + 1][j] >= dp[i][j + 1])) {
+                    i++;
+                } else {
+                    j++;
+                }
+            }
+            hunks.push({
+                baseStart: prefix + hBaseStart,
+                baseEnd: prefix + i,
+                rep: tMid.slice(hTargetStart, j)
+            });
+        }
+    }
+    return hunks;
+}
+
+function _isContiguousLineSubslice(needle, haystack) {
+    if (!needle || needle.length === 0 || needle.length > haystack.length) return false;
+    for (let idx = 0; idx <= haystack.length - needle.length; idx++) {
+        let match = true;
+        for (let k = 0; k < needle.length; k++) {
+            if (haystack[idx + k] !== needle[k]) {
+                match = false;
+                break;
+            }
+        }
+        if (match) return true;
+    }
+    return false;
+}
+export function threeWayMergeText(baseText, localText, remoteText) {
+    if (localText === remoteText) return { merged: localText, clean: true };
+    if (localText === baseText) return { merged: remoteText, clean: true };
+    if (remoteText === baseText) return { merged: localText, clean: true };
+
+    const baseNorm = String(baseText ?? '').replace(/\r\n/g, '\n');
+    const localNorm = String(localText ?? '').replace(/\r\n/g, '\n');
+    const remoteNorm = String(remoteText ?? '').replace(/\r\n/g, '\n');
+
+    if (localNorm === remoteNorm) return { merged: localText, clean: true };
+    if (localNorm === baseNorm) return { merged: remoteText, clean: true };
+    if (remoteNorm === baseNorm) return { merged: localText, clean: true };
+
+    const baseLines = baseNorm.split('\n');
+    const localLines = localNorm.split('\n');
+    const remoteLines = remoteNorm.split('\n');
+
+    const localHunks = _computeLcsDiffHunks(baseLines, localLines);
+    const remoteHunks = _computeLcsDiffHunks(baseLines, remoteLines);
+
+    // 1. Zombie-ACK Fast Path: Remote is an earlier snapshot of the same contiguous line stream in Local
+    const remoteSubsumedByLocal = remoteHunks.length > 0 && remoteHunks.every(rH =>
+        localHunks.some(lH =>
+            lH.baseStart === rH.baseStart &&
+            lH.baseEnd === rH.baseEnd &&
+            ((rH.rep.length === lH.rep.length && rH.rep.every((v, idx) => v === lH.rep[idx])) ||
+            _isContiguousLineSubslice(rH.rep, lH.rep))
+        )
+    );
+    if (remoteSubsumedByLocal) {
+        return { merged: localText, clean: true };
+    }
+
+    // 2. Multi-Hunk 3-Way Merger
+    const outLines = [];
+    let baseCursor = 0;
+    let idxL = 0;
+    let idxR = 0;
+
+    while (idxL < localHunks.length || idxR < remoteHunks.length) {
+        const lH = idxL < localHunks.length ? localHunks[idxL] : null;
+        const rH = idxR < remoteHunks.length ? remoteHunks[idxR] : null;
+
+        if (lH && !rH) {
+            outLines.push(...baseLines.slice(baseCursor, lH.baseStart), ...lH.rep);
+            baseCursor = lH.baseEnd;
+            idxL++;
+        } else if (rH && !lH) {
+            outLines.push(...baseLines.slice(baseCursor, rH.baseStart), ...rH.rep);
+            baseCursor = rH.baseEnd;
+            idxR++;
+        } else {
+            const sameSpan = lH.baseStart === rH.baseStart && lH.baseEnd === rH.baseEnd;
+            const sameRep = lH.rep.length === rH.rep.length && lH.rep.every((v, idx) => v === rH.rep[idx]);
+            if (sameSpan && sameRep) {
+                outLines.push(...baseLines.slice(baseCursor, lH.baseStart), ...lH.rep);
+                baseCursor = lH.baseEnd;
+                idxL++;
+                idxR++;
+            } else if (lH.baseEnd < rH.baseStart || (lH.baseEnd === rH.baseStart && lH.baseStart < lH.baseEnd && rH.baseStart < rH.baseEnd)) {
+                outLines.push(...baseLines.slice(baseCursor, lH.baseStart), ...lH.rep);
+                baseCursor = lH.baseEnd;
+                idxL++;
+            } else if (rH.baseEnd < lH.baseStart || (rH.baseEnd === lH.baseStart && rH.baseStart < rH.baseEnd && lH.baseStart < lH.baseEnd)) {
+                outLines.push(...baseLines.slice(baseCursor, rH.baseStart), ...rH.rep);
+                baseCursor = rH.baseEnd;
+                idxR++;
+            } else {
+                return { merged: localText, clean: false };
+            }
+        }
+    }
+
+    outLines.push(...baseLines.slice(baseCursor));
+    let mergedStr = outLines.join('\n');
+    if (String(remoteText ?? '').includes('\r\n') && !mergedStr.includes('\r\n')) {
+        mergedStr = mergedStr.replace(/\n/g, '\r\n');
+    }
+    return { merged: mergedStr, clean: true };
+}
+
 export function cleanCodeArtifacts(text) {
     if (!text || typeof text !== 'string') return '';
     let result = text;
@@ -123,11 +282,21 @@ export function fuzzyFilterObjects(items, query, getSearchString = (item) => Str
     return scoredItems.sort((a, b) => b.score - a.score).map(res => res.item);
 }
 export function debounce(callback, delay = 300) {
-    let timer;
-    return function(...args) {
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(() => callback.apply(this, args), delay);
+    let timeoutTimer = null;
+    const debounced = function(...args) {
+        if (timeoutTimer) clearTimeout(timeoutTimer);
+        timeoutTimer = setTimeout(() => {
+            timeoutTimer = null;
+            callback.apply(this, args);
+        }, delay);
     };
+    debounced.cancel = () => {
+        if (timeoutTimer) {
+            clearTimeout(timeoutTimer);
+            timeoutTimer = null;
+        }
+    };
+    return debounced;
 }
 export function coalescedAsync(asyncFn) {
     let promise = null;
@@ -154,11 +323,80 @@ export function coalescedAsync(asyncFn) {
         return promise;
     };
 }
+const SLUG_CHARMAP = { 'Đ': 'D', 'đ': 'd', 'Æ': 'AE', 'æ': 'ae', 'Ø': 'O', 'ø': 'o', 'ß': 'ss' };
+
 export function slugify(str) {
     if (!str) return '';
-    return normalizeAccentText(str).replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
+    const mapped = String(str).replace(/[ĐđÆæØøß]/g, ch => SLUG_CHARMAP[ch]);
+    return mapped
+        .normalize('NFKD')
+        .replace(/[^\x00-\x7f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '');
 }
 
+export function truncateFilename(filename, maxLen = 24, ellipsis = '…') {
+    if (!filename || typeof filename !== 'string') return '';
+    const base = filename.replace(/\\/g, '/').split('/').pop() || '';
+    if (base.length <= maxLen) return base;
+
+    const lastDot = base.lastIndexOf('.');
+    if (lastDot <= 0) {
+        const sliceLen = Math.max(1, maxLen - ellipsis.length);
+        return base.slice(0, sliceLen) + ellipsis;
+    }
+
+    const ext = base.slice(lastDot);
+    if (ext.length + ellipsis.length >= maxLen) {
+        const sliceLen = Math.max(1, maxLen - ellipsis.length);
+        return base.slice(0, sliceLen) + ellipsis;
+    }
+
+    const frontLen = maxLen - ext.length - ellipsis.length;
+    return `${base.slice(0, frontLen)}${ellipsis}${ext}`;
+}
+
+export function clone(obj) {
+    if (obj === undefined || obj === null) return obj;
+    try {
+        return typeof structuredClone === 'function' ? structuredClone(obj) : JSON.parse(JSON.stringify(obj));
+    } catch (e) {
+        return JSON.parse(JSON.stringify(obj));
+    }
+}
+
+export const HostPath = {
+    split(rawPath) {
+        const norm = String(rawPath || '').replace(/\\/g, '/').trim();
+        const driveMatch = norm.match(/^([a-zA-Z]:)\/(.*)$/);
+        if (driveMatch) {
+            return { root: `${driveMatch[1]}/`, segments: driveMatch[2].split('/').filter(Boolean) };
+        }
+        return {
+            root: norm.startsWith('/') ? '/' : '',
+            segments: norm.split('/').filter(Boolean)
+        };
+    },
+    basename(rawPath) {
+        const { segments } = this.split(rawPath);
+        return segments.length > 0 ? segments[segments.length - 1] : '';
+    },
+    join(rawPath, ...extraSegments) {
+        const { root, segments } = this.split(rawPath);
+        const cleanExtra = extraSegments
+            .map(s => String(s || '').replace(/\\/g, '/').trim().replace(/^\/+|\/+$/g, ''))
+            .filter(Boolean);
+        const combined = [...segments, ...cleanExtra];
+        return combined.length > 0 ? `${root}${combined.join('/')}` : (root || '/');
+    },
+    parent(rawPath) {
+        const { root, segments } = this.split(rawPath);
+        if (segments.length > 0) segments.pop();
+        return segments.length > 0 ? `${root}${segments.join('/')}` : (root || '/');
+    }
+};
 export async function copyToClipboard(text) {
     try {
         await navigator.clipboard.writeText(text);
@@ -166,6 +404,24 @@ export async function copyToClipboard(text) {
     } catch (e) {
         throw new Error("Clipboard access denied");
     }
+}
+export async function copyRichHtml(htmlStr, plainText = null) {
+    if (!htmlStr) return false;
+    const fallbackText = plainText !== null ? plainText : htmlStr;
+    try {
+        if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+            const htmlBlob = new Blob([htmlStr], { type: 'text/html' });
+            const plainBlob = new Blob([fallbackText], { type: 'text/plain' });
+            await navigator.clipboard.write([
+                new ClipboardItem({
+                    'text/html': htmlBlob,
+                    'text/plain': plainBlob
+                })
+            ]);
+            return true;
+        }
+    } catch (_) {}
+    return await copyToClipboard(fallbackText);
 }
 export async function copyRawText(text, successCallback, errorCallback) {
     try {
@@ -265,7 +521,8 @@ export function bindGhostDrag(e, label, icon = '📄', payloadData = {}) {
     }
     e.dataTransfer.effectAllowed = 'copyMove';
 }
-export function buildFileTree(files, stripPrefix = '') {
+export function buildFileTree(files, stripPrefix = '', options = {}) {
+    const { defaultScheme = 'vfs', sharedScheme = 'ws' } = options;
     const root = {
         id: '',
         name: '',
@@ -283,10 +540,10 @@ export function buildFileTree(files, stripPrefix = '') {
 
         let fullUri = normRaw.replace(/\/+$/, '');
         if (!fullUri.includes('://')) {
-            fullUri = `vfs://${fullUri.replace(/^\/+/, '')}`;
+            fullUri = `${defaultScheme}://${fullUri.replace(/^\/+/, '')}`;
         }
 
-        const isWs = fullUri.startsWith('ws://');
+        const isWs = Boolean(sharedScheme && fullUri.startsWith(`${sharedScheme}://`));
         let visualRel = fullUri;
         let baseAccumUri = '';
 

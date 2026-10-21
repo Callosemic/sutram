@@ -4,67 +4,291 @@ import { LitElement, html } from 'lit';
 import { createStore } from 'zustand/vanilla';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { getEventPath, getEventTarget } from '../../yenvui/js/physics.js';
-import { shallowEqual } from './utils.js';
-export function createSutramStore(name, initialState, persistenceSchema = {}, getScopeId = () => 'default', prefix = 'sutram') {
+import { shallowEqual, coalescedAsync, slugify } from './utils.js';
+function _cloneInitialValue(val) {
+    if (val instanceof Set) return new Set(val);
+    if (val instanceof Map) return new Map(val);
+    if (Array.isArray(val)) return [...val];
+    if (val && typeof val === 'object' && val.constructor === Object) return { ...val };
+    return val;
+}
+function _buildCleanBaseline(initialState) {
+    const clean = {};
+    Object.keys(initialState).forEach(k => {
+        if (k === 'resetState' && typeof initialState[k] === 'function') return;
+        clean[k] = _cloneInitialValue(initialState[k]);
+    });
+    return clean;
+}
+export const StoreRegistry = {
+    _stores: new Map(),
+    _isTransitioning: false,
+    _transitionTargetScope: null,
+    isTransitioning() {
+        return Boolean(this._isTransitioning);
+    },
+    _scopeProvider: () => {
+        try {
+            if (typeof window !== 'undefined') {
+                const hashWs = window.location.hash.replace(/^#\/?/, '').split('/')[0];
+                if (hashWs) return decodeURIComponent(hashWs);
+            }
+        } catch (e) {}
+        return 'default';
+    },
+    setScopeProvider(fn) {
+        if (typeof fn === 'function') {
+            this._scopeProvider = fn;
+            const currentScope = this.getActiveScope();
+            this._stores.forEach((store) => {
+                if (store._storeScope !== 'global' && store._boundScope !== currentScope && typeof store.hydrateStore === 'function') {
+                    try { store.hydrateStore(currentScope); } catch (e) {}
+                }
+            });
+        }
+    },
+    getActiveScope() {
+        try {
+            return this._scopeProvider() || 'default';
+        } catch (e) {
+            return 'default';
+        }
+    },
+    register(name, store) {
+        this._stores.set(name, store);
+    },
+    get(name) {
+        return this._stores.get(name);
+    },
+    getAll() {
+        return this._stores;
+    },
+    switchTenantScope(newScopeId, excludeNames = []) {
+        const excluded = new Set(excludeNames || []);
+        this._stores.forEach((store, name) => {
+            if (excluded.has(name) || store._storeScope === 'global') return;
+            if (typeof store.switchScope === 'function') {
+                try { store.switchScope(newScopeId); } catch (e) {
+                    console.error(`[StoreRegistry] Failed to switch scope for store [${name}]:`, e);
+                }
+            }
+        });
+    },
+    beginScopeTransition(targetScopeId = null, excludeNames = []) {
+        const resolvedTarget = targetScopeId || this.getActiveScope();
+        this._isTransitioning = true;
+        this._transitionTargetScope = resolvedTarget;
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('sutram:scope-transition-start', {
+                detail: { targetScopeId: resolvedTarget },
+                bubbles: true,
+                composed: true
+            }));
+        }
+        if (targetScopeId) {
+            this.switchTenantScope(targetScopeId, excludeNames);
+        }
+    },
+    endScopeTransition() {
+        const completedScope = this._transitionTargetScope || this.getActiveScope();
+        this._isTransitioning = false;
+        this._transitionTargetScope = null;
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('sutram:scope-transition-end', {
+                detail: { scopeId: completedScope },
+                bubbles: true,
+                composed: true
+            }));
+        }
+        if (typeof ExtensionRegistry !== 'undefined' && typeof ExtensionRegistry.compileLayout === 'function') {
+            ExtensionRegistry.compileLayout();
+        }
+    },
+    getScopedStorage(key, defaultVal = null, scopeId = null, prefix = 'sutram') {
+        if (typeof localStorage === 'undefined') return defaultVal;
+        const ws = scopeId || this.getActiveScope() || 'default';
+        const val = localStorage.getItem(`${prefix}_${ws}_${key}`);
+        if (val === null) {
+            const legacyVal = localStorage.getItem(`${prefix}_${key}`);
+            return legacyVal !== null ? legacyVal : defaultVal;
+        }
+        return val;
+    },
+    setScopedStorage(key, value, scopeId = null, prefix = 'sutram') {
+        if (typeof localStorage === 'undefined') return;
+        const ws = scopeId || this.getActiveScope() || 'default';
+        localStorage.setItem(`${prefix}_${ws}_${key}`, typeof value === 'string' ? value : JSON.stringify(value));
+    },
+    removeScopedStorage(key, scopeId = null, prefix = 'sutram') {
+        if (typeof localStorage === 'undefined') return;
+        const ws = scopeId || this.getActiveScope() || 'default';
+        localStorage.removeItem(`${prefix}_${ws}_${key}`);
+    }
+};
+export function createSutramStore(name, initialState, persistenceSchema = {}, getScopeId = null, prefix = 'sutram') {
+    const resolveScope = typeof getScopeId === 'function' ? getScopeId : () => StoreRegistry.getActiveScope();
+    const isLegacyArray = Array.isArray(persistenceSchema);
+    const schema = isLegacyArray ? { localSync: persistenceSchema } : (persistenceSchema || {});
+    const localKeys = (schema.localSync || []).filter(k => Object.prototype.hasOwnProperty.call(initialState, k));
+    const sessionKeys = (schema.sessionSync || []).filter(k => Object.prototype.hasOwnProperty.call(initialState, k));
+    const storeScope = schema.scope || 'tenant';
+    const customResetFn = typeof initialState.resetState === 'function' ? initialState.resetState : null;
+
+    let storeRef = null;
+    const processedState = { ...initialState };
+    Object.keys(processedState).forEach(key => {
+        if (key.startsWith('fetch') && typeof processedState[key] === 'function' && !processedState[key]._isEpochGuarded) {
+            const origFn = processedState[key];
+            const epochGuardedFn = async function(...args) {
+                const startScope = resolveScope();
+                const startEpoch = storeRef ? storeRef._scopeEpoch : 0;
+                const result = await origFn.apply(this, args);
+                if (storeRef && (storeRef._scopeEpoch !== startEpoch || resolveScope() !== startScope)) {
+                    return undefined;
+                }
+                return result;
+            };
+            const wrapped = coalescedAsync(epochGuardedFn);
+            wrapped._isEpochGuarded = true;
+            processedState[key] = wrapped;
+        }
+    });
+
     const store = createStore(
         devtools(
             subscribeWithSelector((set, get) => ({
-                ...initialState,
-                resetState: () => set(initialState)
+                ..._buildCleanBaseline(processedState),
+                resetState: () => {
+                    set(_buildCleanBaseline(processedState));
+                    if (customResetFn) {
+                        try { customResetFn(); } catch (_) {}
+                    }
+                }
             })),
             { name: `${name}Store` }
         )
     );
-    if (typeof window !== 'undefined') {
-        window.Sutram = window.Sutram || {};
-        window.Sutram.stores = window.Sutram.stores || {};
-        window.Sutram.stores[name] = store;
-    }
+    storeRef = store;
+    store._storeName = name;
+    store._storeScope = storeScope;
+    store._boundScope = resolveScope() || 'default';
+    store._scopeEpoch = 0;
+    store._suspendPersistence = false;
+    store._hydrated = false;
 
-    const isLegacyArray = Array.isArray(persistenceSchema);
-    const schema = isLegacyArray ? { localSync: persistenceSchema } : (persistenceSchema || {});
-    const localKeys = schema.localSync || [];
-    const sessionKeys = schema.sessionSync || [];
-
-    if (localKeys.length > 0 || sessionKeys.length > 0 || schema.urlParser) {
-        const hydrate = (scope) => {
-            const hydrated = {};
-
-            localKeys.forEach(k => {
-                const storageKey = isLegacyArray ? `${prefix}_${name.toLowerCase()}_${k}_${scope}` : `${prefix}_local_${scope}_${name}_${k}`;
-                const val = localStorage.getItem(storageKey);
-                if (val) {
-                    try { 
-                        const parsed = JSON.parse(val); 
-                        hydrated[k] = initialState[k] instanceof Set ? new Set(parsed) : parsed;
-                    } catch(e) {}
-                }
-            });
-
-            sessionKeys.forEach(k => {
-                const val = sessionStorage.getItem(`${prefix}_session_${scope}_${name}_${k}`);
-                if (val) {
-                    try { 
-                        const parsed = JSON.parse(val); 
-                        hydrated[k] = initialState[k] instanceof Set ? new Set(parsed) : parsed;
-                    } catch(e) {}
-                }
-            });
-
-            if (typeof schema.urlParser === 'function' && typeof window !== 'undefined') {
-                const urlState = schema.urlParser(window.location.hash);
-                if (urlState && typeof urlState === 'object') {
-                    Object.assign(hydrated, urlState);
-                }
+    store.resetMemoryOnly = () => {
+        store._suspendPersistence = true;
+        store._scopeEpoch = (store._scopeEpoch || 0) + 1;
+        try {
+            const st = store.getState();
+            if (st && typeof st.clearPayload === 'function') {
+                try { st.clearPayload(); } catch (_) {}
             }
+            store.setState(_buildCleanBaseline(processedState));
+            if (customResetFn) {
+                try { customResetFn(); } catch (_) {}
+            }
+        } finally {
+            store._suspendPersistence = false;
+        }
+    };
 
-            if (Object.keys(hydrated).length > 0) store.setState(hydrated);
-        };
-        store.hydrateStore = hydrate;
-        setTimeout(() => hydrate(getScopeId()), 0);
+    const _isEmptyPersistedValue = (k, parsed) => {
+        if (parsed === null || parsed === undefined) return true;
+        if (k === 'columns' && typeof parsed === 'object') {
+            return !['left', 'center', 'right'].some(c => Array.isArray(parsed[c]?.pinned) && parsed[c].pinned.length > 0);
+        }
+        if (Array.isArray(parsed)) return parsed.length === 0;
+        return false;
+    };
+
+    const readHydratedPatch = (scope) => {
+        const hydrated = {};
+        const allSyncedKeys = new Set([...localKeys, ...sessionKeys]);
+        allSyncedKeys.forEach(k => {
+            hydrated[k] = _cloneInitialValue(initialState[k]);
+        });
+
+        localKeys.forEach(k => {
+            const storageKey = isLegacyArray ? `${prefix}_${name.toLowerCase()}_${k}_${scope}` : `${prefix}_local_${scope}_${name}_${k}`;
+            const val = localStorage.getItem(storageKey);
+            if (val !== null) {
+                try {
+                    const parsed = JSON.parse(val);
+                    hydrated[k] = initialState[k] instanceof Set ? new Set(parsed) : parsed;
+                } catch (e) {}
+            }
+        });
+
+        sessionKeys.forEach(k => {
+            const val = sessionStorage.getItem(`${prefix}_session_${scope}_${name}_${k}`);
+            if (val !== null) {
+                try {
+                    const parsed = JSON.parse(val);
+                    const isSharedWithLocal = localKeys.includes(k);
+                    if (!isSharedWithLocal || !_isEmptyPersistedValue(k, parsed) || _isEmptyPersistedValue(k, hydrated[k])) {
+                        hydrated[k] = initialState[k] instanceof Set ? new Set(parsed) : parsed;
+                    }
+                } catch (e) {}
+            }
+        });
+
+        if (typeof schema.urlParser === 'function' && typeof window !== 'undefined') {
+            const urlState = schema.urlParser(window.location.hash);
+            if (urlState && typeof urlState === 'object') {
+                Object.assign(hydrated, urlState);
+            }
+        }
+        return hydrated;
+    };
+
+    store.hydrateStore = (scope = null) => {
+        const targetScope = scope || resolveScope() || 'default';
+        store._boundScope = targetScope;
+        if (localKeys.length === 0 && sessionKeys.length === 0 && !schema.urlParser) {
+            store._hydrated = true;
+            return;
+        }
+        store._suspendPersistence = true;
+        try {
+            const patch = readHydratedPatch(targetScope);
+            if (Object.keys(patch).length > 0) {
+                store.setState(patch);
+            }
+            store._hydrated = true;
+        } finally {
+            store._suspendPersistence = false;
+        }
+    };
+    store.switchScope = (newScopeId) => {
+        const targetScope = newScopeId || resolveScope() || 'default';
+        store._suspendPersistence = true;
+        store._scopeEpoch = (store._scopeEpoch || 0) + 1;
+        try {
+            const currentSt = store.getState();
+            if (currentSt && typeof currentSt.clearPayload === 'function') {
+                try { currentSt.clearPayload(); } catch (_) {}
+            }
+            store._boundScope = targetScope;
+            const nextState = {
+                ..._buildCleanBaseline(processedState),
+                ...readHydratedPatch(targetScope)
+            };
+            store.setState(nextState);
+            store._hydrated = true;
+            if (customResetFn) {
+                try { customResetFn(); } catch (_) {}
+            }
+        } finally {
+            store._suspendPersistence = false;
+        }
+    };
+    if (localKeys.length > 0 || sessionKeys.length > 0 || schema.urlParser) {
+        store.hydrateStore(resolveScope());
 
         store.subscribe((state, prevState) => {
-            const scope = getScopeId();
+            if (store._suspendPersistence || !store._hydrated) return;
+            const scope = store._boundScope || resolveScope() || 'default';
             localKeys.forEach(k => {
                 if (state[k] !== prevState[k]) {
                     const valToSave = state[k] instanceof Set ? Array.from(state[k]) : state[k];
@@ -83,16 +307,27 @@ export function createSutramStore(name, initialState, persistenceSchema = {}, ge
 
     if (typeof window !== 'undefined' && schema.onEvict) {
         window.addEventListener('sutram-evict-projection', (e) => {
-            const id = e.detail?.id;
+            const { id, scopeId } = e.detail || {};
+            if (scopeId && store._storeScope === 'tenant' && store._boundScope && scopeId !== store._boundScope) {
+                return;
+            }
             if (id && schema.onEvict[id]) {
-                const patch = typeof schema.onEvict[id] === 'function' 
-                    ? schema.onEvict[id](store.getState()) 
+                const patch = typeof schema.onEvict[id] === 'function'
+                    ? schema.onEvict[id](store.getState(), scopeId || store._boundScope)
                     : schema.onEvict[id];
-                if (patch && typeof patch === 'object') {
+                if (patch && typeof patch === 'object' && Object.keys(patch).length > 0) {
                     store.setState(patch);
                 }
             }
         });
+    }
+
+    StoreRegistry.register(name, store);
+    if (typeof window !== 'undefined') {
+        window.Sutram = window.Sutram || {};
+        window.Sutram.stores = window.Sutram.stores || {};
+        window.Sutram.stores[name] = store;
+        window.Sutram.storeRegistry = StoreRegistry;
     }
 
     return store;
@@ -126,9 +361,9 @@ export const SutramContextMixin = (SuperClass) => class extends SuperClass {
         super();
         this._storeUnsubs = [];
         this._managedIntervals = [];
+        this._managedTimeouts = new Set();
         this._sutramManagedListeners = [];
     }
-
     connectedCallback() {
         if (super.connectedCallback) super.connectedCallback();
         if (typeof this.onProjectionEvicted === 'function') {
@@ -136,19 +371,38 @@ export const SutramContextMixin = (SuperClass) => class extends SuperClass {
                 this.onProjectionEvicted(e.detail?.id);
             });
         }
+        if (typeof this.onProjectionRekeyed === 'function') {
+            this.registerGlobalListener('sutram-rekey-projection', window, (e) => {
+                const { oldId, newId, newLabel } = e.detail || {};
+                if (oldId && newId) {
+                    this.onProjectionRekeyed(oldId, newId, newLabel);
+                }
+            });
+        }
+    }
+    getStore(storeOrName) {
+        if (!storeOrName) return null;
+        if (typeof storeOrName !== 'string') return storeOrName;
+        return (
+            StoreRegistry.get(storeOrName) ||
+            window.Sutram?.stores?.[storeOrName] ||
+            window.stores?.[storeOrName] ||
+            null
+        );
     }
     subscribe(storeOrName, selectorOrListener, listener = undefined, equalityFn = shallowEqual) {
         let store = storeOrName;
         if (typeof storeOrName === 'string') {
-            store = window.Sutram?.stores?.[storeOrName] || 
+            store = StoreRegistry.get(storeOrName) ||
+                    window.Sutram?.stores?.[storeOrName] ||
                     window.stores?.[storeOrName];
 
-            // Lazy Subscription: If the named store isn't on window yet, defer binding until it hydrates
+            // Lazy Subscription: If the named store isn't registered yet, defer binding until it hydrates
             if (!store) {
                 const pendingKey = storeOrName;
                 let activeUnsub = () => {};
                 const checkInterval = setInterval(() => {
-                    const lateStore = window.Sutram?.stores?.[pendingKey];
+                    const lateStore = StoreRegistry.get(pendingKey) || window.Sutram?.stores?.[pendingKey];
                     if (lateStore) {
                         clearInterval(checkInterval);
                         activeUnsub = listener
@@ -189,11 +443,54 @@ export const SutramContextMixin = (SuperClass) => class extends SuperClass {
         this._storeUnsubs.push(unsub);
         return unsub;
     }
+    bindStore(store, stateMapper, options = {}) {
+        const { autoFetch = 'fetchData', equalityFn } = options;
 
+        this.subscribe(store, stateMapper, (mappedSlice) => {
+            Object.assign(this, mappedSlice);
+            this.requestUpdate();
+        }, equalityFn);
+
+        if (autoFetch) {
+            const triggerFetch = (scopeId) => {
+                if (typeof this.isExtensionActive === 'function' && !this.isExtensionActive()) return;
+                if (typeof autoFetch === 'function') {
+                    autoFetch(scopeId);
+                } else if (typeof autoFetch === 'string') {
+                    const resolvedStore = this.getStore(store);
+                    const state = typeof resolvedStore?.getState === 'function' ? resolvedStore.getState() : resolvedStore;
+                    if (state && typeof state[autoFetch] === 'function') {
+                        state[autoFetch](scopeId);
+                    }
+                }
+            };
+
+            this._autoFetchFns = this._autoFetchFns || [];
+            this._autoFetchFns.push(triggerFetch);
+
+            const activeScope = this.workspaceId || StoreRegistry.getActiveScope();
+            triggerFetch(activeScope);
+        }
+    }
     registerInterval(callback, delayMs) {
         const id = setInterval(callback, delayMs);
         this._managedIntervals.push(id);
         return id;
+    }
+
+    registerTimeout(callback, delayMs) {
+        const id = setTimeout(() => {
+            this._managedTimeouts.delete(id);
+            if (this.isConnected) {
+                callback();
+            }
+        }, delayMs);
+        this._managedTimeouts.add(id);
+        return id;
+    }
+    clearManagedTimeouts() {
+        this._managedTimeouts.forEach(timeoutTimer => clearTimeout(timeoutTimer));
+        this._managedTimeouts.clear();
     }
     registerGlobalListener(eventType, targetNode, callback, options = false) {
         targetNode.addEventListener(eventType, callback, options);
@@ -213,9 +510,10 @@ export const SutramContextMixin = (SuperClass) => class extends SuperClass {
 
         this._storeUnsubs.forEach(unsub => unsub());
         this._storeUnsubs = [];
-
         this._managedIntervals.forEach(id => clearInterval(id));
         this._managedIntervals = [];
+
+        this.clearManagedTimeouts();
 
         this._sutramManagedListeners.forEach(({ eventType, targetNode, callback, options }) => {
             if (targetNode && typeof targetNode.removeEventListener === 'function') {
@@ -384,19 +682,22 @@ export const ExtensionRegistry = {
             if (manifest.layoutSlots && Array.isArray(manifest.layoutSlots)) {
                 slots.push(...manifest.layoutSlots.map(s => {
                     const slotType = (s.slot || '').startsWith('slots:') ? s.slot : 'slots:' + s.slot;
-
-                    // Legacy Adapter: Map targetParent to spatial columns for the Strangler Fig rollout
+                    // Resolve preferred spatial column via hook or fallback
                     let pCol = s.preferredColumn;
                     if (!pCol && s.targetParent) {
-                        const t = s.targetParent.toLowerCase();
-                        if (t === 'context' || t === 'library') pCol = 'left';
-                        else if (t === 'edit' || t === 'ctrl') pCol = 'center';
-                        else pCol = 'right';
+                        const hookedCol = this.executeUIHook ? this.executeUIHook('sutram:resolve-preferred-column', s.targetParent) : null;
+                        if (hookedCol) {
+                            pCol = hookedCol;
+                        } else {
+                            const t = s.targetParent.toLowerCase();
+                            if (t === 'left' || t === 'center' || t === 'right') pCol = t;
+                            else pCol = 'center';
+                        }
                     }
 
                     const isSubNav = slotType === 'slots:sub-navigation';
                     const rawId = s.rawId || s.id || '';
-                    const isUriOrCustom = rawId.includes('://') || rawId.startsWith('vfs:') || rawId.startsWith('ctx:') || rawId.startsWith('virtual:');
+                    const isUriOrCustom = rawId.includes('://') || rawId.includes(':');
                     const isAlreadyScoped = rawId.startsWith(`${extName}:`);
                     const scopedId = (isSubNav && !isUriOrCustom && !isAlreadyScoped) ? `${extName}:${rawId}` : rawId;
 
@@ -433,8 +734,10 @@ export const ExtensionRegistry = {
 
         return slots;
     },
-
     compileLayout: function() {
+        if (StoreRegistry.isTransitioning()) {
+            return;
+        }
         window.dispatchEvent(new Event('sutram-layout-recompile'));
         window.dispatchEvent(new Event('sutram-settings-actions-updated'));
     },
@@ -452,7 +755,23 @@ export const ExtensionRegistry = {
         this.isBooting = false;
         this.compileLayout();
     },
+    setDynamicLayoutSlots: function(extName, dynamicSlots = []) {
+        const manifest = this._manifests.get(extName);
+        if (!manifest) return;
+        const baseGlobals = (manifest._baseLayoutSlots || manifest.layoutSlots || []).filter(s => s.slot === 'slots:global');
+        manifest.layoutSlots = [...baseGlobals, ...dynamicSlots];
+        if (!this.isBooting) {
+            this.compileLayout();
+        }
+    },
     registerExtension: function(extName, config) {
+        if (Array.isArray(config.layoutSlots) && !config._baseLayoutSlots) {
+            try {
+                config._baseLayoutSlots = JSON.parse(JSON.stringify(config.layoutSlots));
+            } catch (_) {
+                config._baseLayoutSlots = [...config.layoutSlots];
+            }
+        }
         this._manifests.set(extName, config);
 
         // Clear previous registrations for this extension to prevent duplicate firing on HMR/reloads
@@ -466,6 +785,19 @@ export const ExtensionRegistry = {
         if (config.entityActions) {
             config.entityActions.forEach(act => {
                 act.extName = extName;
+                if (act.emitEvent && !act.onClick && !act.asyncAction) {
+                    act.onClick = (data, e) => {
+                        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+                        const payload = typeof act.emitEvent === 'function' ? act.emitEvent(data) : act.emitEvent;
+                        if (payload && payload.name && typeof window !== 'undefined') {
+                            window.dispatchEvent(new CustomEvent(payload.name, {
+                                detail: payload.detail,
+                                bubbles: true,
+                                composed: true
+                            }));
+                        }
+                    };
+                }
                 const targets = act.targetEntities || (act.targetEntity ? [act.targetEntity] : []);
                 targets.forEach(target => {
                     if (!this._entityActions.has(target)) this._entityActions.set(target, []);
@@ -483,8 +815,8 @@ export const ExtensionRegistry = {
 
         if (config.shortcuts) {
             config.shortcuts.forEach(s => {
-                const id = s.id || `${extName}:${(s.label || s.key || 'shortcut').toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-                this.registerShortcut(s.context, s.key, s.action, { id, extName, label: s.label });
+                s.id = s.id || `${extName}:${slugify(s.label || s.key || 'shortcut')}`;
+                this.registerShortcut(s.context, s.key, s.action, { id: s.id, extName, label: s.label });
             });
         }
         console.log(`📦 Registered Declarative Extension: ${extName} v${config.version || '1.0'}`);
@@ -496,10 +828,18 @@ export const ExtensionRegistry = {
     registerShortcut: function(context, keyCombo, callback, meta = {}) {
         if (!this.shortcuts[context]) this.shortcuts[context] = {};
         const key = keyCombo.toLowerCase();
-        this.shortcuts[context][key] = callback;
+        const extName = meta.extName || callback._extName || null;
+        const wrappedShortcut = (e) => {
+            if (extName && this._filterPredicate && !this._filterPredicate(extName)) {
+                return;
+            }
+            return callback(e);
+        };
+        wrappedShortcut._extName = extName;
+        this.shortcuts[context][key] = wrappedShortcut;
         if (meta.id) {
             this._shortcutMeta = this._shortcutMeta || new Map();
-            this._shortcutMeta.set(meta.id, { context, key, extName: meta.extName, label: meta.label });
+            this._shortcutMeta.set(meta.id, { context, key, extName, label: meta.label });
         }
     },
 
@@ -661,12 +1001,58 @@ export const ExtensionRegistry = {
         }
         return null;
     },
-
     _settingsActions: [],
-    registerSettingsAction: function(id, label, icon, callback, section = 'Extensions') {
+    _extAbortControllers: new Map(),
+
+    getSignal: function(extName) {
+        if (!this._extAbortControllers.has(extName) || this._extAbortControllers.get(extName).signal.aborted) {
+            this._extAbortControllers.set(extName, new AbortController());
+        }
+        return this._extAbortControllers.get(extName).signal;
+    },
+    registerSettingsAction: function(id, label, icon, callback, section = 'Extensions', extName = null, meta = {}) {
         this._settingsActions = this._settingsActions.filter(a => a.id !== id);
-        this._settingsActions.push({ id, label, icon, callback, section });
+        this._settingsActions.push({
+            id,
+            label,
+            icon,
+            callback,
+            section,
+            extName,
+            ...(meta && typeof meta === 'object' ? meta : {})
+        });
         window.dispatchEvent(new Event('sutram-settings-actions-updated'));
+    },
+
+    getSettingsActions: function() {
+        const results = [];
+        const seen = new Set();
+        this._manifests.forEach((manifest, extName) => {
+            if (this._filterPredicate && !this._filterPredicate(extName)) return;
+            if (Array.isArray(manifest.settingsActions)) {
+                manifest.settingsActions.forEach(act => {
+                    if (!act || act.id === `${extName}_generic_settings` || seen.has(act.id)) return;
+                    seen.add(act.id);
+                    const section = act.section || manifest.settingsCategory || 'Extensions';
+                    results.push({
+                        ...act,
+                        id: act.id,
+                        label: act.label,
+                        icon: act.icon,
+                        callback: act.onClick || act.callback,
+                        section,
+                        extName
+                    });
+                });
+            }
+        });
+        this._settingsActions.forEach(act => {
+            if (seen.has(act.id)) return;
+            if (act.extName && this._filterPredicate && !this._filterPredicate(act.extName)) return;
+            seen.add(act.id);
+            results.push(act);
+        });
+        return results;
     },
 
     _unloadHooks: new Map(),
@@ -681,11 +1067,65 @@ export const ExtensionRegistry = {
         this._ticks.get(extName).push({ interval: intervalMs, lastRun: Date.now(), cb: callback });
     },
     executeUnload: function(extName) {
+        if (!extName) return;
+        // 0. Abort any in-flight extension lifecycle signal
+        if (this._extAbortControllers.has(extName)) {
+            try { this._extAbortControllers.get(extName).abort(); } catch (_) {}
+            this._extAbortControllers.delete(extName);
+        }
+        // 0.5 Restore baseline layout slots if the extension dynamically mutated its layoutSlots
+        const manifest = this._manifests.get(extName);
+        if (manifest && Array.isArray(manifest._baseLayoutSlots)) {
+            try {
+                manifest.layoutSlots = JSON.parse(JSON.stringify(manifest._baseLayoutSlots));
+            } catch (_) {
+                manifest.layoutSlots = [...manifest._baseLayoutSlots];
+            }
+        }
+        // 1. Execute custom unload hook if registered (retain in Map so re-enabling doesn't lose the hook)
         if (this._unloadHooks.has(extName)) {
             try { this._unloadHooks.get(extName)(); } catch (e) { console.error(`Error unloading extension [${extName}]:`, e); }
-            this._unloadHooks.delete(extName);
         }
-        if (this._ticks.has(extName)) this._ticks.delete(extName);
+        // 2. Evict any open windows or column projections owned by this extension
+        const layoutStore = window.Sutram?.stores?.Layout;
+        if (layoutStore && typeof layoutStore.getState === 'function') {
+            const st = layoutStore.getState();
+            (st.windows || []).forEach(w => {
+                if (w.extName === extName || (typeof w.id === 'string' && w.id.startsWith(`${extName}:`))) {
+                    st.closeWindow(w.id, true);
+                }
+            });
+            ['left', 'center', 'right'].forEach(col => {
+                const pinned = st.columns?.[col]?.pinned || [];
+                pinned.forEach(p => {
+                    if (p.extName === extName || (typeof p.id === 'string' && p.id.startsWith(`${extName}:`))) {
+                        st.unpinFromColumn(col, p.id);
+                        st.evictProjection(p.id, true);
+                    }
+                });
+            });
+        }
+        // 3. Reset any Zustand store matching this extension's namespace without clobbering storage
+        if (window.Sutram?.stores) {
+            const capName = extName.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+            const targetStore = window.Sutram.stores[capName] || window.Sutram.stores[extName];
+            if (targetStore && typeof targetStore.getState === 'function') {
+                if (typeof targetStore.resetMemoryOnly === 'function') {
+                    try { targetStore.resetMemoryOnly(); } catch (_) {}
+                } else {
+                    const sState = targetStore.getState();
+                    if (typeof sState?.clearPayload === 'function') {
+                        try { sState.clearPayload(); } catch (_) {}
+                    }
+                    if (typeof sState?.resetState === 'function') {
+                        try { sState.resetState(); } catch (_) {}
+                    }
+                }
+            }
+        }
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('sutram-extension-unloaded', { detail: { extName }, bubbles: true, composed: true }));
+        }
     },
     startMetronome: function(getActiveExtensions = null, coreExtensions = []) {
         if (this._metronomeId) clearTimeout(this._metronomeId);
@@ -746,40 +1186,37 @@ setStatus: (msg, timeout = 3000, isError = false) => {
         newTimeoutId = setTimeout(() => {
             StatusStore.setState({ message: '', isError: false, timeoutId: null });
         }, timeout);
-    }
-    StatusStore.setState({ message: msg, isError, timeoutId: newTimeoutId });
-}
-});
+            }
+            StatusStore.setState({ message: msg, isError, timeoutId: newTimeoutId });
+        }
+        }, { scope: 'global' });
 
-export const ToastStore = createSutramStore('Toast', {
-toasts: [],
-addToast: (message, intent = 'danger', duration = 6000) => {
-    const id = `toast_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    const state = ToastStore.getState();
-    if (state.toasts.some(t => t.message === message)) return;
-    ToastStore.setState({ toasts: [...state.toasts, { id, message, intent }] });
-    setTimeout(() => {
-        ToastStore.setState(s => ({ toasts: s.toasts.filter(t => t.id !== id) }));
-    }, duration);
-},
-removeToast: (id) => ToastStore.setState(state => ({ toasts: state.toasts.filter(t => t.id !== id) }))
-});
-export const SelectionStore = createSutramStore('Selection', {
-selectedItems: new Map(),
-toggleSelection: (id, entityType, data) => {
-    const newMap = new Map(SelectionStore.getState().selectedItems);
-    if (newMap.has(id)) newMap.delete(id);
-    else newMap.set(id, { entityType, data });
-    SelectionStore.setState({ selectedItems: newMap });
-},
-clearSelection: () => SelectionStore.setState({ selectedItems: new Map() })
-});
-export const EnvironmentStore = createSutramStore('Environment', {
-    isOffline: false
-});
-
-const _activePopoutWindows = new Map();
-const _lastPopoutFocusTs = new Map();
+        export const ToastStore = createSutramStore('Toast', {
+        toasts: [],
+        addToast: (message, intent = 'danger', duration = 6000) => {
+            const id = `toast_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+            const state = ToastStore.getState();
+            if (state.toasts.some(t => t.message === message)) return;
+            ToastStore.setState({ toasts: [...state.toasts, { id, message, intent }] });
+            setTimeout(() => {
+                ToastStore.setState(s => ({ toasts: s.toasts.filter(t => t.id !== id) }));
+            }, duration);
+        },
+        removeToast: (id) => ToastStore.setState(state => ({ toasts: state.toasts.filter(t => t.id !== id) }))
+        }, { scope: 'global' });
+        export const SelectionStore = createSutramStore('Selection', {
+        selectedItems: new Map(),
+        toggleSelection: (id, entityType, data) => {
+            const newMap = new Map(SelectionStore.getState().selectedItems);
+            if (newMap.has(id)) newMap.delete(id);
+            else newMap.set(id, { entityType, data });
+            SelectionStore.setState({ selectedItems: newMap });
+        },
+        clearSelection: () => SelectionStore.setState({ selectedItems: new Map() })
+        }, { scope: 'tenant' });
+        export const EnvironmentStore = createSutramStore('Environment', {
+            isOffline: false
+        }, { scope: 'global' });
 const _layoutBus = (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel('sutram_layout_bus') : null;
 
 export function canUseMultiWindowPopout() {
@@ -791,7 +1228,6 @@ export function canUseMultiWindowPopout() {
     if (isCoarsePointer && isCompactScreen) return false;
     return true;
 }
-
 export const LayoutStore = createSutramStore('Layout', {
     columns: {
         left: { active: null, pinned: [], history: [] },
@@ -804,6 +1240,13 @@ export const LayoutStore = createSutramStore('Layout', {
     capacity: 3, // 1, 2, or 3 columns
     layoutRatios: null, // e.g., [1, 2, 1]
     windows: [],
+    activePopoutWindows: new Map(),
+    lastPopoutFocusTs: new Map(),
+    clearPayload: () => {
+        const st = LayoutStore.getState();
+        st.activePopoutWindows?.clear();
+        st.lastPopoutFocusTs?.clear();
+    },
     setLayoutRatios: (ratios) => LayoutStore.setState({ layoutRatios: ratios }),
     openWindow: (entity, anchorCol = 'center', span = 1) => LayoutStore.setState((state) => {
         const { capacity, focusedColumn, mobileViewportIndex } = state;
@@ -831,7 +1274,7 @@ export const LayoutStore = createSutramStore('Layout', {
             ]
         };
     }),
-    closeWindow: (id) => {
+    closeWindow: (id, sync = false) => {
         LayoutStore.setState((state) => {
             const nextWindows = state.windows.filter(w => w.id !== id);
             const nextGlobalHistory = (state.focusHistory || []).filter(h => h.id !== id);
@@ -846,7 +1289,7 @@ export const LayoutStore = createSutramStore('Layout', {
             st.setActiveProjection(lastFocus.col, lastFocus.id);
             st.setFocusedColumn(lastFocus.col);
         }
-        LayoutStore.getState().evictProjection(id);
+        LayoutStore.getState().evictProjection(id, sync);
     },
     updateWindowConstraints: (id, anchorCol, span) => LayoutStore.setState((state) => ({
         windows: state.windows.map(w => w.id === id ? { ...w, anchorCol, span, z: Date.now() } : w)
@@ -988,13 +1431,169 @@ export const LayoutStore = createSutramStore('Layout', {
         LayoutStore.setState({ capacity: cap });
         LayoutStore.getState().enforceWindowBounds();
     },
-    evictProjection: (id) => {
-        // Defer eviction broadcast to the microtask queue so synchronous callers of closeWindow()
-        // finish reading component/store state before teardown listeners reset store fields.
-        if (typeof window !== 'undefined') {
-            queueMicrotask(() => {
-                window.dispatchEvent(new CustomEvent('sutram-evict-projection', { detail: { id }, bubbles: true, composed: true }));
+    rekeyProjection: (oldId, newId, newLabel = null, options = {}) => {
+        if (!oldId || !newId || oldId === newId) return;
+        const deriveLabel = (targetId) => {
+            if (targetId === newId && newLabel) return newLabel;
+            return String(targetId).replace(/\/+$/, '').split('/').pop() || targetId;
+        };
+        const mapSegment = (seg) => {
+            if (!seg || typeof seg !== 'string') return seg;
+            if (seg === oldId) return newId;
+            if (seg.startsWith(oldId + '/')) return newId + seg.slice(oldId.length);
+            return seg;
+        };
+        const registry = (typeof window !== 'undefined' && window.ExtensionRegistry) || ExtensionRegistry;
+        const mapId = (id) => {
+            if (!id || typeof id !== 'string') return id;
+            const direct = mapSegment(id);
+            if (direct !== id) return direct;
+            if (registry?.executeUIHook) {
+                const hooked = registry.executeUIHook('sutram:rekey-projection-id', { id, oldId, newId, mapSegment });
+                if (typeof hooked === 'string' && hooked) return hooked;
+            }
+            return id;
+        };
+
+        const rekeyedPairs = [];
+        const recordPair = (fromId, toId) => {
+            if (fromId !== toId && !rekeyedPairs.some(p => p.oldId === fromId)) {
+                rekeyedPairs.push({ oldId: fromId, newId: toId, newLabel: deriveLabel(toId) });
+            }
+        };
+        recordPair(oldId, newId);
+
+        LayoutStore.setState((state) => {
+            let changed = false;
+            const nextColumns = { ...state.columns };
+
+            ['left', 'center', 'right'].forEach(col => {
+                const colState = nextColumns[col];
+                if (!colState) return;
+                let colChanged = false;
+
+                const nextPinned = (colState.pinned || []).map(p => {
+                    const mapped = mapId(p.id);
+                    if (mapped !== p.id) {
+                        colChanged = true;
+                        changed = true;
+                        recordPair(p.id, mapped);
+                        const lbl = deriveLabel(mapped);
+                        return { ...p, id: mapped, rawId: mapped, label: lbl };
+                    }
+                    return p;
+                });
+
+                let nextActive = colState.active;
+                const mappedActive = mapId(colState.active);
+                if (mappedActive !== colState.active) {
+                    nextActive = mappedActive;
+                    colChanged = true;
+                    changed = true;
+                }
+
+                const nextHistory = Array.isArray(colState.history)
+                    ? colState.history.map(hId => {
+                        const mh = mapId(hId);
+                        if (mh !== hId) { colChanged = true; changed = true; }
+                        return mh;
+                    })
+                    : [];
+
+                if (colChanged) {
+                    nextColumns[col] = {
+                        ...colState,
+                        pinned: nextPinned,
+                        active: nextActive,
+                        history: nextHistory
+                    };
+                }
             });
+
+            const nextFocusHistory = (state.focusHistory || []).map(h => {
+                if (!h || !h.id) return h;
+                const mh = mapId(h.id);
+                if (mh !== h.id) {
+                    changed = true;
+                    return { ...h, id: mh };
+                }
+                return h;
+            });
+            const nextWindows = (state.windows || []).map(w => {
+                const mw = mapId(w.id);
+                if (mw !== w.id) {
+                    changed = true;
+                    recordPair(w.id, mw);
+                    const lbl = deriveLabel(mw);
+                    let nextProps = w.props;
+                    if (w.props && typeof w.props === 'object') {
+                        nextProps = { ...w.props };
+                        Object.keys(nextProps).forEach(pk => {
+                            if (typeof nextProps[pk] === 'string') {
+                                nextProps[pk] = mapSegment(nextProps[pk]);
+                            }
+                        });
+                    }
+                    return { ...w, id: mw, label: lbl, titleText: lbl, props: nextProps };
+                }
+                return w;
+            });
+
+            if (!changed) return {};
+            return {
+                columns: nextColumns,
+                focusHistory: nextFocusHistory,
+                windows: nextWindows
+            };
+        });
+
+        // Rekey active popout window handles
+        const popoutMap = LayoutStore.getState().activePopoutWindows;
+        if (popoutMap) {
+            Array.from(popoutMap.keys()).forEach(k => {
+                const sepIdx = k.indexOf('::');
+                if (sepIdx === -1) return;
+                const scopePrefix = k.slice(0, sepIdx);
+                const popId = k.slice(sepIdx + 2);
+                const mappedPopId = mapId(popId);
+                if (mappedPopId !== popId) {
+                    const winRef = popoutMap.get(k);
+                    popoutMap.delete(k);
+                    popoutMap.set(`${scopePrefix}::${mappedPopId}`, winRef);
+                }
+            });
+        }
+
+        if (typeof window !== 'undefined') {
+            rekeyedPairs.forEach(pair => {
+                window.dispatchEvent(new CustomEvent('sutram-rekey-projection', {
+                    detail: pair,
+                    bubbles: true,
+                    composed: true
+                }));
+            });
+            if (!options.fromBus && _layoutBus) {
+                _layoutBus.postMessage({
+                    type: 'rekey_projection',
+                    data: { oldId, newId, newLabel }
+                });
+            }
+        }
+    },
+    evictProjection: (id, sync = false) => {
+        if (typeof window === 'undefined' || !id) return;
+        const evictScope = LayoutStore._boundScope || 'default';
+        const dispatchEvict = () => {
+            window.dispatchEvent(new CustomEvent('sutram-evict-projection', {
+                detail: { id, scopeId: evictScope },
+                bubbles: true,
+                composed: true
+            }));
+        };
+        if (sync) {
+            dispatchEvict();
+        } else {
+            queueMicrotask(dispatchEvict);
         }
     },
     canPopout: () => canUseMultiWindowPopout(),
@@ -1003,17 +1602,18 @@ export const LayoutStore = createSutramStore('Layout', {
         if (new URLSearchParams(window.location.search).get('popout') === 'true') return false;
         const scope = scopeId || (window.location.hash.replace(/^#\/?/, '').split('/')[0] || 'default');
         const key = `${scope}::${id}`;
-        const win = _activePopoutWindows.get(key);
+        const { activePopoutWindows, lastPopoutFocusTs } = LayoutStore.getState();
+        const win = activePopoutWindows?.get(key);
         if (win) {
             if (!win.closed) {
                 const now = Date.now();
-                const lastAttempt = _lastPopoutFocusTs.get(key) || 0;
-                _lastPopoutFocusTs.set(key, now);
+                const lastAttempt = lastPopoutFocusTs?.get(key) || 0;
+                lastPopoutFocusTs?.set(key, now);
 
                 // Double-click recall escape hatch for OS window managers that block window.focus()
                 if (now - lastAttempt < 3500) {
-                    _activePopoutWindows.delete(key);
-                    _lastPopoutFocusTs.delete(key);
+                    activePopoutWindows?.delete(key);
+                    lastPopoutFocusTs?.delete(key);
                     try { win.close(); } catch (e) {}
                     StatusStore.getState().setStatus(`↙️ Re-docked ${id.split('/').pop()} into main window`, 2500);
                     return false;
@@ -1024,16 +1624,17 @@ export const LayoutStore = createSutramStore('Layout', {
                     return true;
                 } catch (e) {}
             }
-            _activePopoutWindows.delete(key);
-            _lastPopoutFocusTs.delete(key);
+            activePopoutWindows?.delete(key);
+            lastPopoutFocusTs?.delete(key);
         }
         return false;
     },
     clearPopout: (id, scopeId = null) => {
         if (!id) return;
         const scope = scopeId || (window.location.hash.replace(/^#\/?/, '').split('/')[0] || 'default');
-        _activePopoutWindows.delete(`${scope}::${id}`);
-        _lastPopoutFocusTs.delete(`${scope}::${id}`);
+        const { activePopoutWindows, lastPopoutFocusTs } = LayoutStore.getState();
+        activePopoutWindows?.delete(`${scope}::${id}`);
+        lastPopoutFocusTs?.delete(`${scope}::${id}`);
     },
     popoutProjection: async (id, options = {}) => {
         if (!id || typeof window === 'undefined') return false;
@@ -1078,9 +1679,9 @@ export const LayoutStore = createSutramStore('Layout', {
             ToastStore.getState().addToast("Pop-out window was blocked by your browser. Please allow pop-ups for this site.", "warning");
             return false;
         }
-
-        _activePopoutWindows.set(`${scope}::${normId}`, childWin);
-        _activePopoutWindows.set(`${scope}::${id}`, childWin);
+        const popoutMap = LayoutStore.getState().activePopoutWindows;
+        popoutMap?.set(`${scope}::${normId}`, childWin);
+        popoutMap?.set(`${scope}::${id}`, childWin);
 
         if (isAsyncPreSave) {
             try { await preSavePromise; } catch (e) {}
@@ -1156,6 +1757,12 @@ export const LayoutStore = createSutramStore('Layout', {
 if (typeof window !== 'undefined' && _layoutBus) {
     const isPopoutWindow = new URLSearchParams(window.location.search).get('popout') === 'true';
     if (isPopoutWindow) {
+        _layoutBus.addEventListener('message', (ev) => {
+            const { type, data } = ev.data || {};
+            if (type === 'rekey_projection' && data?.oldId && data?.newId) {
+                LayoutStore.getState().rekeyProjection(data.oldId, data.newId, data.newLabel, { fromBus: true });
+            }
+        });
         window.addEventListener('pagehide', () => {
             const hash = window.location.hash.replace(/^#\/?/, '');
             const parts = hash.split('/').map(decodeURIComponent);
@@ -1170,6 +1777,8 @@ if (typeof window !== 'undefined' && _layoutBus) {
             const { type, data } = ev.data || {};
             if (type === 'presence_ping') {
                 _layoutBus.postMessage({ type: 'presence_pong' });
+            } else if (type === 'rekey_projection' && data?.oldId && data?.newId) {
+                LayoutStore.getState().rekeyProjection(data.oldId, data.newId, data.newLabel, { fromBus: true });
             } else if (type === 'popout_closed') {
                 LayoutStore.getState().clearPopout(data?.id, data?.scopeId);
             } else if (type === 'dock_projection') {

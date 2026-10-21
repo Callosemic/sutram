@@ -139,11 +139,21 @@ export class SutramDB {
                 const index = store.index('by_scope');
                 const req = index.openCursor(IDBKeyRange.only(scopeId));
                 let updated = false;
-
                 req.onsuccess = (e) => {
                     const cursor = e.target.result;
                     if (cursor) {
                         if (cursor.value.collapseKey === collapseKey) {
+                            try {
+                                const prevPayload = JSON.parse(cursor.value.bodyString || '{}');
+                                const nextPayload = JSON.parse(record.bodyString || '{}');
+                                if (prevPayload.base_hash && !nextPayload._forceNewBase) {
+                                    nextPayload.base_hash = prevPayload.base_hash;
+                                }
+                                if (prevPayload.base_content !== undefined && !nextPayload._forceNewBase) {
+                                    nextPayload.base_content = prevPayload.base_content;
+                                }
+                                record.bodyString = JSON.stringify(nextPayload);
+                            } catch (_) {}
                             cursor.update(record);
                             updated = true;
                         }
@@ -310,7 +320,7 @@ export class OfflineHttpProvider {
 
         // Circuit Breaker: Abort background warming if cache is heavily loaded
         if (options.onlyIfMissing) {
-            const offlineState = window.Sutram?.stores?.Offline?.getState() || window.inSetu?.stores?.Offline?.getState() || {};
+            const offlineState = window.Sutram?.stores?.Offline?.getState() || {};
             const limitBytes = 250 * 1024 * 1024; // Align with core schema setting
             if (offlineState.storageUsage > limitBytes * 0.8) {
                 return new Response(null, { status: 204, statusText: 'Cache Full Circuit Breaker' });
@@ -328,8 +338,19 @@ export class OfflineHttpProvider {
             }
             return res;
         } catch (err) {
-            if (err.name === 'AbortError') throw err;
-            this.setOfflineState(true);
+            if (err.name === 'AbortError' || err.name === 'TimeoutError') throw err;
+            if (!options.onlyIfMissing) {
+                if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                    this.setOfflineState(true);
+                } else {
+                    try {
+                        const probe = await fetch('/?t=' + Date.now(), { method: 'HEAD', cache: 'no-store', signal: AbortSignal.timeout(1500) });
+                        if (!probe.ok) this.setOfflineState(true);
+                    } catch (_) {
+                        this.setOfflineState(true);
+                    }
+                }
+            }
             const cachedBlob = await SutramDB.getVFSBlob(scopeId, cacheKeyUrl);
             if (cachedBlob) return new Response(cachedBlob, { status: 200 });
             throw err;
@@ -343,12 +364,24 @@ export class OfflineHttpProvider {
         try {
             return await fetch(url, options);
         } catch (err) {
-            const isAbort = err.name === 'AbortError';
-            if (!isAbort) this.setOfflineState(true);
-
-            // Route aborted mutations to the offline queue to prevent data loss, 
-            // but pass the abort signal so we can decide whether to drop or queue it.
-            return this._handleOfflineQueue(url, method, bodyString, options, scopeId, isAbort);
+            const isAbort = err.name === 'AbortError' || err.name === 'TimeoutError';
+            if (isAbort) {
+                throw err;
+            }
+            let serverUnreachable = (typeof navigator !== 'undefined' && navigator.onLine === false);
+            if (!serverUnreachable) {
+                try {
+                    const probe = await fetch('/?t=' + Date.now(), { method: 'HEAD', cache: 'no-store', signal: AbortSignal.timeout(1500) });
+                    if (!probe.ok) serverUnreachable = true;
+                } catch (_) {
+                    serverUnreachable = true;
+                }
+            }
+            if (!serverUnreachable) {
+                throw err;
+            }
+            this.setOfflineState(true);
+            return this._handleOfflineQueue(url, method, bodyString, options, scopeId, false);
         }
     }
 
@@ -367,15 +400,6 @@ export class OfflineHttpProvider {
         try {
             const collapseKey = options.collapseKey || null;
             const headers = options.plainHeaders || {};
-            if (method === 'POST' && url.endsWith('/fs/save') && typeof bodyString === 'string') {
-                try {
-                    const parsed = JSON.parse(bodyString);
-                    if (parsed.filepath && parsed.content !== undefined) {
-                        const fetchUrl = `/api/${scopeId}/fs/fetch?file=${encodeURIComponent(parsed.filepath)}`;
-                        await SutramDB.cacheVFSBlob(scopeId, fetchUrl, new Blob([parsed.content], { type: 'text/plain;charset=utf-8' }));
-                    }
-                } catch (e) {}
-            }
             await SutramDB.enqueueMutation(scopeId, url, method, headers, bodyString, collapseKey);
             const count = await SutramDB.getOutboxCount(scopeId);
 
@@ -484,11 +508,25 @@ export class OutboxReconciler {
                 const res = await executePost(data.path, fetchOptions, data.scope_id);
                 if (res.ok || res.status === 202) {
                     logger(`Drained mutation [${data.method}] ${data.path}`, 'success');
+                    let responseData = null;
+                    try {
+                        responseData = await res.clone().json();
+                    } catch (_) {}
                     await new Promise((resolve) => {
                         const delTx = db.transaction('sutram_outbox', 'readwrite');
                         delTx.objectStore('sutram_outbox').delete(key);
                         delTx.oncomplete = () => resolve();
                     });
+                    if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('sutram-outbox-item-synced', {
+                            detail: {
+                                path: data.path,
+                                scopeId: data.scope_id,
+                                bodyString: data.bodyString,
+                                responseData
+                            }
+                        }));
+                    }
                 } else if (res.status >= 400 && res.status < 500) {
                     logger(`Poison pill moved to DLQ (HTTP ${res.status}): [${data.method}] ${data.path}`, 'error', data.bodyString);
                     // Dead Letter Queue: Safely sideline poison pills so the queue doesn't halt

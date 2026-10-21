@@ -2,13 +2,18 @@
 // Architectural Proxy: Wraps yenVUI primitives and injects Sutram-specific structural overrides
 import { css } from 'lit';
 import { sharedStyles as yenvuiSharedStyles } from '../../yenvui/js/shared_styles.js';
-
 export const sharedStyles = css`
     ${yenvuiSharedStyles}
 
-    /* Global Reset for Components */
+    /* Global Reset for Components & iOS WebKit Text-Inflation Guard */
+    :host {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+    }
     * { 
-        box-sizing: border-box; 
+        box-sizing: border-box;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
     }
     yenvui-dropdown, sutram-dropdown { display: inline-flex; align-items: stretch; height: 100%; }
 

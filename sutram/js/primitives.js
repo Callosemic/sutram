@@ -29,17 +29,55 @@ import { YenvuiDiffViewer } from '../../yenvui/js/diff-viewer.js';
 import { sharedStyles } from './shared_styles.js';
 import { buildFileTree, resolveDirectoryState, SutramWorker } from './utils.js';
 import 'lit-virtualizer';
-
 // 0. Universal Virtualized List
 export class SutramVirtualList extends LitElement {
     static properties = {
         items: { type: Array },
-        renderItem: { type: Object }
+        renderItem: { type: Object },
+        keyFunction: { type: Object }
     };
     static styles = css`
-        :host { display: flex; flex-direction: column; width: 100%; flex: 1; min-width: 0; }
-        lit-virtualizer { width: 100%; flex: 1; min-width: 0; }
+        :host {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            flex: 1;
+            min-width: 0;
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+            --card-content-visibility: visible;
+            --card-contain-intrinsic-size: none;
+        }
+        lit-virtualizer {
+            width: 100%;
+            flex: 1;
+            min-width: 0;
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+            --card-content-visibility: visible;
+            --card-contain-intrinsic-size: none;
+        }
+        lit-virtualizer sutram-card,
+        lit-virtualizer yenvui-card {
+            content-visibility: visible !important;
+            contain-intrinsic-size: none !important;
+            --card-content-visibility: visible;
+            --card-contain-intrinsic-size: none;
+        }
     `;
+
+    constructor() {
+        super();
+        this.items = [];
+        this.renderItem = null;
+        this.keyFunction = (item, idx) => {
+            if (!item) return idx;
+            if (typeof item === 'string') return item;
+            const kind = item.type || item.entityType || 'item';
+            const uri = item.canonicalUri || item.fullPath || item.filepath || item.id || item.name || idx;
+            return `${kind}::${uri}`;
+        };
+    }
 
     render() {
         if (!this.items || this.items.length === 0) return html``;
@@ -47,6 +85,7 @@ export class SutramVirtualList extends LitElement {
             <lit-virtualizer
                 scroller
                 .items=${this.items}
+                .keyFunction=${this.keyFunction}
                 .renderItem=${this.renderItem}>
             </lit-virtualizer>
         `;
@@ -57,6 +96,67 @@ customElements.define('sutram-virtual-list', SutramVirtualList);
 // 1. Synchronous Action Button
 export class SutramBtn extends YenvuiBtn {}
 customElements.define('sutram-btn', SutramBtn);
+// 1.25 Multi-Window Pop-Out / Dock-In Control Button
+export class SutramProjectionWindowControls extends SutramElement {
+    static properties = {
+        filepath: { type: String },
+        projectionId: { type: String },
+        beforeAction: { attribute: false }
+    };
+    static styles = [sharedStyles, css`:host { display: inline-flex; align-items: center; }`];
+
+    _getTargetId() {
+        return this.projectionId || this.filepath || '';
+    }
+
+    render() {
+        const targetId = this._getTargetId();
+        if (!targetId) return html``;
+        const isPopout = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('popout') === 'true';
+        const layout = window.Sutram?.stores?.Layout?.getState?.();
+        if (isPopout) {
+            return html`
+                <sutram-btn
+                    intent="highlight"
+                    variant="tinted"
+                    icon="minimize-2"
+                    label="Dock In"
+                    title="Return projection to main workbench window"
+                    style="--btn-padding: 4px 10px; --btn-font-size: 0.8rem; margin: 0;"
+                    @click=${async () => {
+                        if (typeof this.beforeAction === 'function') await this.beforeAction();
+                        if (layout && typeof layout.dockInProjection === 'function') {
+                            await layout.dockInProjection(targetId);
+                        }
+                    }}>
+                </sutram-btn>
+            `;
+        }
+        const canPop = layout && typeof layout.canPopout === 'function' ? layout.canPopout() : true;
+        if (canPop) {
+            return html`
+                <sutram-btn
+                    intent="neutral"
+                    variant="tinted"
+                    icon="external-link"
+                    label="Pop Out"
+                    title="Open in dedicated pop-out window"
+                    style="--btn-padding: 4px 10px; --btn-font-size: 0.8rem; margin: 0;"
+                    @click=${async () => {
+                        if (typeof this.beforeAction === 'function') await this.beforeAction();
+                        if (layout && typeof layout.popoutProjection === 'function') {
+                            await layout.popoutProjection(targetId);
+                        }
+                    }}>
+                </sutram-btn>
+            `;
+        }
+        return html``;
+    }
+}
+if (!customElements.get('sutram-projection-window-controls')) {
+    customElements.define('sutram-projection-window-controls', SutramProjectionWindowControls);
+}
 
 // 1.5 Async Action Button
 export class SutramAsyncBtn extends SutramContextMixin(YenvuiAsyncBtn) {
@@ -259,7 +359,7 @@ export class SutramSelectionTray extends SutramElement {
         .cart-badge.mobile-only { display: none; }
         .cart-badge {
             background: var(--intent-warning);
-            color: #000;
+            color: var(--bg-deep, #000000);
             border-radius: 50%;
             width: 20px;
             height: 20px;
@@ -321,7 +421,7 @@ export class SutramSelectionTray extends SutramElement {
         .tray-item-path { font-family: monospace; font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .pack-tag { background: color-mix(in srgb, var(--intent-warning) 20%, transparent); color: var(--intent-warning); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; }
         .tray-footer {
-            display: flex; gap: 10px; padding: 15px 20px; border-top: 1px solid var(--border); background: var(--bg-deep); border-radius: 0 0 12px 12px;
+            display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg-deep); border-radius: 0 0 12px 12px; width: 100%; box-sizing: border-box; overflow: hidden;
         }
     `];
 
@@ -424,20 +524,25 @@ export class SutramSelectionTray extends SutramElement {
                     `})}
                 </div>
                 <div class="tray-footer">
-                    <sutram-async-btn label="Clear" intent="danger" .onClick=${() => { SelectionStore.getState().clearSelection(); this.modalOpen = false; }} style="margin-right: auto;"></sutram-async-btn>
-                    ${batchActions.map(act => html`
-                        <sutram-async-btn  
-                            .label=${act.label}
-                            .icon=${act.icon}
-                            intent="${act.intent || 'primary'}" 
-                            variant="${act.variant || 'tinted'}"
-                            ?emphasis=${act.emphasis}
-                            .onClick=${async (e) => {
-                                if (act.asyncAction) await act.asyncAction(e);
-                                else if (act.onClick) act.onClick(e);
-                            }}>
-                        </sutram-async-btn>
-                    `)}
+                    <sutram-async-btn label="Clear" intent="danger" .onClick=${() => { SelectionStore.getState().clearSelection(); this.modalOpen = false; }} style="flex-shrink: 0; margin: 0;"></sutram-async-btn>
+                    <sutram-scrub-track style="flex: 1; min-width: 0;">
+                        <div style="display: flex; gap: 8px; align-items: center; width: max-content; margin-left: auto;">
+                            ${batchActions.map(act => html`
+                                <sutram-async-btn  
+                                    style="margin: 0; flex-shrink: 0;"
+                                    .label=${act.label}
+                                    .icon=${act.icon}
+                                    intent="${act.intent || 'primary'}" 
+                                    variant="${act.variant || 'tinted'}"
+                                    ?emphasis=${act.emphasis}
+                                    .onClick=${async (e) => {
+                                        if (act.asyncAction) await act.asyncAction(e);
+                                        else if (act.onClick) act.onClick(e);
+                                    }}>
+                                </sutram-async-btn>
+                            `)}
+                        </div>
+                    </sutram-scrub-track>
                 </div>
             </div>
         `;
@@ -576,7 +681,83 @@ export class SutramWindow extends SutramContextMixin(YenvuiWindow) {
     }
 }
 customElements.define('sutram-window', SutramWindow);
-// 8. Generic Settings Form & Modal Engine
+// 8. Generic Field Card, Settings Form & Modal Engine
+export class SutramFieldCard extends SutramElement {
+    static properties = {
+        label: { type: String },
+        description: { type: String },
+        scope: { type: String },
+        secure: { type: Boolean }
+    };
+    static styles = [sharedStyles, css`
+        :host {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 14px 16px;
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+        .field-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .field-title {
+            font-size: 0.9rem;
+            color: var(--text);
+            font-weight: bold;
+            margin: 0;
+        }
+        .field-desc {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+    `];
+
+    constructor() {
+        super();
+        this.label = '';
+        this.description = '';
+        this.scope = 'workspace';
+        this.secure = false;
+    }
+
+    _renderBadges() {
+        const badges = [];
+        if (this.secure) {
+            badges.push(html`<sutram-tag text="secure" intent="warning"></sutram-tag>`);
+        }
+        const scope = this.scope || 'workspace';
+        if (scope === 'daemon') {
+            badges.push(html`<sutram-tag text="daemon" intent="neutral"></sutram-tag>`);
+        } else if (scope === 'repo') {
+            badges.push(html`<sutram-tag text="repo" intent="highlight"></sutram-tag>`);
+        } else if (scope !== 'none') {
+            badges.push(html`<sutram-tag text="workspace" intent="primary"></sutram-tag>`);
+        }
+        return html`<div style="display: inline-flex; gap: 6px; align-items: center;"><slot name="header-actions"></slot>${badges}</div>`;
+    }
+
+    render() {
+        return html`
+            <div class="field-header">
+                <span class="field-title">${this.label}</span>${this._renderBadges()}
+            </div>
+            <slot></slot>
+            ${this.description ? html`<div class="field-desc">${this.description}</div>` : ''}
+        `;
+    }
+}
+if (!customElements.get('sutram-field-card')) {
+    customElements.define('sutram-field-card', SutramFieldCard);
+}
+
 export class SutramSettingsForm extends SutramElement {
     static properties = {
         extName: { type: String },
@@ -653,12 +834,31 @@ export class SutramSettingsForm extends SutramElement {
     async triggerSave(e) {
         const hasRepoScope = (this.schema || []).some(f => f && f.type !== 'hidden' && f.scope === 'repo');
         const targetRepo = hasRepoScope ? (this.selectedRepo || (this.repos && this.repos[0]) || '') : '';
+        const cleanedData = { ...(this.formData || {}) };
+        (this.schema || []).forEach(f => {
+            if (!f || f.type === 'hidden' || f.type === 'action') return;
+            const v = cleanedData[f.id];
+            if (f.type === 'number') {
+                cleanedData[f.id] = (v === '' || v === null || v === undefined || Number.isNaN(Number(v))) ? (f.default ?? 0) : Number(v);
+            } else if (f.type === 'string_list') {
+                if (typeof v === 'string') {
+                    cleanedData[f.id] = v.split(',').map(s => s.trim()).filter(Boolean);
+                } else if (!Array.isArray(v)) {
+                    cleanedData[f.id] = Array.isArray(f.default) ? f.default : [];
+                }
+            } else if (f.type === 'intent_map') {
+                if (!v || typeof v !== 'object' || Array.isArray(v)) {
+                    cleanedData[f.id] = (f.default && typeof f.default === 'object') ? f.default : {};
+                }
+            }
+        });
+        this.formData = cleanedData;
         return new Promise((resolve, reject) => {
             this.dispatchEvent(new CustomEvent('sutram-settings-save', {
                 detail: {
                     extName: this.extName,
                     schema: this.schema,
-                    formData: this.formData,
+                    formData: cleanedData,
                     repo: targetRepo,
                     resolve,
                     reject,
@@ -900,20 +1100,13 @@ export class SutramSettingsForm extends SutramElement {
                         </div>
                     `;
                 }
-
                 return html`
-                    <div class="field-card">
-                        <div class="field-header">
-                            <label style="font-size: 0.9rem; color: var(--text); font-weight: bold; margin: 0;">${displayLabel}</label>
-                            ${this._renderScopeBadge(field)}
-                        </div>
-                        ${inputHtml}
-                        ${field.description || field.desc ? html`
-                            <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;">
-                                ${field.description || field.desc}
-                            </div>
-                        ` : ''}
-                    </div>
+                    <sutram-field-card
+                        .label=${displayLabel}
+                        .description=${field.description || field.desc || ''}
+                        .scope=${field.scope || 'workspace'}
+                        ?secure=${!!field.secure}>${inputHtml}
+                    </sutram-field-card>
                 `;
             })}
 
@@ -1061,9 +1254,9 @@ export class SutramEntityActions extends SutramElement {
             to { transform: translateY(0); }
         }
         :host([data-theme="e-ink"]) .action-tray-panel {
-            border: 2px solid #000;
+            border: 2px solid var(--border, #000000);
             border-top: none;
-            box-shadow: 4px 4px 0 #8b5cf6;
+            box-shadow: 4px 4px 0 var(--intent-primary, #8b5cf6);
         }
         .tray-group-header {
             font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
@@ -1097,14 +1290,14 @@ export class SutramEntityActions extends SutramElement {
             filter: brightness(1.15);
         }
         :host([data-theme="e-ink"]) .sync-btn {
-            background: #ffffff !important;
-            color: #000000 !important;
+            background: var(--bg, #ffffff) !important;
+            color: var(--text, #000000) !important;
             font-weight: 900 !important;
-            border: 2px solid #ec4899 !important;
-            box-shadow: 3px 3px 0 #eab308 !important;
+            border: 2px solid var(--intent-danger, #ec4899) !important;
+            box-shadow: 3px 3px 0 var(--intent-warning, #eab308) !important;
         }
-        :host([data-theme="e-ink"]) .sync-btn:hover { background: #f1f5f9 !important; }
-        :host([data-theme="e-ink"]) .sync-btn.active { background: #000000 !important; color: #ffffff !important; }
+        :host([data-theme="e-ink"]) .sync-btn:hover { background: var(--bg-hover, #f1f5f9) !important; }
+        :host([data-theme="e-ink"]) .sync-btn.active { background: var(--text, #000000) !important; color: var(--bg, #ffffff) !important; }
     `];
     updated(changedProperties) {
         super.updated(changedProperties);
@@ -1121,6 +1314,15 @@ export class SutramEntityActions extends SutramElement {
     }
     connectedCallback() {
         super.connectedCallback();
+    }
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        const dialog = this.shadowRoot?.querySelector('.action-tray-dialog');
+        if (dialog && dialog.open) {
+            document.body.appendChild(dialog);
+            dialog.close();
+            dialog.remove();
+        }
     }
     render() {
         if (!this.entityType || !window.ExtensionRegistry?.getEntityActions) return '';
@@ -1244,9 +1446,11 @@ export class SutramEntityActions extends SutramElement {
             });
             const groupLabels = { file: 'File', edit: 'Edit', share: 'Share', tools: 'Tools' };
             const groupIcons = { file: 'file-text', edit: 'edit-3', share: 'share-2', tools: 'wrench' };
-
             const handleTrayAction = async (act, e) => {
                 await executeAction(act, e);
+                if (!act.keepDrawerOpen) {
+                    this._trayOpen = false;
+                }
             };
 
             const title = this.entityData?.titleText || this.entityData?.filepath?.split('/').pop() || this.entityData?.id || 'Actions';
@@ -1375,17 +1579,6 @@ export class SutramCard extends SutramContextMixin(YenvuiCard) {
                 this.selected = store.getState().selectedItems.has(id);
             }
         }
-
-        this.addEventListener('yenvui-overlay-opened', (e) => {
-            if (!this.entityType || !this.entityData) return;
-            const actions = window.ExtensionRegistry?.getEntityActions?.(this.entityType, this.entityData) || [];
-            actions.forEach(act => {
-                if (typeof act.onReveal === 'function') {
-                    act.onReveal(this.entityData);
-                }
-            });
-        });
-
         this.addEventListener('yenvui-card-select-toggled', (e) => {
             e.stopPropagation();
             const id = this._getId();
@@ -1548,12 +1741,13 @@ export class SutramFilterDropdown extends YenvuiFilterDropdown {}
 if (!customElements.get('sutram-filter-dropdown')) {
     customElements.define('sutram-filter-dropdown', SutramFilterDropdown);
 }
-
 export class SutramCollapsible extends YenvuiCollapsible {
     connectedCallback() {
         super.connectedCallback();
         this.addEventListener('yenvui-collapsible-toggled', e => {
-            this.dispatchEvent(new CustomEvent('sutram-collapsible-toggled', { detail: e.detail, bubbles: true, composed: true }));
+            e.stopPropagation();
+            if (e.target !== this) return;
+            this.dispatchEvent(new CustomEvent('sutram-collapsible-toggled', { detail: e.detail, bubbles: false, composed: false }));
         });
     }
 }
@@ -1611,11 +1805,18 @@ export class SutramEditor extends SutramContextMixin(YenvuiEditor) {
             this.customExtensions = baseExts; // Inject directly into base property
         }
     }
-
     connectedCallback() {
         super.connectedCallback();
         this.addEventListener('yenvui-editor-changed', e => {
             this.dispatchEvent(new CustomEvent('editor-changed', { detail: e.detail, bubbles: true, composed: true }));
+            this.dispatchEvent(new CustomEvent('content-changed', { detail: e.detail, bubbles: true, composed: true }));
+            this.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+        });
+        this.addEventListener('yenvui-editor-selection', e => {
+            this.dispatchEvent(new CustomEvent('editor-selection', { detail: e.detail, bubbles: true, composed: true }));
+        });
+        this.addEventListener('yenvui-editor-scroll', e => {
+            this.dispatchEvent(new CustomEvent('editor-scroll', { detail: e.detail, bubbles: true, composed: true }));
         });
     }
 }
@@ -1817,7 +2018,194 @@ export class SutramReportProjection extends SutramElement {
     }
 }
 customElements.define('sutram-report-projection', SutramReportProjection);
-
 // 17. Synchronized Dual-Box & Interleaved Diff Viewer
 export class SutramDiffViewer extends SutramContextMixin(YenvuiDiffViewer) {}
 customElements.define('sutram-diff-viewer', SutramDiffViewer);
+
+// 18. Declarative Sub-Tab Action & Bulk Selection Menu
+export class SutramSubtabMenu extends SutramElement {
+    static properties = {
+        slotConfig: { type: Object },
+        _menuItems: { type: Array, state: true },
+        _selectedCount: { type: Number, state: true }
+    };
+    static styles = [sharedStyles, css`
+        :host { display: flex; align-items: stretch; height: 100%; }
+        .subtab-menu-trigger {
+            background: transparent;
+            color: var(--text);
+            border: none;
+            border-left: 1px solid var(--border);
+            border-radius: 0;
+            cursor: pointer;
+            font-weight: bold;
+            height: 100%;
+            width: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            position: relative;
+            padding: 0;
+            margin: 0;
+            transition: background 0.15s ease;
+        }
+        .subtab-menu-trigger:hover {
+            background: var(--input-bg);
+        }
+        .subtab-badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: var(--intent-warning);
+            color: var(--bg-deep, #000000);
+            border-radius: 50%;
+            width: 14px;
+            height: 14px;
+            font-size: 9px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+    `];
+
+    constructor() {
+        super();
+        this.slotConfig = null;
+        this._menuItems = [];
+        this._selectedCount = 0;
+        this._selectedItems = new Map();
+    }
+    connectedCallback() {
+        super.connectedCallback();
+        this.subscribe(
+            SelectionStore,
+            state => state.selectedItems || new Map(),
+            (selectedItems) => {
+                this._selectedItems = selectedItems;
+                this._rebuildMenu();
+            }
+        );
+        this.subscribe(
+            EnvironmentStore,
+            state => state.isOffline,
+            () => {
+                this._rebuildMenu();
+            }
+        );
+        this.registerGlobalListener('sutram-subtab-menu-refresh', window, () => {
+            this._rebuildMenu();
+        });
+        this._selectedItems = SelectionStore.getState()?.selectedItems || new Map();
+        this._rebuildMenu();
+    }
+    _bindSlotMenuStores() {
+        if (this._slotStoreUnsubs) {
+            this._slotStoreUnsubs.forEach(u => u());
+        }
+        this._slotStoreUnsubs = [];
+        const stores = this.slotConfig?.menuStores || [];
+        stores.forEach(storeName => {
+            const unsub = this.subscribe(storeName, () => {
+                this._rebuildMenu();
+            });
+            this._slotStoreUnsubs.push(unsub);
+        });
+    }
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        this._slotStoreUnsubs = [];
+    }
+
+    willUpdate(changedProperties) {
+        super.willUpdate(changedProperties);
+        if (changedProperties.has('slotConfig')) {
+            this._bindSlotMenuStores();
+            this._rebuildMenu();
+        }
+    }
+
+    _rebuildMenu() {
+        const cfg = this.slotConfig || {};
+        const selectedMap = this._selectedItems || new Map();
+        const allSelected = Array.from(selectedMap.values());
+        const allowedTypes = Array.isArray(cfg.bulkEntityTypes) && cfg.bulkEntityTypes.length > 0
+            ? cfg.bulkEntityTypes
+            : null;
+
+        const scopedSelected = allowedTypes
+            ? allSelected.filter(item => {
+                const types = String(item?.entityType || '').split(':');
+                return types.some(t => allowedTypes.includes(t));
+            })
+            : allSelected;
+
+        this._selectedCount = cfg.bulkActionGroup ? scopedSelected.length : 0;
+        const items = [];
+
+        if (cfg.bulkActionGroup && scopedSelected.length > 0) {
+            const bulkActions = window.ExtensionRegistry?.getAggregatableActions
+                ? window.ExtensionRegistry.getAggregatableActions(scopedSelected, { group: cfg.bulkActionGroup })
+                : [];
+            if (bulkActions.length > 0) {
+                bulkActions.forEach(act => items.push(act));
+                items.push({ divider: true });
+            }
+            items.push({
+                label: `Clear Selection (${scopedSelected.length})`,
+                icon: 'x',
+                onClick: () => SelectionStore.getState().clearSelection()
+            });
+            items.push({ divider: true });
+        }
+
+        const customMenu = typeof cfg.menuActions === 'function'
+            ? cfg.menuActions(cfg)
+            : (Array.isArray(cfg.menuActions) ? cfg.menuActions : []);
+
+        customMenu.forEach(entry => {
+            if (!entry) return;
+            if (entry.divider) {
+                items.push({ divider: true });
+                return;
+            }
+            items.push({
+                ...entry,
+                onClick: entry.onClick || (entry.emitEvent ? () => {
+                    const evtSpec = typeof entry.emitEvent === 'function' ? entry.emitEvent(cfg) : entry.emitEvent;
+                    if (typeof evtSpec === 'string') {
+                        window.dispatchEvent(new CustomEvent(evtSpec, { bubbles: true, composed: true }));
+                    } else if (evtSpec && evtSpec.name) {
+                        window.dispatchEvent(new CustomEvent(evtSpec.name, { detail: evtSpec.detail, bubbles: true, composed: true }));
+                    }
+                } : null)
+            });
+        });
+
+        while (items.length > 0 && items[items.length - 1].divider) {
+            items.pop();
+        }
+        this._menuItems = items;
+    }
+    render() {
+        if (!this._menuItems || this._menuItems.length === 0) return html``;
+        const count = this._selectedCount || 0;
+        return html`
+            <sutram-dropdown align="right" .items=${this._menuItems} style="height: 100%; display: flex; align-items: stretch;">
+                <button slot="trigger" class="subtab-menu-trigger" @pointerdown=${() => this._rebuildMenu()} title="${count > 0 ? `Bulk Actions (${count} selected)` : 'Actions'}">
+                    ${count > 0 ? html`
+                        <yv-icon name="layers" style="width: 15px; height: 15px; color: var(--intent-warning);"></yv-icon>
+                        <span class="subtab-badge">${count > 9 ? '9+' : count}</span>
+                    ` : html`
+                        <yv-icon name="menu" style="width: 14px; height: 14px;"></yv-icon>
+                    `}
+                </button>
+            </sutram-dropdown>
+        `;
+    }
+}
+if (!customElements.get('sutram-subtab-menu')) {
+    customElements.define('sutram-subtab-menu', SutramSubtabMenu);
+}

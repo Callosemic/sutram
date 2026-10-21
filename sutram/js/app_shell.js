@@ -1,6 +1,6 @@
 // sutram/js/app_shell.js (Compiled Vendor Artifact)
 import { html, css } from 'lit';
-import { SutramElement, ExtensionRegistry, LayoutStore } from './sutram_sdk.js';
+import { SutramElement, ExtensionRegistry, LayoutStore, StoreRegistry } from './sutram_sdk.js';
 import { sharedStyles } from './shared_styles.js';
 import { debounce } from './utils.js';
 import { SutramProjectionCompiler } from './projection_engine.js';
@@ -125,10 +125,10 @@ export class SutramAppShell extends SutramElement {
             background: transparent !important;
         }
         :host-context([data-theme="e-ink"]) .tab-btn.active {
-            background: #ffffff !important;
-            color: #000000 !important;
-            border: 2px solid #3b82f6 !important;
-            box-shadow: 3px -3px 0 #10b981 !important;
+            background: var(--bg, #ffffff) !important;
+            color: var(--text, #000000) !important;
+            border: 2px solid var(--intent-neutral, #3b82f6) !important;
+            box-shadow: 3px -3px 0 var(--intent-success, #10b981) !important;
         }
         /* Viewport Layout */
         .spatial-viewport {
@@ -219,7 +219,7 @@ export class SutramAppShell extends SutramElement {
         .pos-dot-target { padding: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .pos-dot { width: 6px; height: 6px; border-radius: 9999px; background: var(--text-muted); transition: all 0.2s ease; }
         .pos-dot.active { width: 14px; background: var(--intent-primary); box-shadow: none; }
-        :host-context([data-theme="e-ink"]) .pos-dot.active { background: #000; box-shadow: none; }
+        :host-context([data-theme="e-ink"]) .pos-dot.active { background: var(--text, #000000); box-shadow: none; }
         .spatial-col.is-focused {
             z-index: 10;
         }
@@ -537,6 +537,48 @@ export class SutramAppShell extends SutramElement {
             this.registerGlobalListener('sutram-evict-projection', window, () => {
                 this.requestUpdate();
             });
+            this.registerGlobalListener('sutram-extension-unloaded', window, (e) => {
+                const unloadedExt = e.detail?.extName;
+                if (unloadedExt && this._activeNodes) {
+                    for (const [key, node] of Array.from(this._activeNodes.entries())) {
+                        const nodeExt = node?.extName || node?.dataset?.ext || (node?.tagName ? node.tagName.toLowerCase().replace(/^[a-z0-9_-]+-ext-/, '') : '');
+                        if (nodeExt === unloadedExt || key.includes(`:${unloadedExt}:`)) {
+                            try { node.remove(); } catch (_) {}
+                            this._activeNodes.delete(key);
+                        }
+                    }
+                }
+                this.requestUpdate();
+            });
+            this.registerGlobalListener('sutram-rekey-projection', window, (e) => {
+                const { oldId, newId } = e.detail || {};
+                if (!oldId || !newId) return;
+                for (const [cacheKey, node] of Array.from(this._activeNodes.entries())) {
+                    const suffix = `:${oldId}`;
+                    if (cacheKey.endsWith(suffix)) {
+                        const tagPrefix = cacheKey.slice(0, cacheKey.length - suffix.length);
+                        this._activeNodes.delete(cacheKey);
+                        if (node.dataset) node.dataset.subId = newId;
+                        this._activeNodes.set(`${tagPrefix}:${newId}`, node);
+                    }
+                }
+                const decodedHash = decodeURIComponent(window.location.hash || '');
+                if (decodedHash.includes(oldId)) {
+                    const st = LayoutStore.getState();
+                    const focused = st.focusedColumn || 'center';
+                    if (this.variant === 'popout') {
+                        const updatedHash = window.location.hash
+                            .replace(encodeURIComponent(oldId), encodeURIComponent(newId))
+                            .replace(oldId, newId);
+                        if (updatedHash !== window.location.hash) {
+                            window.history.replaceState(null, '', updatedHash);
+                        }
+                    } else if (st.columns?.[focused]?.active === newId) {
+                        this._updateUrlHash(focused, newId);
+                    }
+                }
+                this.requestUpdate();
+            });
             this._handleResize = debounce(() => {
                 const width = window.innerWidth;
                 const maxCapacity = Math.min(3, Math.max(1, Math.floor(width / 360)));
@@ -582,64 +624,61 @@ export class SutramAppShell extends SutramElement {
         // Break synchronous infinite loops by debouncing the layout compilation listener
         this._debouncedCompile = debounce(() => this._compileLayout(), 50);
         this.registerGlobalListener('sutram-layout-recompile', window, this._debouncedCompile);
+        this.registerGlobalListener('sutram:scope-transition-start', window, () => {
+            if (this._debouncedCompile && typeof this._debouncedCompile.cancel === 'function') {
+                this._debouncedCompile.cancel();
+            }
+        });
 
         this._compileLayout();
         } catch(err) { console.error("[Telemetry] AppShell connectedCallback error:", err); }
     }
-    _getPrimaryTabColor(tab) {
-        if (tab && tab.intent) return `var(--intent-${tab.intent})`;
-        const id = typeof tab === 'string' ? tab : tab?.id;
-        const map = {
-            'context': 'var(--intent-primary)',
-            'edit': 'var(--intent-highlight)',
-            'diagnostics': 'var(--intent-warning)',
-            'tasks': 'var(--intent-warning)',
-            'ctrl': 'var(--intent-danger)',
-            'dev': 'var(--intent-success)',
-            'offline': 'var(--text-muted)',
-            'library': 'var(--intent-highlight)',
-            'cronic': 'var(--intent-warning)',
-            'skills': 'var(--intent-success)',
-            'practice': 'var(--intent-success)'
+    _resolvePrimaryTabMeta(tab) {
+        const id = (typeof tab === 'string' ? tab : tab?.id)?.toLowerCase() || '';
+        const registry = window.ExtensionRegistry || ExtensionRegistry;
+        const hooked = registry?.executeUIHook ? registry.executeUIHook('sutram:resolve-primary-tab-meta', { id, tab }) : null;
+        const defaultMap = {
+            'context': { color: 'var(--intent-primary)', icon: 'folder-code' },
+            'edit': { color: 'var(--intent-highlight)', icon: 'edit-3' },
+            'diagnostics': { color: 'var(--intent-warning)', icon: 'activity' },
+            'tasks': { color: 'var(--intent-warning)', icon: 'check-square' },
+            'ctrl': { color: 'var(--intent-danger)', icon: 'terminal' },
+            'dev': { color: 'var(--intent-success)', icon: 'code' },
+            'offline': { color: 'var(--text-muted)', icon: 'wifi-off' },
+            'library': { color: 'var(--intent-highlight)', icon: 'book-open' }
         };
-        return map[id?.toLowerCase()] || 'var(--intent-primary)';
+        return {
+            color: (tab && tab.intent) ? `var(--intent-${tab.intent})` : (hooked?.color || defaultMap[id]?.color || 'var(--intent-primary)'),
+            icon: (tab && tab.icon) ? tab.icon : (hooked?.icon || defaultMap[id]?.icon || 'folder')
+        };
+    }
+
+    _getPrimaryTabColor(tab) {
+        return this._resolvePrimaryTabMeta(tab).color;
     }
 
     _getPrimaryTabIcon(tab) {
-        if (tab && tab.icon) {
-            const color = this._getPrimaryTabColor(tab);
-            return html`<yv-icon name="${tab.icon}" stroke-width="2.5" style="width: 14px; height: 14px; margin-right: 8px; display: inline-block; vertical-align: text-bottom; color: ${color};"></yv-icon>`;
-        }
-        const id = typeof tab === 'string' ? tab : tab?.id;
-        const map = {
-            'context': 'folder-code',
-            'edit': 'edit-3',
-            'diagnostics': 'activity',
-            'tasks': 'check-square',
-            'ctrl': 'terminal',
-            'dev': 'code',
-            'offline': 'wifi-off',
-            'library': 'book-open',
-            'cronic': 'clock',
-            'skills': 'award',
-            'practice': 'target'
-        };
-        const icon = map[id?.toLowerCase()] || 'folder';
-        const color = this._getPrimaryTabColor(tab);
+        const { color, icon } = this._resolvePrimaryTabMeta(tab);
         return html`<yv-icon name="${icon}" stroke-width="2.5" style="width: 14px; height: 14px; margin-right: 8px; display: inline-block; vertical-align: text-bottom; color: ${color};"></yv-icon>`;
     }
     _compileLayout() {
         try {
             this._layoutConfig = SutramProjectionCompiler.getCompiledLayout();
-
             // Ghost Projection Cleanup & Legacy ID Migration
             const layoutStore = window.Sutram?.stores?.Layout;
-            if (layoutStore) {
+            const registry = window.ExtensionRegistry || ExtensionRegistry;
+            const storeRegistry = window.Sutram?.storeRegistry || StoreRegistry;
+            const isSwapping = Boolean(
+                (storeRegistry && typeof storeRegistry.isTransitioning === 'function' && storeRegistry.isTransitioning()) ||
+                (registry?.executeUIHook
+                    ? (registry.executeUIHook('sutram:is-swapping-scope') || registry.executeUIHook('sutram:is-swapping-workspace'))
+                    : false)
+            );
+            if (layoutStore && !registry.isBooting && !isSwapping) {
                 const state = layoutStore.getState();
                 let changed = false;
                 const migrationMap = {};
                 const newCols = { ...state.columns };
-                const registry = window.ExtensionRegistry || ExtensionRegistry;
                 const isExtActive = (extName) => typeof registry._filterPredicate === 'function' ? registry._filterPredicate(extName) : true;
                 const subSlots = this._layoutConfig.filter(s => s.slot === 'slots:sub-navigation');
 
@@ -686,8 +725,12 @@ export class SutramAppShell extends SutramElement {
                         }
                     }
                 });
-
-                let newWindows = (state.windows || []).map(w => {
+                const rawWindows = state.windows || [];
+                const activeWindows = rawWindows.filter(w => !w.extName || isExtActive(w.extName));
+                if (activeWindows.length !== rawWindows.length) {
+                    changed = true;
+                }
+                let newWindows = activeWindows.map(w => {
                     const slotDef = subSlots.find(s => s.id === w.id || (w.extName && s.extName === w.extName && s.rawId === w.id));
                     if (slotDef && w.id !== slotDef.id) {
                         migrationMap[w.id] = slotDef.id;
@@ -711,22 +754,12 @@ export class SutramAppShell extends SutramElement {
                         windows: newWindows,
                         focusHistory: newFocusHistory
                     });
-
-                    if (window.inSetu?.stores?.App) {
-                        const appStore = window.inSetu.stores.App;
-                        const tPaths = appStore.getState().tabBrowsePaths || {};
-                        let tChanged = false;
-                        const updatedPaths = { ...tPaths };
-                        for (const [oldKey, newKey] of Object.entries(migrationMap)) {
-                            if (updatedPaths[oldKey]) {
-                                updatedPaths[newKey] = updatedPaths[oldKey];
-                                delete updatedPaths[oldKey];
-                                tChanged = true;
-                            }
-                        }
-                        if (tChanged) {
-                            appStore.setState({ tabBrowsePaths: updatedPaths });
-                        }
+                    if (Object.keys(migrationMap).length > 0) {
+                        window.dispatchEvent(new CustomEvent('sutram-projections-migrated', {
+                            detail: { migrationMap },
+                            bubbles: true,
+                            composed: true
+                        }));
                     }
                 }
             }
@@ -1221,11 +1254,14 @@ export class SutramAppShell extends SutramElement {
                                     rawId: slotDef?.rawId || pin.rawId || pin.id,
                                     label: slotDef?.label || pin.label || pin.title || pin.id,
                                     component: slotDef?.component || pin.component,
-                                    extName: slotDef?.extName || pin.extName || 'fs',
+                                    extName: slotDef?.extName || pin.extName || null,
                                     targetParent: slotDef?.targetParent || pin.targetParent || sourceColId,
                                     preferredColumn: slotDef?.preferredColumn || pin.preferredColumn || sourceColId,
                                     icon: slotDef?.icon || pin.icon,
                                     intent: slotDef?.intent || pin.intent,
+                                    bulkActionGroup: slotDef?.bulkActionGroup || pin.bulkActionGroup || null,
+                                    bulkEntityTypes: slotDef?.bulkEntityTypes || pin.bulkEntityTypes || null,
+                                    menuActions: slotDef?.menuActions || pin.menuActions || null,
                                     actualSourceCol: sourceColId
                                 });
                             });
@@ -1316,6 +1352,9 @@ export class SutramAppShell extends SutramElement {
                                         s.slot === 'slots:sub-navigation-actions' && 
                                         (s.targetSub === activeSubInCol.id || (s.extName === activeSubInCol.extName && (s.targetSub === activeSubInCol.rawId || s.targetSub === `${activeSubInCol.extName}:${activeSubInCol.rawId}`)))
                                     ).map(act => html`<div style="display: contents;" data-ext="${act.extName}">${getDynamicNode(act.component, activeSubInCol.id)}</div>`) : ''}
+                                    ${activeSubInCol && (activeSubInCol.bulkActionGroup || activeSubInCol.menuActions) ? html`
+                                        <sutram-subtab-menu .slotConfig=${activeSubInCol}></sutram-subtab-menu>
+                                    ` : ''}
                                 </div>
                             </div>
                             <!-- Pinned Tab Rendering Pool -->
