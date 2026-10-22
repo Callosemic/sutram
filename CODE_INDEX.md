@@ -36,7 +36,11 @@ sutram/
 │   │   ├── 0017_yenvui_top_layer_popover_anchoring_and_spatial_geometry_tokens.md # ADR-0017: Top-layer popover anchoring engine and standardized spatial geometry tokens
 │   │   ├── 0018_spatial_drag_hud_css_mask_icons_and_offline_write_through.md # ADR-0018: Spatial drag HUD coordinator, CSS mask-image icon primitive, and offline cache write-through
 │   │   ├── 0019_codemirror_tag_completion_defense_ligature_suppression_and_innerhtml_ban.md # ADR-0019: CodeMirror tag completion defense, ligature suppression, and innerHTML ban
-│   │   └── 0020_multi_window_popout_lifecycle_broadcast_channel_and_declarative_job_runner.md # ADR-0020: Multi-window popout lifecycle, BroadcastChannel IPC synchronization, and declarative job runner
+│   │   ├── 0020_multi_window_popout_lifecycle_broadcast_channel_and_declarative_job_runner.md # ADR-0020: Multi-window popout lifecycle, BroadcastChannel IPC synchronization, and declarative job runner
+│   │   ├── 0021_declarative_settings_form_engine_configuration_hooks_and_native_esm_caching.md # ADR-0021: Declarative settings form engine, configuration hooks, and native ESM caching
+│   │   ├── 0022_codemirror_viewport_preservation_prose_engine_and_virtualizer_sizing.md # [comment required]
+│   │   ├── 0022_store_registry_multi_tenancy_three_way_merge_and_projection_rekeying.md # ADR-0022: StoreRegistry multi-tenancy scoping, three-way text merge, and projection rekeying
+│   │   └── 0023_codemirror_viewport_preservation_prose_engine_and_virtualizer_sizing.md # ADR-0023: CodeMirror viewport preservation, prose typography engine, and virtualizer intrinsic sizing
 │   └── yenvui_contracts.md         # Interface contract specification and CSS intent tokens for yenVUI presentation chassis
 ├── pyproject.toml                  # Python project metadata and semantic release configuration
 ├── readme.md                       # Master repository architecture map and component reference
@@ -60,42 +64,49 @@ sutram/
 │       └── workers/                # Dedicated off-main-thread Web Worker scripts
 │           └── search-worker.js    # Web Worker for asynchronous fuzzy filtering and directory tree construction
 ├── tests/                          # Automated presentation chassis compliance tests and fitness functions
-│   └── sutram_consumer_linter.py   # Reusable static analysis script for consumer UDF compliance
+│   ├── fitness/                    # Modular static analysis rules for Sutram and yenVUI architectural invariants
+│   │   ├── __init__.py             # Unit test package initializer
+│   │   ├── core.py                 # Shared file walker and violation reporting state
+│   │   ├── rules_sutram.py         # Sutram micro-kernel domain isolation, metronome, and store schema rules
+│   │   └── rules_yenvui.py         # yenVUI presentation token, dialog lifecycle, and container query rules
+│   ├── fitness_functions.py        # CLI entrypoint for Sutram and yenVUI architectural fitness validation
+│   ├── run_unit_tests.py           # CLI test runner for platform behavioral unit tests
+│   ├── sutram_consumer_linter.py   # Reusable static analysis script for consumer UDF compliance
+│   └── unit/                       # Behavioral unit and integration tests for the Sutram runtime
+│       ├── __init__.py             # Unit test package initializer
+│       └── test_sutram_registry.py # Node.js and Python behavioral tests for StoreRegistry, ExtensionRegistry, and utilities
 └── yenvui/                         # Edge-Native presentation chassis and Web Component UI library
     ├── css/                        # Universal CSS theme tokens and layout resets
     │   ├── theme-tokens.css        # CSS custom property tokens for Dark, Light, and E-Ink brutalist themes
     │   └── yenvui-primitives.css   # Atomic presentation resets and utility classes
-    ├── js/                         # Pure ES module frontend runtime kernel and utilities
-    │   ├── async-btn.js            # Agnostic asynchronous action button with status feedback state machine
-    │   ├── board.js                # Multi-column container-query responsive layout grid and column container
-    │   ├── card-group.js           # Gesture-locked card container with edge-selection swipe detection, stacked layout rendering, and accordion deck physics
-    │   ├── card.js                 # Polymorphic card primitive with drawer overlay and long-press selection
-    │   ├── category-section.js     # Categorized list section wrapper with header action slot
-    │   ├── collapsible.js          # Expandable accordion container with semantic intent styling
-    │   ├── diff-utils.js           # Line-by-line diff calculation algorithms and patch formatting utilities
-    │   ├── diff-viewer.js          # Dual-box and interleaved split-pane diff presentation component
-    │   ├── drop-zone.js            # Top-layer popover drop overlay and drop target presentation primitives
-    │   ├── dropdown.js             # Context popover trigger menus and filter dropdown panels
-    │   ├── editor.js               # CodeMirror 6 code editor wrapper with dynamic ESM language loading
-    │   ├── empty-state.js          # Centered empty state feedback container with icon and text slot
-    │   ├── filter-group.js         # Interactive pill array for multi-attribute filtering
-    │   ├── label.js                # Standardized form label primitive with theme observation support
-    │   ├── modal.js                # Native HTML5 top-layer dialog modal overlay with backdrop handling
-    │   ├── physics.js              # Universal gesture physics controller and Shadow DOM point resolution
-    │   ├── pill.js                 # Toggleable tag/badge primitive supporting standard and text variants
-    │   ├── scroll-view.js          # Container-query responsive scrollable view container with adaptive edge padding
-    │   ├── search-bar.js           # Standardized text search input with instant clear action
-    │   ├── selection-tray.js       # Floating action tray for batch selection operations
-    │   ├── shared_styles.js        # Lit CSS intent tokens, presentation primitives, and theme styles
-    │   ├── spinner.js              # Asynchronous CSS loading indicator component with custom text label
-    │   ├── status-bar.js           # System status and background synchronization indicator bar
-    │   ├── tabs.js                 # Horizontal swipe carousel tab navigation and cached view router
-    │   ├── tag.js                  # Semantic intent tag primitive with high-contrast theme overrides
-    │   ├── toast.js                # Non-blocking toast notification alert container
-    │   ├── toolbar.js              # Sticky header toolbar integrating search, filters, and action slots
-    │   ├── window.js               # Grid-constrained floating workspace dialog surface with column anchor and span layout control
-    │   └── yenvui-base.js          # Base presentation class encapsulating theme mutation observation and lifecycle hooks
-    └── tests/                      # Automated presentation chassis compliance tests and fitness functions
-        ├── .gitkeep                # Folder preservation tracking marker
-        └── fitness_functions.py    # Static analysis and linting fitness functions enforcing yenVUI standards
+    └── js/                         # Pure ES module frontend runtime kernel and utilities
+        ├── async-btn.js            # Agnostic asynchronous action button with status feedback state machine
+        ├── board.js                # Multi-column container-query responsive layout grid and column container
+        ├── card-group.js           # Gesture-locked card container with edge-selection swipe detection, stacked layout rendering, and accordion deck physics
+        ├── card.js                 # Polymorphic card primitive with drawer overlay and long-press selection
+        ├── category-section.js     # Categorized list section wrapper with header action slot
+        ├── collapsible.js          # Expandable accordion container with semantic intent styling
+        ├── diff-utils.js           # Line-by-line diff calculation algorithms and patch formatting utilities
+        ├── diff-viewer.js          # Dual-box and interleaved split-pane diff presentation component
+        ├── drop-zone.js            # Top-layer popover drop overlay and drop target presentation primitives
+        ├── dropdown.js             # Context popover trigger menus and filter dropdown panels
+        ├── editor.js               # CodeMirror 6 code editor wrapper with dynamic ESM language loading
+        ├── empty-state.js          # Centered empty state feedback container with icon and text slot
+        ├── filter-group.js         # Interactive pill array for multi-attribute filtering
+        ├── label.js                # Standardized form label primitive with theme observation support
+        ├── modal.js                # Native HTML5 top-layer dialog modal overlay with backdrop handling
+        ├── physics.js              # Universal gesture physics controller and Shadow DOM point resolution
+        ├── pill.js                 # Toggleable tag/badge primitive supporting standard and text variants
+        ├── scroll-view.js          # Container-query responsive scrollable view container with adaptive edge padding
+        ├── search-bar.js           # Standardized text search input with instant clear action
+        ├── selection-tray.js       # Floating action tray for batch selection operations
+        ├── shared_styles.js        # Lit CSS intent tokens, presentation primitives, and theme styles
+        ├── spinner.js              # Asynchronous CSS loading indicator component with custom text label
+        ├── status-bar.js           # System status and background synchronization indicator bar
+        ├── tabs.js                 # Horizontal swipe carousel tab navigation and cached view router
+        ├── tag.js                  # Semantic intent tag primitive with high-contrast theme overrides
+        ├── toast.js                # Non-blocking toast notification alert container
+        ├── toolbar.js              # Sticky header toolbar integrating search, filters, and action slots
+        ├── window.js               # Grid-constrained floating workspace dialog surface with column anchor and span layout control
+        └── yenvui-base.js          # Base presentation class encapsulating theme mutation observation and lifecycle hooks
 ```

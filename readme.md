@@ -72,6 +72,8 @@ State-aware wrappers, IoC brokers, and form controls delivered via `sutram`:
 | **`<sutram-card-group>`** | IoC card group wrapper | Wraps `<yenvui-card-group>` for extension slot projection. |
 | **`<sutram-modal>`** | IoC modal dialog wrapper | Binds `<yenvui-modal>` closing events to `SutramElement` dispatch. |
 | **`<sutram-async-btn>`** | Async button wrapper | Accepts `onClick` async handlers and manages feedback state machine execution. |
+| **`<sutram-field-card>`** | Standardized setting field card | Renders title, scope/security badges, header actions slot, and description caption. |
+| **`<sutram-subtab-menu>`** | Declarative sub-tab action & bulk menu | Aggregates scoped bulk selection actions and dynamic `menuActions` in column headers. |
 | **`<sutram-generic-settings>`** | Dynamic extension settings modal | Generates form controls automatically from extension schema definitions. |
 | **`<sutram-selector-modal>`** | Fuzzy-searchable item picker modal | Fuzzy-filters object arrays for prompt/template pickers. |
 | **`<sutram-folder-browser>`** | Workspace directory tree browser | Interactive path navigation breadcrumbs. |
