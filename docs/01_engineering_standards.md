@@ -16,9 +16,19 @@ The boundary between Sutram and yenVUI is a strict separation of State/Topology 
 All components across `yenVUI` and `Sutram` are strictly forbidden from assigning `.innerHTML`. All dynamic content rendering MUST utilize declarative Lit templates (`html````), native text nodes, or CSS mask-image primitives (`<yv-icon>`).
 ### Monospaced Ligature Suppression Standard
 All monospaced text rendering surfaces (code editors, diff viewers, `<pre>`, `<code>`) MUST explicitly suppress contextual font ligatures using `font-variant-ligatures: none` and `font-feature-settings: "liga" 0, "calt" 0` to preserve 1:1 physical character-to-glyph column positioning.
-
 ### Substrate Input Control Standardization
 Presentation components, workspace overlays, and modals MUST NOT render raw, un-encapsulated HTML form controls (`<input>`, `<textarea>`, `<select>`). All user input and parameter entry MUST utilize standardized substrate primitives (`<sutram-input>`, `<sutram-textarea>`, `<sutram-select>`, `<sutram-toggle>`) binding to `@sutram-input-changed` events. This guarantees uniform design token inheritance, focus trapping, and theme-neutral high-contrast compliance.
+### Clean Dynamic ESM Specifier Standard
+Dynamic module batch loaders (`ExtensionRegistry.loadBatches`) MUST NOT append query parameters (such as `?v=timestamp`) to import URLs. All dynamic module imports must preserve bare specifiers or clean path URLs to ensure deterministic compatibility with browser-native import maps (`<script type="importmap">`) and native module graph deduplication.
+
+### Virtual List Double-Virtualization De-Escalation Standard
+Components utilizing CSS `content-visibility: auto` must parameterize intrinsic sizing via CSS custom properties (e.g., `--card-contain-intrinsic-size`) and MUST explicitly de-escalate to `content-visibility: visible; contain-intrinsic-size: none` within virtualized containers (`:host-context(lit-virtualizer)`, `:host-context(sutram-virtual-list)`). This prevents height oscillation, scrolling micro-stutter, and WebKit paint clipping caused by competing virtualization engines.
+
+### Minimal Buffer Reconciliation & Viewport Preservation
+Text editing primitives encapsulating CodeMirror or native text areas MUST NOT execute full document replacements (`from: 0, to: length`) during external reactive updates. Components MUST compute minimal character-level prefix and suffix boundaries (`_applyMinimalDiff`), updating only the delta slice and mapping cursor anchor and scroll offsets to guarantee uninterrupted user focus.
+
+### Isolated Child Toggle Event Containment
+Collapsible sections, accordions, and disclosure widgets rendered inside composite cards or list items MUST dispatch toggle notifications with `bubbles: false` and `composed: false`. Emitting bubbling toggle events from nested disclosures leads to accidental event interception and state desynchronization in parent container controllers.
 
 ---
 
@@ -71,9 +81,30 @@ Cross-window state coordination across detached popout surfaces and the host app
 * **Presence Ping/Pong & Self-Healing Docking:** Child windows re-docking into the workbench (`dockInProjection`) must issue a `presence_ping` and await a `presence_pong` (120ms timeout). If the host window is active, the projection emits `dock_projection` and closes the child window. If the host has closed, the child window MUST self-heal by upgrading itself into the full workbench shell (`window.location.href = ...`).
 * **Pagehide Disposal Tracking:** External popout windows MUST dispatch `popout_closed` upon `pagehide` to clean up active window handles and focus timestamps in the host `LayoutStore`.
 * **Microtask Eviction Deferred Broadcast:** Eviction dispatches (`sutram-evict-projection`) must be scheduled via `queueMicrotask` to ensure synchronous callers finish inspecting buffer and uncommitted form state prior to store teardown.
-
 ### Declarative Background Job Execution
 Long-running asynchronous actions attached to action buttons (`<sutram-async-btn>`) MUST NOT implement ad-hoc promise loops. Buttons declaring a `jobRoute` attribute must route execution through `ExtensionRegistry.executeJobAction`, delegating `onProgress`, `onComplete`, and `onError` callbacks to manage button state machine transitions (`idle` → `loading` → `success` / `error`) automatically.
+### Transactional Scope Transition Lock & Layout Compilation Suppression
+When switching tenant or workspace contexts, state hydration and layout compilation must execute atomically:
+* **The Transition Lock:** Scope swaps MUST initiate via `StoreRegistry.beginScopeTransition(targetScopeId)` and conclude via `StoreRegistry.endScopeTransition()`.
+* **Recompilation Suppression:** While `StoreRegistry.isTransitioning()` is true, calls to `ExtensionRegistry.compileLayout()` and dispatches of `sutram-layout-recompile` MUST be suppressed or canceled, preventing intermediate render cycles against partially hydrated stores. A single compilation pass is automatically dispatched upon `endScopeTransition()`.
+* **Scope-Stamped Evictions:** Eviction broadcasts (`sutram-evict-projection`) must carry the originating `scopeId` in `event.detail` to ensure tenant-scoped stores ignore evictions emitted by alternate scopes.
+
+### Epoch-Guarded Asynchronous Store Fetching
+All asynchronous network fetch methods declared within `createSutramStore` (conventionally prefixed with `fetch*`):
+* **Epoch Tracking:** Methods MUST automatically be wrapped with `_scopeEpoch` validation. If the workspace scope switches or `store.resetMemoryOnly()` executes while a request is in flight, the returned payload must be silently discarded to prevent stale state poisoning.
+* **Request Coalescing:** Identical concurrent async requests must be coalesced via `coalescedAsync` to eliminate redundant network traffic.
+
+### Non-Destructive Projection Rekeying Protocol
+When a file, document, or projection identity changes:
+* **Identity Re-Mapping:** The layout kernel MUST update projection identifiers across pinned columns, history backstacks, and active popout windows via `LayoutStore.rekeyProjection(oldId, newId, newLabel)`.
+* **DOM Retention:** Shells and presentation containers MUST NOT unmount or recreate DOM nodes during a rekey. Components must update internal cache keys (`sutram-rekey-projection`) and retain active editor buffers, scroll positions, and DOM instances.
+* **Cross-Window IPC:** Rekey events must broadcast across `_layoutBus` (`BroadcastChannel`) to synchronize popout and host window instances simultaneously.
+
+### Causal Monotonicity & The Procedural Timer Ban
+State synchronization across stores, projections, and network gateways MUST be strictly event-, revision-, and hash-driven rather than time-bound:
+* **The Determinism Law:** Timers (`setTimeout`, `utils.debounce`) are permitted strictly for rate-limiting (slew limiting), network transport timeouts, and visual toast/status decay. Using timers or `Date.now()` timestamp deltas to order state transitions, await DOM/store hydration, or suppress mutation echoes is strictly prohibited.
+* **Pre-Broadcast Mutation Settlement:** Network mutation gateways (`executeWorkspaceMutation`) MUST await the caller's `onSuccess` state update callback *before* broadcasting global mutation events, ensuring local stores reflect confirmed revisions and baseline hashes before reactive listeners evaluate the event.
+* **Monotonic Revision & Ancestor Guards:** Asynchronous read-reconciliation tasks must snapshot the local buffer/store revision (`docRevision`) and `baseHash` prior to network dispatch, aborting if local state advances while the request is in flight or if the fetched payload matches a known historical ancestor hash (`ancestorHashes`).
 
 ---
 
@@ -81,9 +112,8 @@ Long-running asynchronous actions attached to action buttons (`<sutram-async-btn
 
 ### The ExtensionRegistry Icon Contract
 All core modules and extension components MUST use standard Lucide string identifiers (e.g., `icon: 'trash-2'`) rather than raw emoji strings across all registry schemas (`layoutSlots`, `entityActions`, `settingsActions`, `batchActions`)[cite: 10].
-
-### Shadow DOM Icon Hydration
-Web Components rendering Lucide icons MUST execute `window.lucide.createIcons({ root: this.shadowRoot })` within their `updated(changedProperties)` lifecycle hook to ensure SVGs hydrate cleanly inside isolated Shadow DOM roots[cite: 5, 6, 10].
+### CSS Mask Icon Rendering Standard
+Web Components rendering icons MUST utilize the native `<yv-icon>` micro-primitive or CSS mask-image styles (`mask-image`, `-webkit-mask-image`) rather than imperative DOM scanning (`window.lucide.createIcons`) or `.innerHTML` parsing. This ensures zero-cost paint updates, immune to DOM traversal churn.
 
 ### Graphic Dictionary
 When building new features or declaring actions, semantic concepts MUST map directly to these canonical Lucide tokens[cite: 10]:

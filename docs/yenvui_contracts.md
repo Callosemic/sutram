@@ -25,8 +25,18 @@ A compliant chassis must consume and respect the following CSS custom properties
 
 Any replacement library must export the following Custom Elements.
 ### Core Layout & Overlays
+*   **`<sutram-virtual-list>`**: High-performance virtualized list with double-virtualization protection.
+    *   *Properties:* `.items` (Array), `.renderItem` (Function), `.keyFunction` (Function: `(item, idx) => string`).
+*   **`<sutram-projection-window-controls>`**: Multi-window popout and dock-in control button.
+    *   *Properties:* `.filepath` (String), `.projectionId` (String), `.beforeAction` (Async Function).
+*   **`<sutram-field-card>`**: Modular settings field card container with scope badges.
+    *   *Properties:* `.label` (String), `.description` (String), `.scope` (`'workspace'`|`'repo'`|`'daemon'`|`'none'`), `?secure` (Boolean).
+    *   *Slots:* `header-actions`, default.
+*   **`<sutram-subtab-menu>`**: Spatial column sub-tab header action and bulk selection menu.
+    *   *Properties:* `.slotConfig` (Object with `bulkActionGroup`, `bulkEntityTypes`, `menuActions`, `menuStores`).
 *   **`<yenvui-modal>`**: Native `#top-layer` dialog.
-    *   *Properties:* `?open`, `.titleText`, `?fullscreen`, `?flush`, `.maxWidth`.
+    *   *Properties:* `?open`, `.titleText`, `?fullscreen`, `?flush`, `?transparent`, `.maxWidth`.
+    *   *Methods:* `bringToFront()`.
     *   *Events:* `@yenvui-modal-closed`, `@yenvui-modal-closing`.
     *   *Slots:* `body`, `footer`, default.
 *   **`<yenvui-window>`**: Native `<dialog>` grid-constrained spatial window.
@@ -34,9 +44,17 @@ Any replacement library must export the following Custom Elements.
     *   *Events:* `@yenvui-window-close`, `@yenvui-window-dock`, `@yenvui-window-focus`, `@yenvui-window-drag-start`.
     *   *Slots:* default.
 *   **`<yenvui-card>`**: Polymorphic catalog container.
-    *   *Properties:* `.titleText`, `.descriptionText`, `.detailText`, `.detailPrefix`, `.detailSuffix`, `.icon`, `.intentColor`, `?selected`, `?disableSelection`, `?compact`, `?flush`, `?has-actions`.
+    *   *Properties:* `.titleText`, `.descriptionText`, `.detailText`, `.detailPrefix`, `.detailSuffix`, `.statusText`, `.icon`, `.intent`, `.intentColor`, `?selected`, `?disableSelection`, `?compact`, `?flush`, `?stale`, `?has-actions`.
     *   *Events:* `@yenvui-card-select-toggled`, `@yenvui-card-clicked`.
-    *   *Slots:* `header-tags`, `detail`, `inline-actions`, `actions`, default.
+    *   *Slots:* `header-actions`, `detail`, `inline-actions`, `actions`, default.
+*   **`<yenvui-collapsible>`**: Collapsible content section with semantic header styling.
+    *   *Properties:* `.titleText`, `?open`, `.intent` (`primary`|`success`|`highlight`|`warning`|`danger`|`neutral`), `?flush`.
+    *   *Events:* `@yenvui-collapsible-toggled` (isolated, non-bubbling).
+    *   *Slots:* `actions`, default.
+*   **`<yenvui-drop-overlay>` & `<yenvui-drop-target>`**: Top-layer drag-and-drop backdrop and target zones.
+    *   *Overlay Properties:* `?active`.
+    *   *Target Properties:* `?hovered`, `.intent` (`primary`|`danger`), `.zone`.
+    *   *Slots:* default.
 *   **`<yenvui-card-group>`**: Wraps cards with accordion and horizontal swipe physics.
     *   *Properties:* `?enableEdgeSelection`, `?stacked`, `?accordion`.
 *   **`<yenvui-tabs>`**: Carousel tab navigation.
@@ -50,8 +68,8 @@ Any replacement library must export the following Custom Elements.
     *   *Events:* `@yv-click`.
 *   **`<yenvui-editor>`**: CodeMirror 6 text editor.
     *   *Properties:* `.value`, `?readOnly`, `.language`, `?writingMode`, `.customExtensions`.
-    *   *Methods:* `insertAtCursor(text)`.
-    *   *Events:* `@yenvui-editor-changed`.
+    *   *Methods:* `insertAtCursor(text)`, `getCursor()`, `setCursor(pos)`, `getScrollInfo()`, `setScrollInfo(top)`, `transformContent(transformFn)`.
+    *   *Events:* `@yenvui-editor-changed`, `@yenvui-editor-selection`, `@yenvui-editor-scroll`.
 
 ### Utilities & Feedback
 *   **`<yenvui-toast-container>`**: Fixed notification stack.
