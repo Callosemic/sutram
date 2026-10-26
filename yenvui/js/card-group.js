@@ -16,7 +16,8 @@ export class YenvuiCardGroup extends LitElement {
             flex-direction: column;
             width: 100%;
             position: relative;
-            touch-action: pan-x pan-y;
+            touch-action: pan-y;
+            overscroll-behavior-x: none;
         }
         :host([stacked]) {
             gap: 0;

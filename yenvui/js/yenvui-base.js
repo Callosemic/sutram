@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'lit';
-import { YenvuiGestureController, getEventPath } from './physics.js';
+import { YenvuiGestureController, getEventPath, startKineticThrow } from './physics.js';
 export class YenvuiBase extends LitElement {
     connectedCallback() {
         super.connectedCallback();
@@ -30,7 +30,8 @@ export class YenvuiScrubTrack extends YenvuiBase {
             display: block; 
             width: 100%; 
             overflow: hidden; 
-            touch-action: pan-x pan-y;
+            touch-action: pan-y;
+            overscroll-behavior-x: none;
         }
         .scrub-container {
             display: flex;
@@ -40,7 +41,7 @@ export class YenvuiScrubTrack extends YenvuiBase {
             overflow-x: auto;
             overflow-y: hidden;
             overscroll-behavior-x: none;
-            touch-action: pan-x pan-y;
+            touch-action: pan-y;
             scrollbar-width: none;
             white-space: nowrap;
             cursor: grab;
@@ -53,19 +54,28 @@ export class YenvuiScrubTrack extends YenvuiBase {
         super();
         this._isSwiping = false;
         this._rafId = null;
+        this._cancelMomentum = null;
+        this._velocitySamples = [];
         this._containerNode = null;
         this._gestureController = new YenvuiGestureController(this, {
-            onPanStart: () => {
+            onPanStart: (x, y) => {
+                if (this._cancelMomentum) {
+                    this._cancelMomentum();
+                    this._cancelMomentum = null;
+                }
                 const container = this._getContainer();
                 if (!container) return;
                 this._startScroll = container.scrollLeft;
                 this._isSwiping = false;
+                this._velocitySamples = [{ x, y, t: performance.now() }];
                 if (this._rafId) cancelAnimationFrame(this._rafId);
             },
             onPanMove: (x, y, axis) => {
                 if (axis === 'horizontal') {
                     const deltaX = x - this._gestureController.startX;
                     if (Math.abs(deltaX) > 5) this._isSwiping = true;
+                    this._velocitySamples.push({ x, y, t: performance.now() });
+                    if (this._velocitySamples.length > 6) this._velocitySamples.shift();
 
                     // RAF debounce to align layout writes with browser paint cycles
                     if (this._rafId) cancelAnimationFrame(this._rafId);
@@ -77,8 +87,15 @@ export class YenvuiScrubTrack extends YenvuiBase {
                     });
                 }
             },
-            onPanEnd: () => {
+            onPanEnd: (x, y, axis) => {
                 if (this._rafId) cancelAnimationFrame(this._rafId);
+                if (axis === 'horizontal') {
+                    const container = this._getContainer();
+                    if (container && this._velocitySamples.length >= 2) {
+                        this._cancelMomentum = startKineticThrow(container, this._velocitySamples, { axis: 'x' });
+                    }
+                }
+                this._velocitySamples = [];
             }
         });
     }
@@ -89,10 +106,13 @@ export class YenvuiScrubTrack extends YenvuiBase {
         }
         return this._containerNode;
     }
-
     disconnectedCallback() {
         super.disconnectedCallback();
         if (this._rafId) cancelAnimationFrame(this._rafId);
+        if (this._cancelMomentum) {
+            this._cancelMomentum();
+            this._cancelMomentum = null;
+        }
         // Force teardown to cleanly unbind global window listeners if unmounted mid-drag
         if (this._gestureController && this._gestureController.active) {
             this._gestureController._handlePointerUp(new Event('pointerup'));

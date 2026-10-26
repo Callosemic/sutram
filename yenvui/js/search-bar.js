@@ -48,20 +48,6 @@ export class YenvuiSearchBar extends YenvuiBase {
             cursor: pointer;
             margin-left: 8px;
         }
-        /* High Contrast Themes */
-        :host([data-theme="light"]) .fuzzy-search-wrapper {
-            background: transparent;
-            border: none;
-        }
-        :host([data-theme="e-ink"]) .fuzzy-search-wrapper {
-            border: none !important;
-            border-radius: 0 !important;
-            background: transparent !important;
-        }
-        :host([data-theme="e-ink"]) input {
-            border: none !important;
-            box-shadow: none !important;
-        }
     `;
     constructor() { 
         super(); 

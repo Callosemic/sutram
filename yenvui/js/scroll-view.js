@@ -12,6 +12,9 @@ export class YenvuiScrollView extends YenvuiBase {
             flex: 1;
             min-height: 0;
             overflow-y: auto;
+            overflow-x: hidden;
+            overscroll-behavior-x: none;
+            touch-action: pan-y;
             box-sizing: border-box;
             padding: var(--scroll-padding, 0 12px);
             --mobile-edge-padding: 0px;

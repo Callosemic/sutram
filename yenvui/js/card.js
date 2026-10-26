@@ -26,7 +26,8 @@ export class YenvuiCard extends YenvuiBase {
             display: block;
             margin-bottom: var(--card-margin-bottom, 12px);
             position: relative;
-            touch-action: pan-x pan-y;
+            touch-action: pan-y;
+            overscroll-behavior-x: none;
             content-visibility: var(--card-content-visibility, auto);
             contain-intrinsic-size: var(--card-contain-intrinsic-size, auto 76px);
             -webkit-text-size-adjust: 100%;
@@ -42,7 +43,8 @@ export class YenvuiCard extends YenvuiBase {
             contain-intrinsic-size: none;
         }
         .card-wrapper {
-            touch-action: pan-x pan-y;
+            touch-action: pan-y;
+            overscroll-behavior-x: none;
             background: var(--bg-card, var(--input-bg));
             border: 1px solid var(--border);
             border-top: var(--card-border-top, 1px solid var(--border));

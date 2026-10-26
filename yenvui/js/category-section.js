@@ -22,10 +22,6 @@ export class YenvuiCategorySection extends YenvuiBase {
             justify-content: space-between;
             align-items: center;
         }
-        :host([data-theme="e-ink"]) .category-heading {
-            color: #000000;
-            border-bottom: 2px solid #000000;
-        }
     `;
     render() {
         return html`

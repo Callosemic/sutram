@@ -28,6 +28,7 @@ export class YenvuiTabs extends YenvuiBase {
             background: var(--bg-deep);
             border-bottom: 1px solid var(--border);
             flex-shrink: 0;
+            overscroll-behavior-x: none;
             touch-action: pan-x pan-y;
         }
         .tabs-container::-webkit-scrollbar {

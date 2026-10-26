@@ -4,6 +4,10 @@ export const sharedStyles = css`
     :host, * {
         -webkit-text-size-adjust: 100%;
         text-size-adjust: 100%;
+        overscroll-behavior-x: none;
+    }
+    :host {
+        touch-action: pan-y;
     }
     /* --- CUSTOM ELEMENT HOST STRUCTURAL REPAIRS --- */
     yenvui-btn, sutram-btn, yenvui-async-btn, sutram-async-btn {
