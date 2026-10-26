@@ -14,9 +14,10 @@ class TestSutramRegistry(unittest.TestCase):
         node_bin = shutil.which("node")
         if not node_bin:
             self.skipTest("Node.js binary not available in PATH.")
-
         sutram_sdk_path = SUTRAM_JS_DIR / "sutram_sdk.js"
         sutram_utils_path = SUTRAM_JS_DIR / "utils.js"
+        projection_engine_path = SUTRAM_JS_DIR / "projection_engine.js"
+        sutram_offline_path = SUTRAM_JS_DIR / "offline.js"
 
         if not sutram_sdk_path.exists():
             self.skipTest("sutram_sdk.js not found in repository.")
@@ -79,7 +80,6 @@ export const subscribeWithSelector = (fn) => (set, get, api) => {
     return fn(set, get, api);
 };
 """, encoding="utf-8")
-
             shutil.copy2(sutram_utils_path, tmp_path / "utils.mjs")
             sdk_src = sutram_sdk_path.read_text(encoding="utf-8")
             sdk_src = sdk_src.replace("from 'lit'", "from './lit_stub.mjs'")
@@ -88,8 +88,12 @@ export const subscribeWithSelector = (fn) => (set, get, api) => {
             sdk_src = sdk_src.replace("from '../../yenvui/js/physics.js'", "from './physics_stub.mjs'")
             sdk_src = sdk_src.replace("from './utils.js'", "from './utils.mjs'")
             (tmp_path / "sutram_sdk.mjs").write_text(sdk_src, encoding="utf-8")
+            proj_src = projection_engine_path.read_text(encoding="utf-8")
+            proj_src = proj_src.replace("from './sutram_sdk.js'", "from './sutram_sdk.mjs'")
+            (tmp_path / "projection_engine.mjs").write_text(proj_src, encoding="utf-8")
 
-            test_script = """
+            shutil.copy2(sutram_offline_path, tmp_path / "offline.mjs")
+            test_script = r"""
 import assert from 'node:assert/strict';
 
 class StorageMock {
@@ -128,13 +132,27 @@ globalThis.window = {
     Event: Event,
     Sutram: { stores: {} }
 };
-globalThis.document = { hidden: false, addEventListener: () => {} };
+globalThis.document = {
+    hidden: false,
+    addEventListener: () => {},
+    createElement: (tag) => ({
+        tagName: String(tag).toUpperCase(),
+        dataset: {},
+        style: {},
+        removed: false,
+        remove() { this.removed = true; },
+        setAttribute(k, v) { this[k] = v; },
+        replaceChildren(...children) { this.children = children; }
+    })
+};
 globalThis.localStorage = new StorageMock();
 globalThis.sessionStorage = new StorageMock();
 
 let activeWs = 'ws_alpha';
 const { createSutramStore, StoreRegistry, ExtensionRegistry } = await import('./sutram_sdk.mjs');
-const { debounce, threeWayMergeText, HostPath, truncateFilename, clone } = await import('./utils.mjs');
+const { SutramProjectionCompiler, SutramProjectionPool } = await import('./projection_engine.mjs');
+const { debounce, threeWayMergeText, HostPath, truncateFilename, clone, SutramWorker } = await import('./utils.mjs');
+const { SutramDB } = await import('./offline.mjs');
 
 // 1. Bound-Scope Persistence
 const DomainStore = createSutramStore('DomainTest', {
@@ -145,12 +163,18 @@ const DomainStore = createSutramStore('DomainTest', {
     sessionSync: ['ephemeral'],
     onEvict: { 'dom:view': { ephemeral: 'evicted' } }
 }, () => activeWs, 'insetu');
-
+DomainStore.setState({ items: ['alpha_intermediate'], ephemeral: 'alpha_temp' });
 DomainStore.setState({ items: ['alpha_1', 'alpha_2'], ephemeral: 'alpha_session' });
 assert.equal(
     localStorage.getItem('insetu_local_ws_alpha_DomainTest_items'),
+    null,
+    'Trailing-edge debounce must defer synchronous localStorage writes during rapid state mutations'
+);
+DomainStore.flushPersistence();
+assert.equal(
+    localStorage.getItem('insetu_local_ws_alpha_DomainTest_items'),
     JSON.stringify(['alpha_1', 'alpha_2']),
-    'ws_alpha localSync must be written under ws_alpha key'
+    'flushPersistence() must commit the settled state under ws_alpha key'
 );
 
 // Switch scope
@@ -286,23 +310,103 @@ assert.equal(HostPath.join('/Users/alice', 'repos', 'sutram'), '/Users/alice/rep
 assert.equal(HostPath.parent('/Users/alice/repos'), '/Users/alice');
 assert.equal(HostPath.parent('/Users'), '/');
 assert.equal(HostPath.join('C:\\Users\\alice', 'Documents'), 'C:/Users/alice/Documents');
-assert.equal(truncateFilename('very_long_filename_example.md', 14), 'very_long_…md');
+assert.equal(truncateFilename('very_long_filename_example.md', 14), 'very_long_….md');
 assert.deepEqual(clone({ a: [1, 2] }), { a: [1, 2] });
 StoreRegistry.setScopedStorage('test_key', 'scoped_val', 'ws_alpha');
 assert.equal(StoreRegistry.getScopedStorage('test_key', null, 'ws_alpha'), 'scoped_val');
 
 // 9. threeWayMergeText Behavioral & CRLF Vectors
-const disjoint = threeWayMergeText('a\\nb\\nc\\nd', 'a_mod\\nb\\nc\\nd', 'a\\nb\\nc\\nd_mod');
-assert.deepEqual(disjoint, { merged: 'a_mod\\nb\\nc\\nd_mod', clean: true });
+const disjoint = threeWayMergeText('a\nb\nc\nd', 'a_mod\nb\nc\nd', 'a\nb\nc\nd_mod');
+assert.deepEqual(disjoint, { merged: 'a_mod\nb\nc\nd_mod', clean: true });
 
-const zombieAck = threeWayMergeText('line1\\nline2\\nline3', 'line1\\nline2_v1\\nline2_v2\\nline3', 'line1\\nline2_v1\\nline3');
-assert.deepEqual(zombieAck, { merged: 'line1\\nline2_v1\\nline2_v2\\nline3', clean: true });
+const zombieAck = threeWayMergeText('line1\nline2\nline3', 'line1\nline2_v1\nline2_v2\nline3', 'line1\nline2_v1\nline3');
+assert.deepEqual(zombieAck, { merged: 'line1\nline2_v1\nline2_v2\nline3', clean: true });
 
-const crlfMerge = threeWayMergeText('one\\r\\ntwo\\r\\nthree', 'one_mod\\r\\ntwo\\r\\nthree', 'one\\r\\ntwo\\r\\nthree_mod');
-assert.deepEqual(crlfMerge, { merged: 'one_mod\\r\\ntwo\\r\\nthree_mod', clean: true });
-
-const conflictMerge = threeWayMergeText('alpha\\nbeta\\ngamma', 'alpha\\nbeta_local\\ngamma', 'alpha\\nbeta_remote\\ngamma');
+const crlfMerge = threeWayMergeText('one\r\ntwo\r\nthree', 'one_mod\r\ntwo\r\nthree', 'one\r\ntwo\r\nthree_mod');
+assert.deepEqual(crlfMerge, { merged: 'one_mod\r\ntwo\r\nthree_mod', clean: true });
+const conflictMerge = threeWayMergeText('alpha\nbeta\ngamma', 'alpha\nbeta_local\ngamma', 'alpha\nbeta_remote\ngamma');
 assert.equal(conflictMerge.clean, false);
+
+// 10. SutramProjectionCompiler & SutramProjectionPool (Generational Mark-and-Sweep, Rekey, & Evict)
+ExtensionRegistry.setTabOrder(['tasks', 'context']);
+const compiledSlots = SutramProjectionCompiler.getCompiledLayout();
+assert.ok(Array.isArray(compiledSlots), 'getCompiledLayout() must return a compiled slot array');
+
+const pool = new SutramProjectionPool();
+pool.beginPass();
+const editorNodeA = pool.resolve('insetu-editor-projection', 'vfs://alpha/old.md', { filepath: 'vfs://alpha/old.md' });
+const toolNodeB = pool.resolve('insetu-ext-git', 'git:status');
+pool.commitPass();
+
+assert.equal(editorNodeA.dataset.subId, 'vfs://alpha/old.md');
+assert.equal(editorNodeA.filepath, 'vfs://alpha/old.md');
+
+// Rekeying preserves the exact DOM node instance while migrating its subId
+assert.equal(pool.rekey('vfs://alpha/old.md', 'vfs://alpha/new.md'), true);
+assert.equal(editorNodeA.dataset.subId, 'vfs://alpha/new.md');
+
+// Next render pass: resolving under the new ID returns the preserved DOM instance, while unreferenced toolNodeB is swept
+pool.beginPass();
+const editorNodeAfterRename = pool.resolve('insetu-editor-projection', 'vfs://alpha/new.md');
+pool.commitPass();
+assert.strictEqual(editorNodeAfterRename, editorNodeA, 'Rekeyed projection must reuse the exact DOM element instance');
+assert.equal(pool._activeNodes.has('insetu-ext-git:git:status'), false, 'Unreferenced nodes must be swept on commitPass()');
+
+// Extension eviction removes matching extension nodes
+pool.beginPass();
+const extNode = pool.resolve('insetu-ext-notes', 'notes:main');
+pool.commitPass();
+assert.equal(pool.evictExtension('notes'), true);
+assert.equal(extNode.removed, true);
+assert.equal(pool._activeNodes.has('insetu-ext-notes:notes:main'), false);
+// 11. RFC 4: SutramWorker < 500 synchronous fast-path and >= 500 fallback/worker search
+const smallList = ['vfs://alpha/app.py', 'vfs://alpha/utils.py', 'vfs://alpha/readme.md'];
+const smallSearch = await SutramWorker.dispatch('FUZZY_SEARCH', { items: smallList, query: 'utils' });
+assert.equal(smallSearch.results[0], 'vfs://alpha/utils.py', 'Sub-500 item FUZZY_SEARCH must resolve ranked matches');
+
+const largeList = Array.from({ length: 600 }, (_, idx) => `vfs://alpha/module_${idx}.py`);
+largeList.push('vfs://alpha/target_needle_file.py');
+const largeSearch = await SutramWorker.dispatch('FUZZY_SEARCH', { items: largeList, query: 'target_needle' });
+assert.equal(largeSearch.results[0], 'vfs://alpha/target_needle_file.py', '>= 500 item FUZZY_SEARCH must resolve ranked matches');
+
+// 12. RFC 1: SutramDB Lazy LRU (readonly getVFSBlob + batched _flushLRUQueue into manifest_cache)
+const txModes = [];
+const mockStores = {
+    vfs_cache: new Map([['ws_alpha::/api/ws_alpha/fs/fetch?file=vfs://alpha/app.py', { blob: { size: 42, text: 'hello' }, ts: 1000 }]]),
+    manifest_cache: new Map()
+};
+SutramDB._db = {
+    transaction: (storeNames, mode) => {
+        txModes.push({ storeNames, mode });
+        const txObj = {
+            objectStore: (name) => ({
+                get: (key) => {
+                    const req = {};
+                    queueMicrotask(() => {
+                        req.result = mockStores[name].get(key);
+                        if (req.onsuccess) req.onsuccess({ target: req });
+                        if (txObj.oncomplete) txObj.oncomplete();
+                    });
+                    return req;
+                },
+                put: (val, key) => {
+                    mockStores[name].set(key, val);
+                }
+            })
+        };
+        return txObj;
+    }
+};
+
+const cachedBlob = await SutramDB.getVFSBlob('ws_alpha', '/api/ws_alpha/fs/fetch?file=vfs://alpha/app.py&t=12345');
+assert.deepEqual(cachedBlob, { size: 42, text: 'hello' }, 'getVFSBlob must resolve the cached blob');
+assert.equal(txModes[0].mode, 'readonly', 'getVFSBlob must use a readonly transaction');
+assert.equal(SutramDB._lruBuffer.has('ws_alpha::/api/ws_alpha/fs/fetch?file=vfs://alpha/app.py'), true, 'getVFSBlob must stage access timestamp in _lruBuffer');
+
+await SutramDB._flushLRUQueue();
+assert.equal(SutramDB._lruBuffer.size, 0, '_flushLRUQueue must drain _lruBuffer');
+const lruIndex = mockStores.manifest_cache.get('vfs_lru_index');
+assert.ok(lruIndex && lruIndex['ws_alpha::/api/ws_alpha/fs/fetch?file=vfs://alpha/app.py'] >= 1000, '_flushLRUQueue must persist compact vfs_lru_index in manifest_cache');
 
 console.log('ALL_SUTRAM_TESTS_PASSED');
 process.exit(0);

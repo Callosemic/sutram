@@ -21,6 +21,7 @@ def check_yenvui_rules():
     observer_pattern = re.compile(r'new\s+ResizeObserver')
     disconnect_pattern = re.compile(r'disconnectedCallback\s*\(\s*\)[\s\S]*?\.disconnect\(\)')
     inner_html_pattern = re.compile(r'\.innerHTML\s*=')
+    body_overflow_pattern = re.compile(r'document\.body\.style\.overflow\s*=')
     scan_dirs = [YENVUI_DIR / "js"]
     for filepath in collect_unique_files(scan_dirs, [".js"]):
         with open(filepath, "r", encoding="utf-8") as f:
@@ -78,11 +79,17 @@ def check_yenvui_rules():
                 e_name = evt_match.group(1)
                 if not (e_name.startswith('yenvui-') or e_name.startswith('yv-') or e_name.startswith('sutram-') or e_name.startswith('sutram:')):
                     report_violation("CUSTOM_EVENT_NAMESPACE", filepath, idx, f"CustomEvent '{e_name}' lacks namespace prefix ('yenvui-', 'yv-', or 'sutram-').")
-
             if container_media_pattern.search(line):
                 report_violation("CONTAINER_QUERY_MANDATE", filepath, idx, "Viewport @media max-width detected. Use CSS @container queries instead.")
             if inner_html_pattern.search(line):
                 report_violation("NO_INNER_HTML_MANDATE", filepath, idx, "Banned .innerHTML assignment detected. Render declaratively with Lit.")
+            if body_overflow_pattern.search(line) and filepath.name != "physics.js":
+                report_violation(
+                    "BODY_OVERFLOW_DIRECT_WRITE_BAN",
+                    filepath,
+                    idx,
+                    "Direct 'document.body.style.overflow' assignment detected. Use acquireBodyScrollLock() and releaseBodyScrollLock() for reentrant lock safety."
+                )
 
     theme_tokens_path = YENVUI_DIR / "css" / "theme-tokens.css"
     if theme_tokens_path.exists():

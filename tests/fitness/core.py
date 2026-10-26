@@ -26,12 +26,9 @@ def collect_unique_files(directories, extensions):
         if not d_path.exists():
             continue
         for root, dirs, files in os.walk(d_path):
-            if "node_modules" in dirs:
-                dirs.remove("node_modules")
-            if "vendor" in dirs:
-                dirs.remove("vendor")
-            if ".git" in dirs:
-                dirs.remove(".git")
+            for skip_dir in ("node_modules", "vendor", ".git", ".venv", "venv", "env", "__pycache__", "build", "dist", ".pytest_cache"):
+                if skip_dir in dirs:
+                    dirs.remove(skip_dir)
             for file in files:
                 if any(file.endswith(ext) for ext in extensions):
                     fp = (Path(root) / file).resolve()

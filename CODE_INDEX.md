@@ -40,7 +40,9 @@ sutram/
 │   │   ├── 0021_declarative_settings_form_engine_configuration_hooks_and_native_esm_caching.md # ADR-0021: Declarative settings form engine, configuration hooks, and native ESM caching
 │   │   ├── 0022_codemirror_viewport_preservation_prose_engine_and_virtualizer_sizing.md # [comment required]
 │   │   ├── 0022_store_registry_multi_tenancy_three_way_merge_and_projection_rekeying.md # ADR-0022: StoreRegistry multi-tenancy scoping, three-way text merge, and projection rekeying
-│   │   └── 0023_codemirror_viewport_preservation_prose_engine_and_virtualizer_sizing.md # ADR-0023: CodeMirror viewport preservation, prose typography engine, and virtualizer intrinsic sizing
+│   │   ├── 0023_codemirror_viewport_preservation_prose_engine_and_virtualizer_sizing.md # ADR-0023: CodeMirror viewport preservation, prose typography engine, and virtualizer intrinsic sizing
+│   │   ├── 0024_generational_projection_pooling_debounced_persistence_and_lazy_lru_caching.md # ADR-0024: Generational projection pooling, debounced store persistence, and lazy LRU cache buffering
+│   │   └── 0025_root_viewport_physics_guard_kinetic_throw_and_reentrant_scroll_lock.md # ADR-0025: Root viewport physics guard, kinetic momentum throw engine, and reentrant scroll locking
 │   └── yenvui_contracts.md         # Interface contract specification and CSS intent tokens for yenVUI presentation chassis
 ├── pyproject.toml                  # Python project metadata and semantic release configuration
 ├── readme.md                       # Master repository architecture map and component reference
