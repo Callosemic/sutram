@@ -62,3 +62,91 @@ export class SutramProjectionCompiler {
         });
     }
 }
+
+export class SutramProjectionPool {
+    constructor() {
+        this._activeNodes = new Map();
+        this._nextNodes = null;
+    }
+
+    beginPass() {
+        this._nextNodes = new Map();
+    }
+
+    resolve(componentTag, subId = null, props = null) {
+        if (!componentTag) return '';
+        const cacheKey = subId ? `${componentTag}:${subId}` : componentTag;
+        let node = this._activeNodes.get(cacheKey) || (this._nextNodes && this._nextNodes.get(cacheKey));
+        if (!node) {
+            try {
+                node = document.createElement(componentTag);
+            } catch (e) {
+                node = document.createElement('div');
+                node.style.cssText = "padding: 15px; color: var(--intent-danger); font-family: monospace; display: flex; align-items: center; gap: 6px;";
+                const iconEl = document.createElement('yv-icon');
+                iconEl.setAttribute('name', 'alert-triangle');
+                iconEl.style.width = '14px';
+                iconEl.style.height = '14px';
+                const textEl = document.createElement('span');
+                textEl.textContent = `Failed to initialize <${componentTag}>`;
+                node.replaceChildren(iconEl, textEl);
+            }
+        }
+        if (subId && node.dataset) {
+            node.dataset.subId = subId;
+        }
+        if (props && typeof props === 'object') {
+            Object.assign(node, props);
+        }
+        if (this._nextNodes) {
+            this._nextNodes.set(cacheKey, node);
+        } else {
+            this._activeNodes.set(cacheKey, node);
+        }
+        return node;
+    }
+
+    commitPass() {
+        if (this._nextNodes) {
+            this._activeNodes = this._nextNodes;
+            this._nextNodes = null;
+        }
+    }
+
+    rekey(oldId, newId) {
+        if (!oldId || !newId || oldId === newId) return false;
+        let mutated = false;
+        const suffix = `:${oldId}`;
+        for (const [cacheKey, node] of Array.from(this._activeNodes.entries())) {
+            if (cacheKey.endsWith(suffix)) {
+                const tagPrefix = cacheKey.slice(0, cacheKey.length - suffix.length);
+                this._activeNodes.delete(cacheKey);
+                if (node && node.dataset) {
+                    node.dataset.subId = newId;
+                }
+                this._activeNodes.set(`${tagPrefix}:${newId}`, node);
+                mutated = true;
+            }
+        }
+        return mutated;
+    }
+
+    evictExtension(unloadedExt) {
+        if (!unloadedExt) return false;
+        let mutated = false;
+        for (const [key, node] of Array.from(this._activeNodes.entries())) {
+            const nodeExt = node?.extName || node?.dataset?.ext || (node?.tagName ? node.tagName.toLowerCase().replace(/^[a-z0-9_-]+-ext-/, '') : '');
+            if (nodeExt === unloadedExt || key.includes(`:${unloadedExt}:`)) {
+                try { node.remove(); } catch (_) {}
+                this._activeNodes.delete(key);
+                mutated = true;
+            }
+        }
+        return mutated;
+    }
+
+    clear() {
+        this._activeNodes.clear();
+        this._nextNodes = null;
+    }
+}

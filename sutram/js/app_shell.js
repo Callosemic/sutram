@@ -3,10 +3,10 @@ import { html, css } from 'lit';
 import { SutramElement, ExtensionRegistry, LayoutStore, StoreRegistry } from './sutram_sdk.js';
 import { sharedStyles } from './shared_styles.js';
 import { debounce } from './utils.js';
-import { SutramProjectionCompiler } from './projection_engine.js';
+import { SutramProjectionCompiler, SutramProjectionPool } from './projection_engine.js';
 import './drag-coordinator.js';
 import '../../yenvui/js/tabs.js';
-import { YenvuiGestureController, getDeepElementFromPoint } from '../../yenvui/js/physics.js';
+import { YenvuiGestureController, YenvuiViewportGuard, getDeepElementFromPoint } from '../../yenvui/js/physics.js';
 const getSpatialMetrics = (capacity, activeViewport, layoutRatios) => {
     const layout = (Array.isArray(layoutRatios) && layoutRatios.length > 0) ? layoutRatios : [1, 1, 1];
     const safeViewport = Math.max(0, Math.min(activeViewport, layout.length - capacity));
@@ -269,7 +269,7 @@ export class SutramAppShell extends SutramElement {
     constructor() {
         super();
         this._layoutConfig = [];
-        this._activeNodes = new Map();
+        this._projectionPool = new SutramProjectionPool();
         this.variant = 'standard';
         this._spatialState = { capacity: 3, focusedColumn: 'center', mobileViewportIndex: 1, layoutRatios: null, columns: { left: { pinned: [] }, center: { pinned: [] }, right: { pinned: [] } } };
         // PointerEvent Drag State
@@ -493,26 +493,8 @@ export class SutramAppShell extends SutramElement {
     connectedCallback() {
         try {
         super.connectedCallback();
-
-        // iOS Edge-Swipe Defeater (Bound to OS Shell Lifecycle)
-        this._edgeSwipeStartX = 0;
-        this._edgeSwipeStartY = 0;
-        this.registerGlobalListener('touchstart', window, (e) => {
-            this._edgeSwipeStartX = e.touches[0].clientX;
-            this._edgeSwipeStartY = e.touches[0].clientY;
-        }, { passive: true, capture: true });
-
-        this.registerGlobalListener('touchmove', window, (e) => {
-            const currentX = e.touches[0].clientX;
-            const currentY = e.touches[0].clientY;
-            const dx = Math.abs(currentX - this._edgeSwipeStartX);
-            const dy = Math.abs(currentY - this._edgeSwipeStartY);
-
-            const isEdge = this._edgeSwipeStartX < 30 || this._edgeSwipeStartX > window.innerWidth - 30;
-            if (isEdge && dx > dy && dx > 5 && e.cancelable) {
-                e.preventDefault();
-            }
-        }, { passive: false, capture: true });
+        // Ensure Tier 0 viewport gesture & edge-swipe shield is active
+        YenvuiViewportGuard.install();
 
         this.registerGlobalListener('click', document, (e) => {
             if (this._launcherDropdown && !e.composedPath().some(n => n.classList?.contains('global-launcher-menu') || n.classList?.contains('tab-btn'))) {
@@ -539,29 +521,15 @@ export class SutramAppShell extends SutramElement {
             });
             this.registerGlobalListener('sutram-extension-unloaded', window, (e) => {
                 const unloadedExt = e.detail?.extName;
-                if (unloadedExt && this._activeNodes) {
-                    for (const [key, node] of Array.from(this._activeNodes.entries())) {
-                        const nodeExt = node?.extName || node?.dataset?.ext || (node?.tagName ? node.tagName.toLowerCase().replace(/^[a-z0-9_-]+-ext-/, '') : '');
-                        if (nodeExt === unloadedExt || key.includes(`:${unloadedExt}:`)) {
-                            try { node.remove(); } catch (_) {}
-                            this._activeNodes.delete(key);
-                        }
-                    }
+                if (unloadedExt) {
+                    this._projectionPool.evictExtension(unloadedExt);
                 }
                 this.requestUpdate();
             });
             this.registerGlobalListener('sutram-rekey-projection', window, (e) => {
                 const { oldId, newId } = e.detail || {};
                 if (!oldId || !newId) return;
-                for (const [cacheKey, node] of Array.from(this._activeNodes.entries())) {
-                    const suffix = `:${oldId}`;
-                    if (cacheKey.endsWith(suffix)) {
-                        const tagPrefix = cacheKey.slice(0, cacheKey.length - suffix.length);
-                        this._activeNodes.delete(cacheKey);
-                        if (node.dataset) node.dataset.subId = newId;
-                        this._activeNodes.set(`${tagPrefix}:${newId}`, node);
-                    }
-                }
+                this._projectionPool.rekey(oldId, newId);
                 const decodedHash = decodeURIComponent(window.location.hash || '');
                 if (decodedHash.includes(oldId)) {
                     const st = LayoutStore.getState();
@@ -960,33 +928,9 @@ export class SutramAppShell extends SutramElement {
     }
     render() {
         try {
-        const nextNodes = new Map();
-        const getDynamicNode = (componentTag, subId = null, props = null) => {
-            if (!componentTag) return '';
-            const cacheKey = subId ? `${componentTag}:${subId}` : componentTag;
-            let node = this._activeNodes.get(cacheKey);
-            if (!node) {
-                try {
-                    node = document.createElement(componentTag);
-                } catch (e) {
-                    node = document.createElement('div');
-                    node.style.cssText = "padding: 15px; color: var(--intent-danger); font-family: monospace; display: flex; align-items: center; gap: 6px;";
-                    const iconEl = document.createElement('yv-icon');
-                    iconEl.setAttribute('name', 'alert-triangle');
-                    iconEl.style.width = '14px';
-                    iconEl.style.height = '14px';
-                    const textEl = document.createElement('span');
-                    textEl.textContent = `Failed to initialize <${componentTag}>`;
-                    node.replaceChildren(iconEl, textEl);
-                }
-            }
-            if (subId && node.dataset) node.dataset.subId = subId;
-            if (props && typeof props === 'object') {
-                Object.assign(node, props);
-            }
-            nextNodes.set(cacheKey, node);
-            return node;
-        };
+        this._projectionPool.beginPass();
+        const getDynamicNode = (componentTag, subId = null, props = null) =>
+            this._projectionPool.resolve(componentTag, subId, props);
 
         const registry = window.ExtensionRegistry || ExtensionRegistry;
         const isOffline = window.Sutram?.stores?.Environment?.getState()?.isOffline || false;
@@ -1075,7 +1019,7 @@ export class SutramAppShell extends SutramElement {
                     ${globalSlots.map(s => getDynamicNode(s.component))}
                 </div>
             `;
-            this._activeNodes = nextNodes;
+            this._projectionPool.commitPass();
             return popoutHtml;
         }
 
@@ -1261,7 +1205,9 @@ export class SutramAppShell extends SutramElement {
                                     intent: slotDef?.intent || pin.intent,
                                     bulkActionGroup: slotDef?.bulkActionGroup || pin.bulkActionGroup || null,
                                     bulkEntityTypes: slotDef?.bulkEntityTypes || pin.bulkEntityTypes || null,
+                                    menuStores: slotDef?.menuStores || pin.menuStores || null,
                                     menuActions: slotDef?.menuActions || pin.menuActions || null,
+                                    headerActionComponent: slotDef?.headerActionComponent || pin.headerActionComponent || null,
                                     actualSourceCol: sourceColId
                                 });
                             });
@@ -1347,7 +1293,10 @@ export class SutramAppShell extends SutramElement {
                                     `})}
                                 </yenvui-scrub-track>
                                 <!-- Projection Top Actions -->
-                                <div style="display: flex; align-items: center; height: 100%;">
+                                <div style="display: flex; align-items: stretch; height: 100%;">
+                                    ${activeSubInCol && activeSubInCol.headerActionComponent ? html`
+                                        <div style="display: flex; align-items: stretch; height: 100%;" data-ext="${activeSubInCol.extName}">${getDynamicNode(activeSubInCol.headerActionComponent, activeSubInCol.id)}</div>
+                                    ` : ''}
                                     ${activeSubInCol ? this._layoutConfig.filter(s => 
                                         s.slot === 'slots:sub-navigation-actions' && 
                                         (s.targetSub === activeSubInCol.id || (s.extName === activeSubInCol.extName && (s.targetSub === activeSubInCol.rawId || s.targetSub === `${activeSubInCol.extName}:${activeSubInCol.rawId}`)))
@@ -1427,7 +1376,6 @@ export class SutramAppShell extends SutramElement {
             <div style="display: contents;">
                 ${globalSlots.map(s => getDynamicNode(s.component))}
             </div>
-
             <!-- Spatial Drop-Zone Overlay -->
             <sutram-drag-coordinator  
                 .dragState=${{...this._dragState}}  
@@ -1435,7 +1383,7 @@ export class SutramAppShell extends SutramElement {
                 @click=${() => { this._dragState.active = false; this.requestUpdate(); }}>
             </sutram-drag-coordinator>
         `;
-        this._activeNodes = nextNodes;
+        this._projectionPool.commitPass();
         return finalHtml;
         } catch(err) {
             console.error("[Telemetry] AppShell render error:", err);

@@ -4,7 +4,7 @@ import { LitElement, html } from 'lit';
 import { createStore } from 'zustand/vanilla';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { getEventPath, getEventTarget } from '../../yenvui/js/physics.js';
-import { shallowEqual, coalescedAsync, slugify } from './utils.js';
+import { shallowEqual, coalescedAsync, slugify, debounce } from './utils.js';
 function _cloneInitialValue(val) {
     if (val instanceof Set) return new Set(val);
     if (val instanceof Map) return new Map(val);
@@ -63,7 +63,15 @@ export const StoreRegistry = {
     getAll() {
         return this._stores;
     },
+    flushAll() {
+        this._stores.forEach((store) => {
+            if (typeof store.flushPersistence === 'function') {
+                try { store.flushPersistence(); } catch (_) {}
+            }
+        });
+    },
     switchTenantScope(newScopeId, excludeNames = []) {
+        this.flushAll();
         const excluded = new Set(excludeNames || []);
         this._stores.forEach((store, name) => {
             if (excluded.has(name) || store._storeScope === 'global') return;
@@ -261,6 +269,9 @@ export function createSutramStore(name, initialState, persistenceSchema = {}, ge
         }
     };
     store.switchScope = (newScopeId) => {
+        if (typeof store.flushPersistence === 'function') {
+            store.flushPersistence();
+        }
         const targetScope = newScopeId || resolveScope() || 'default';
         store._suspendPersistence = true;
         store._scopeEpoch = (store._scopeEpoch || 0) + 1;
@@ -286,23 +297,59 @@ export function createSutramStore(name, initialState, persistenceSchema = {}, ge
     if (localKeys.length > 0 || sessionKeys.length > 0 || schema.urlParser) {
         store.hydrateStore(resolveScope());
 
+        const dirtyLocalKeys = new Set();
+        const dirtySessionKeys = new Set();
+
+        const commitPendingStorage = () => {
+            if (store._suspendPersistence || !store._hydrated) return;
+            if (dirtyLocalKeys.size === 0 && dirtySessionKeys.size === 0) return;
+            const state = store.getState();
+            const scope = store._boundScope || resolveScope() || 'default';
+
+            dirtyLocalKeys.forEach(k => {
+                const valToSave = state[k] instanceof Set ? Array.from(state[k]) : state[k];
+                const storageKey = isLegacyArray ? `${prefix}_${name.toLowerCase()}_${k}_${scope}` : `${prefix}_local_${scope}_${name}_${k}`;
+                localStorage.setItem(storageKey, JSON.stringify(valToSave));
+            });
+            dirtyLocalKeys.clear();
+
+            dirtySessionKeys.forEach(k => {
+                const valToSave = state[k] instanceof Set ? Array.from(state[k]) : state[k];
+                sessionStorage.setItem(`${prefix}_session_${scope}_${name}_${k}`, JSON.stringify(valToSave));
+            });
+            dirtySessionKeys.clear();
+        };
+
+        const debouncedCommit = debounce(commitPendingStorage, 250);
+
+        store.flushPersistence = () => {
+            debouncedCommit.cancel();
+            commitPendingStorage();
+        };
+
         store.subscribe((state, prevState) => {
             if (store._suspendPersistence || !store._hydrated) return;
-            const scope = store._boundScope || resolveScope() || 'default';
+            let hasDirty = false;
             localKeys.forEach(k => {
                 if (state[k] !== prevState[k]) {
-                    const valToSave = state[k] instanceof Set ? Array.from(state[k]) : state[k];
-                    const storageKey = isLegacyArray ? `${prefix}_${name.toLowerCase()}_${k}_${scope}` : `${prefix}_local_${scope}_${name}_${k}`;
-                    localStorage.setItem(storageKey, JSON.stringify(valToSave));
+                    dirtyLocalKeys.add(k);
+                    hasDirty = true;
                 }
             });
             sessionKeys.forEach(k => {
                 if (state[k] !== prevState[k]) {
-                    const valToSave = state[k] instanceof Set ? Array.from(state[k]) : state[k];
-                    sessionStorage.setItem(`${prefix}_session_${scope}_${name}_${k}`, JSON.stringify(valToSave));
+                    dirtySessionKeys.add(k);
+                    hasDirty = true;
                 }
             });
+            if (hasDirty) {
+                debouncedCommit();
+            }
         });
+
+        if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+            window.addEventListener('pagehide', () => store.flushPersistence());
+        }
     }
 
     if (typeof window !== 'undefined' && schema.onEvict) {

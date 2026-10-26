@@ -695,9 +695,13 @@ class SutramWorkerBroker {
         }
         return this._worker;
     }
-
     dispatch(type, payload = {}) {
         return new Promise((resolve) => {
+            if (type === 'FUZZY_SEARCH' && Array.isArray(payload.items) && payload.items.length < 500) {
+                const getSearchString = (item) => typeof item === 'string' ? item : (item.label || String(item));
+                resolve({ results: fuzzyFilterObjects(payload.items, payload.query || '', getSearchString) });
+                return;
+            }
             try {
                 const worker = this._getWorker();
                 const requestId = ++this._reqId;

@@ -3,6 +3,48 @@
 const DB_NAME = 'sutram_offline_db';
 const DB_VERSION = 4;
 export class SutramDB {
+    static _lruBuffer = new Map();
+    static _lruFlushTimer = null;
+
+    static _scheduleLRUFlush(delayMs = 5000) {
+        if (this._lruFlushTimer) return;
+        this._lruFlushTimer = setTimeout(() => {
+            this._lruFlushTimer = null;
+            if (typeof requestIdleCallback === 'function') {
+                requestIdleCallback(() => { this._flushLRUQueue().catch(() => {}); });
+            } else {
+                this._flushLRUQueue().catch(() => {});
+            }
+        }, delayMs);
+    }
+
+    static async _flushLRUQueue() {
+        if (this._lruFlushTimer) {
+            clearTimeout(this._lruFlushTimer);
+            this._lruFlushTimer = null;
+        }
+        if (!this._lruBuffer || this._lruBuffer.size === 0) return;
+        const pendingEntries = Array.from(this._lruBuffer.entries());
+        this._lruBuffer.clear();
+
+        const db = await this.getDB();
+        return new Promise((resolve) => {
+            const tx = db.transaction('manifest_cache', 'readwrite');
+            const store = tx.objectStore('manifest_cache');
+            const req = store.get('vfs_lru_index');
+            req.onsuccess = () => {
+                const indexMap = (req.result && typeof req.result === 'object') ? req.result : {};
+                for (const [k, ts] of pendingEntries) {
+                    if (ts === null) delete indexMap[k];
+                    else indexMap[k] = ts;
+                }
+                store.put(indexMap, 'vfs_lru_index');
+            };
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve();
+        });
+    }
+
     static async getDB() {
         if (this._db) return this._db;
         if (this._dbPromise) return this._dbPromise;
@@ -40,13 +82,15 @@ export class SutramDB {
         const clean = String(filepath || '').replace(/([?&])t=\d+&?/, '$1').replace(/[?&]$/, '');
         return `${scopeId}::${clean}`;
     }
-
     static async cacheVFSBlob(scopeId, filepath, blob) {
         const db = await this.getDB();
         const key = this._normalizeCacheKey(scopeId, filepath);
+        const now = Date.now();
+        this._lruBuffer.set(key, now);
+        this._scheduleLRUFlush();
         return new Promise((resolve, reject) => {
             const tx = db.transaction('vfs_cache', 'readwrite');
-            tx.objectStore('vfs_cache').put({ blob, ts: Date.now() }, key);
+            tx.objectStore('vfs_cache').put({ blob, ts: now }, key);
             tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
         });
@@ -55,6 +99,8 @@ export class SutramDB {
     static async deleteVFSBlob(scopeId, filepath) {
         const db = await this.getDB();
         const key = this._normalizeCacheKey(scopeId, filepath);
+        this._lruBuffer.set(key, null);
+        this._scheduleLRUFlush();
         return new Promise((resolve, reject) => {
             const tx = db.transaction('vfs_cache', 'readwrite');
             tx.objectStore('vfs_cache').delete(key);
@@ -67,7 +113,7 @@ export class SutramDB {
         const db = await this.getDB();
         const key = this._normalizeCacheKey(scopeId, filepath);
         return new Promise((resolve) => {
-            const tx = db.transaction('vfs_cache', 'readwrite');
+            const tx = db.transaction('vfs_cache', 'readonly');
             const req = tx.objectStore('vfs_cache').get(key);
             req.onsuccess = () => {
                 const data = req.result;
@@ -75,11 +121,12 @@ export class SutramDB {
 
                 // Backwards compatibility for legacy pure blobs
                 if (data instanceof Blob) {
+                    this._lruBuffer.set(key, Date.now());
+                    this._scheduleLRUFlush();
                     resolve(data);
                 } else if (data.blob) {
-                    // Update access timestamp for true LRU execution
-                    data.ts = Date.now();
-                    tx.objectStore('vfs_cache').put(data, key);
+                    this._lruBuffer.set(key, Date.now());
+                    this._scheduleLRUFlush();
                     resolve(data.blob);
                 } else {
                     resolve(null);
@@ -90,34 +137,46 @@ export class SutramDB {
     }
 
     static async pruneCache(targetBytesToFree) {
+        await this._flushLRUQueue();
         const db = await this.getDB();
         return new Promise((resolve, reject) => {
-            const tx = db.transaction('vfs_cache', 'readwrite');
+            const tx = db.transaction(['vfs_cache', 'manifest_cache'], 'readwrite');
             const store = tx.objectStore('vfs_cache');
+            const manifestStore = tx.objectStore('manifest_cache');
+            const idxReq = manifestStore.get('vfs_lru_index');
 
-            let entries = [];
-            const cursorReq = store.openCursor();
+            idxReq.onsuccess = () => {
+                const lruIndex = (idxReq.result && typeof idxReq.result === 'object') ? idxReq.result : {};
+                const entries = [];
+                const cursorReq = store.openCursor();
 
-            cursorReq.onsuccess = (e) => {
-                const cursor = e.target.result;
-                if (cursor) {
-                    const size = cursor.value instanceof Blob ? cursor.value.size : (cursor.value.blob ? cursor.value.blob.size : 0);
-                    const ts = cursor.value instanceof Blob ? 0 : (cursor.value.ts || 0);
-                    entries.push({ key: cursor.primaryKey, size, ts });
-                    cursor.continue();
-                } else {
-                    // Sort by oldest access time (Least Recently Used)
-                    entries.sort((a, b) => a.ts - b.ts);
-                    let freed = 0;
-                    for (const entry of entries) {
-                        if (freed >= targetBytesToFree) break;
-                        store.delete(entry.key);
-                        freed += entry.size;
+                cursorReq.onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if (cursor) {
+                        const key = cursor.primaryKey;
+                        const size = cursor.value instanceof Blob ? cursor.value.size : (cursor.value.blob ? cursor.value.blob.size : 0);
+                        const baseTs = cursor.value instanceof Blob ? 0 : (cursor.value.ts || 0);
+                        const ts = this._lruBuffer.get(key) || lruIndex[key] || baseTs;
+                        entries.push({ key, size, ts });
+                        cursor.continue();
+                    } else {
+                        // Sort by oldest access time (Least Recently Used)
+                        entries.sort((a, b) => a.ts - b.ts);
+                        let freed = 0;
+                        for (const entry of entries) {
+                            if (freed >= targetBytesToFree) break;
+                            store.delete(entry.key);
+                            delete lruIndex[entry.key];
+                            this._lruBuffer.delete(entry.key);
+                            freed += entry.size;
+                        }
+                        manifestStore.put(lruIndex, 'vfs_lru_index');
+                        resolve(freed);
                     }
-                    resolve(freed);
-                }
+                };
+                cursorReq.onerror = () => reject(cursorReq.error);
             };
-            cursorReq.onerror = () => reject(cursorReq.error);
+            idxReq.onerror = () => reject(idxReq.error);
         });
     }
     static async enqueueMutation(scopeId, path, method, headers, bodyString, collapseKey = null) {

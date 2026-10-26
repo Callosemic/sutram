@@ -43,6 +43,9 @@ export class SutramVirtualList extends LitElement {
             width: 100%;
             flex: 1;
             min-width: 0;
+            overflow-x: hidden;
+            overscroll-behavior-x: none;
+            touch-action: pan-y;
             -webkit-text-size-adjust: 100%;
             text-size-adjust: 100%;
             --card-content-visibility: visible;
@@ -52,6 +55,9 @@ export class SutramVirtualList extends LitElement {
             width: 100%;
             flex: 1;
             min-width: 0;
+            overflow-x: hidden;
+            overscroll-behavior-x: none;
+            touch-action: pan-y;
             -webkit-text-size-adjust: 100%;
             text-size-adjust: 100%;
             --card-content-visibility: visible;
@@ -1808,6 +1814,7 @@ export class SutramEditor extends SutramContextMixin(YenvuiEditor) {
     connectedCallback() {
         super.connectedCallback();
         this.addEventListener('yenvui-editor-changed', e => {
+            this._lastEmittedValue = e.detail?.value;
             this.dispatchEvent(new CustomEvent('editor-changed', { detail: e.detail, bubbles: true, composed: true }));
             this.dispatchEvent(new CustomEvent('content-changed', { detail: e.detail, bubbles: true, composed: true }));
             this.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
