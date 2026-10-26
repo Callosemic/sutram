@@ -34,6 +34,7 @@ Any replacement library must export the following Custom Elements.
     *   *Slots:* `header-actions`, default.
 *   **`<sutram-subtab-menu>`**: Spatial column sub-tab header action and bulk selection menu.
     *   *Properties:* `.slotConfig` (Object with `bulkActionGroup`, `bulkEntityTypes`, `menuActions`, `menuStores`).
+*   **`<yenvui-viewport>`**: Tier 0 root viewport wrapper installing the singleton viewport physics guard to defeat iOS Safari edge-swipe back-navigation while preserving vertical momentum scrolling and tap responsiveness.
 *   **`<yenvui-modal>`**: Native `#top-layer` dialog.
     *   *Properties:* `?open`, `.titleText`, `?fullscreen`, `?flush`, `?transparent`, `.maxWidth`.
     *   *Methods:* `bringToFront()`.
@@ -88,6 +89,9 @@ Any replacement library must export the following Custom Elements.
 *   **`<yenvui-diff-viewer>`**: Kinetic visual diff viewer for paired hunks and unified streams.
     *   *Properties:* `.diffText`, `.searchStr`, `.replaceStr`, `.searchLines`, `.replaceLines`, `.leftTitle`, `.rightTitle`, `.mode` (`auto`|`split-side`|`split-stacked`|`interleaved`), `.activeLineIndex`.
     *   *Events:* `@yenvui-diff-line-selected`, `@yenvui-diff-mode-changed`.
+*   **Physics & Gesture Utilities (`physics.js`)**:
+    *   *Constants:* `PHYSICS` (`EDGE_START_BEZEL_PX`, `EDGE_MOVE_BEZEL_PX`, `AXIS_LOCK_THRESHOLD_PX`, `TAP_SLOP_PX`, `MIN_THROW_VELOCITY`, `THROW_DECAY`, `POPOVER_ESTIMATED_WIDTH_PX`).
+    *   *Functions:* `startKineticThrow(scrollEl, samples, options)`, `acquireBodyScrollLock()`, `releaseBodyScrollLock()`, `getDeepElementFromPoint(x, y, selector)`.
 
 ### Inputs & Filtering
 *   **`<yenvui-dropdown>`**: Floating action menu utilizing native `#top-layer` Popover API.

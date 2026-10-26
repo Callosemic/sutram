@@ -42,6 +42,21 @@ All custom drag, swipe, spatial reordering, or long-press interactions MUST util
 * **OS Navigation Defeat:** `YenvuiGestureController` automatically intercepts horizontal drag sequences originating near viewport boundaries to defeat mobile browser edge-swipe back-navigation.
 * **Automated Cleanup:** Drag handles and gesture listeners attached via `YenvuiGestureController` automatically unbind global `pointermove` and `pointerup` handlers when gestures complete or cancel.
 
+### Root Viewport Physics Guard Standard (`YenvuiViewportGuard` & `<yenvui-viewport>`)
+All mobile and edge-native chassis shells MUST wrap their top-level application layout in `<yenvui-viewport>` or initialize `YenvuiViewportGuard.install()`.
+* **Hardware Bezel Protection:** On iOS/iPadOS WebKit viewports, `YenvuiViewportGuard` captures touch events within the 20px hardware bezel to prevent `UIScreenEdgePanGestureRecognizer` history traversal.
+* **Vertical Scroll Preservation:** Vertical pans within the bezel resolve ancestor scroll containers and update scroll offsets with velocity tracking.
+* **Synthetic Tap Replay:** Stationary bezel taps ($\le 6\text{px}$ movement) dispatch synthetic, composed `MouseEvent('click')` events to ensure interactive controls remain responsive.
+
+### Inertial Momentum Throw Standard (`startKineticThrow`)
+Custom scroll surfaces and gesture tracks requiring momentum MUST utilize `startKineticThrow(scrollEl, samples, options)`. Custom inertia implementations using `setInterval` or manual physics loops are strictly forbidden.
+
+### Reentrant Body Scroll Lock Standard
+Components and overlays MUST NOT write directly to `document.body.style.overflow`. All modal, drawer, and gesture locking MUST use `acquireBodyScrollLock()` and `releaseBodyScrollLock()` from `yenvui/js/physics.js` to prevent lock clobbering during concurrent overlay states.
+
+### Horizontal Overscroll Containment Standard
+All horizontally scrollable or swipeable chassis containers MUST declare `touch-action: pan-y;` and `overscroll-behavior-x: none;` to eliminate rubber-banding and maintain touch determinism.
+
 ### Multi-Window Popout Lifecycle & Popup Blocker Defense
 External window projections (ejected editor surfaces or diagnostic panels) MUST conform to the synchronous allocation protocol:
 * **Synchronous WindowProxy Allocation:** `window.open('about:blank', ...)` MUST execute synchronously within the direct user pointer gesture before awaiting any asynchronous pre-save hooks (`sutram:before-popout`). Asynchronous operations must resolve after allocation, redirecting the child window via `childWin.location.replace(targetUrl)`. Calling `window.open` after an `await` boundary is strictly prohibited.
@@ -51,13 +66,22 @@ External window projections (ejected editor surfaces or diagnostic panels) MUST 
 ---
 
 ## 3. DOM & State Management
+### Spatial Projection & Generational Mark-and-Sweep Node Pooling
+Complex workspace switching and spatial column views MUST route through `SutramProjectionPool` (`sutram/js/projection_engine.js`) and `SutramProjectionCompiler`:
 
-### Spatial Projection & Non-Destructive DOM Caching
-Complex workspace switching and spatial column views MUST route through `SutramDOMPool` (`sutram/js/projection_engine.js`) and `SutramProjectionCompiler`:
+* **Generational Mark-and-Sweep:** Projections must cycle through `beginPass()`, `resolve(componentTag, subId, props)`, and `commitPass()`. Referenced elements are retained across passes while unreferenced nodes are swept to permit native browser garbage collection.
+* **Non-Destructive Projection Rekeying:** When identities change (e.g., file renames), projection nodes are re-mapped in place via `pool.rekey(oldId, newId)`, preserving active DOM state, scroll positions, and input buffers.
+* **Extension Eviction:** Explicit extension unloading must call `pool.evictExtension(extName)` to remove nodes and destroy associated DOM trees.
 
-* **Node Recycling:** Component instances MUST be cached in `SutramDOMPool` and toggled via CSS (`display: flex` / `display: none`) during spatial column swaps.
-* **State Preservation:** Never destroy `.innerHTML` or unmount active extension views during routing. Non-destructive caching preserves active buffer states, scroll positions, and uncommitted form inputs.
-* **Garbage Collection:** Eviction of cached DOM nodes MUST occur exclusively through the global `sutram-evict-projection` custom event.
+### Debounced Store Persistence & Atomic Flush Barriers
+Stores declaring local or session synchronization via `createSutramStore` must throttle persistent I/O:
+* **Debounced Serialization:** State mutations triggering `localStorage` or `sessionStorage` updates MUST be debounced (250ms) to eliminate main-thread serialization stalls during high-frequency changes.
+* **Flush Barriers:** Scope transitions (`StoreRegistry.switchTenantScope`), extension unloading, and document unload (`pagehide`) MUST invoke `store.flushPersistence()` or `StoreRegistry.flushAll()` to guarantee all pending dirty keys commit synchronously before context teardown.
+
+### Non-Blocking Readonly IndexedDB Transactions & Lazy LRU Buffering
+Client-side offline storage (`SutramDB`) must eliminate readwrite transaction lock contention:
+* **Read-Only Inspection:** Entity reads (`getVFSBlob`) must execute within `readonly` transactions and must not trigger synchronous write locks to update access timestamps.
+* **Lazy LRU Buffering:** Access timestamps must be buffered in memory (`_lruBuffer`) and committed asynchronously to `manifest_cache` (`vfs_lru_index`) via `requestIdleCallback`. Cache pruning tasks must flush in-memory buffers prior to calculating eviction thresholds.
 
 ### Consolidated Theme Observer Pattern
 Components requiring dynamic theme adaptation MUST NOT instantiate individual `MutationObserver` instances on `document.body`. Components MUST extend `YenvuiBase` (which auto-subscribes via `subscribeToTheme`) or call `this.observeTheme()` in `SutramElement` to utilize the shared, Set-based theme subscriber registry.

@@ -12,6 +12,7 @@
 * [ADR-0012: Native `<yv-icon>` Component and Direct Lit Element Node Retention](./adrs/0012_yv_icon_component_and_direct_node_retention.md)
 * [ADR-0021: Declarative Settings Form Engine, Configuration Registry Hooks, and Clean ESM Caching](./adrs/0021_declarative_settings_form_engine_configuration_hooks_and_native_esm_caching.md)
 * [ADR-0022: StoreRegistry Multi-Tenancy Scoping, Three-Way Text Merge Engine, and Projection Rekeying](./adrs/0022_store_registry_multi_tenancy_three_way_merge_and_projection_rekeying.md)
+* [ADR-0024: Generational Projection Pooling, Debounced Store Persistence, and Lazy LRU Cache Buffering](./adrs/0024_generational_projection_pooling_debounced_persistence_and_lazy_lru_caching.md)
 ### yenVUI Presentation Chassis
 * [ADR-0003: Dynamic Theme Mutation Observer Pattern](./adrs/0003_yenvui_theme_mutation_observers.md)
 * [ADR-0004: Encapsulated CodeMirror 6 Integration](./adrs/0004_yenvui_codemirror6_tab_view_caching.md)
@@ -24,6 +25,7 @@
 * [ADR-0019: CodeMirror Tag Completion Defense, Font Ligature Suppression, and Substrate InnerHTML Elimination](./adrs/0019_codemirror_tag_completion_defense_ligature_suppression_and_innerhtml_ban.md)
 * [ADR-0020: Multi-Window Popout Lifecycle, BroadcastChannel IPC Synchronization, and Declarative Job Runner](./adrs/0020_multi_window_popout_lifecycle_broadcast_channel_and_declarative_job_runner.md)
 * [ADR-0023: CodeMirror Viewport Preservation, Prose Typography Engine, WebKit Text-Size Normalization, and Virtualizer Intrinsic Sizing](./adrs/0023_codemirror_viewport_preservation_prose_engine_and_virtualizer_sizing.md)
+* [ADR-0025: Root Viewport Physics Guard, Kinetic Momentum Throw Engine, Reentrant Scroll Locking, and Chassis Overscroll Containment](./adrs/0025_root_viewport_physics_guard_kinetic_throw_and_reentrant_scroll_lock.md)
 
 ## Superseded ADRs
 * [ADR-0010: Floating Window Projection Layer and Z-Index Management (Superseded by ADR-0011)](./adrs/0010_sutram_floating_window_projection.md)
