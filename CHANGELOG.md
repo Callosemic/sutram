@@ -2,6 +2,66 @@
 
 <!-- version list -->
 
+## v2.3.0 (2026-10-26)
+
+### Chores
+
+- Global workspace sweep
+  ([`036fd24`](https://github.com/Callosemic/sutram/commit/036fd24295803a3c7ecd51e6b3ed204c0fc77716))
+
+- Global workspace sweep
+  ([`810e682`](https://github.com/Callosemic/sutram/commit/810e68292c6742922506755f041d292c3aa0836a))
+
+- Global workspace sweep
+  ([`ca49774`](https://github.com/Callosemic/sutram/commit/ca49774a565a0f3f1bdb54eb8586417568d89ab2))
+
+- Global workspace sweep
+  ([`9c87c4d`](https://github.com/Callosemic/sutram/commit/9c87c4dd7bd4300e684923548c1c6cf52cf5741b))
+
+- **audit**: Enforce body scroll lock fitness rule, expand registry unit tests, and resolve adr
+  index placeholders
+  ([`50fb7ea`](https://github.com/Callosemic/sutram/commit/50fb7ea1cbeeb5e14b33685cb24700f901ac258d))
+
+### Features
+
+- Add StoreRegistry scope transitions, three-way text merge, CodeMirror viewport preservation, and
+  modular fitness test suite
+  ([`c98fe26`](https://github.com/Callosemic/sutram/commit/c98fe26a3b24b012b129548a20d2438c17fca694))
+
+- Declarative settings form engine, configuration registry hooks, and clean native esm loading
+  ([`fbb9e6c`](https://github.com/Callosemic/sutram/commit/fbb9e6cfea179320742060c346f53ba5cdfd8f86))
+
+- Generational Projection Pooling, Debounced Store Persistence, Lazy LRU Caching, and Worker
+  Fast-Path
+  ([`9a79873`](https://github.com/Callosemic/sutram/commit/9a79873de1ebeb797e16781d745789fd21723f9d))
+
+- Introduce multi-window popout lifecycle, broadcast IPC, declarative job runner, and input
+  standardization
+  ([`3dce595`](https://github.com/Callosemic/sutram/commit/3dce59505b866fc2c1528323c9002a8b539edb28))
+
+- **kernel**: Implement StoreRegistry scoping, three-way text merge, projection rekeying, and
+  sub-tab menus
+  ([`2c89cc6`](https://github.com/Callosemic/sutram/commit/2c89cc69f61145ead4e5c462bf26efc5613824ab))
+
+- **kernel**: Introduce spatial drag HUD, CSS mask icon engine, custom editor resolution, and
+  offline write-through caching
+  ([`99f559f`](https://github.com/Callosemic/sutram/commit/99f559fe943d08431006ece547957e5d077e2655))
+
+- **yenvui**: Add declarative job runner property bindings to YenvuiAsyncBtn
+  ([`4055256`](https://github.com/Callosemic/sutram/commit/40552565ee9c30df71f2a2428673ed8be9c782fc))
+
+- **yenvui**: Implement root viewport physics guard, kinetic throw engine, and chassis overscroll
+  containment
+  ([`3b0563d`](https://github.com/Callosemic/sutram/commit/3b0563daf671bd75926a8a07cc9a6739a6deb517))
+
+- **yenvui**: Minimal editor diffing, prose writing engine, and webkit layout hardening
+  ([`0673467`](https://github.com/Callosemic/sutram/commit/0673467cb55843c3e299e56a169c054054c5f43f))
+
+- **yenvui**: Window close button, markdown tag completion defense, font ligature suppression, and
+  innerHTML eradication
+  ([`3372bef`](https://github.com/Callosemic/sutram/commit/3372bef1542146b085581c36a34bf1cb824ff823))
+
+
 ## v2.2.0 (2026-10-15)
 
 ### Chores
