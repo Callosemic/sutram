@@ -169,10 +169,11 @@ export class SutramTextarea extends LitElement {
             if (!textarea) return;
 
             if (textarea.scrollHeight === 0) return;
-
             const currentHeight = textarea.style.height;
             textarea.style.height = 'auto';
-            const newHeight = `${Math.min(textarea.scrollHeight + 2, this.maxHeight || 500)}px`;
+            const minPx = (this.minRows && this.minRows > 1) ? (this.minRows * 22 + 16) : 38;
+            const targetPx = !this.value ? minPx : Math.max(minPx, Math.min(textarea.scrollHeight + 2, this.maxHeight || 500));
+            const newHeight = `${targetPx}px`;
 
             if (currentHeight !== newHeight) {
                 textarea.style.height = newHeight;
