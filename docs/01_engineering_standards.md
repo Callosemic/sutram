@@ -97,7 +97,7 @@ To prevent ghost memory leaks and dangling subscriptions, components extending `
 ### Top-Layer Popover API & Viewport Coordinate Anchoring
 Floating menus, dropdowns, and spatial drawers susceptible to CSS `overflow: hidden` or stacking context clipping MUST use the native browser `#top-layer` via HTML5 `popover="manual"`.
 * **State Synchronization:** Components must synchronize popover visibility through `syncTopLayerPopover(triggerEl, popoverEl, isOpen, options)` in `updated(changedProperties)` and ensure clean dismissal (`isOpen = false`) in `disconnectedCallback()`.
-* **Dynamic Anchoring:** Coordinate calculations must route through `anchorTopLayerPopover(triggerEl, popoverEl, options)` supporting `'menu'` (auto-reversing horizontal positioning) and `'column-drawer'` (spatial column bounding).
+* **Dynamic Anchoring:** Coordinate calculations must route through `anchorTopLayerPopover(triggerEl, popoverEl, options)` supporting `'menu'` (auto-reversing horizontal positioning with bidirectional vertical collision drop-up flipping) and `'column-drawer'` (spatial column bounding).
 * **Viewport Tracking:** When open, components must bind capture-phase listeners (`window.addEventListener('scroll', fn, true)` and `window.addEventListener('resize', fn)`) and unbind them immediately on close or unmount.
 
 ### Multi-Window BroadcastChannel IPC Synchronization
@@ -167,3 +167,39 @@ When building new features or declaring actions, semantic concepts MUST map dire
 | **History / Timeline** | `history` |
 | **Terminal / Console / Command** | `terminal` |
 | **Prose / Write / Essay** | `pen-tool` |
+
+---
+
+## 5. The Three-Tier Bug Diagnostic & Verification Governance
+
+Every defect or regression discovered across the `sutram` micro-kernel or `yenVUI` presentation chassis must be triaged through a three-tier decision tree before writing a fix:
+
+```text
+                                                                BUG DIAGNOSED
+                                                                            │
+                ┌──────────────────────────────┼──────────────────────────────┐
+                ▼                              ▼                              ▼
+1. Structural / Form           2. Behavioral Invariant        3. Isolated Logic
+        (DOM/CSS purity, innerHTML,    (StoreRegistry transitions,    (LCS diff math,
+        upward host domain leaks,      generational node pooling,     3-way text merge,
+        unmanaged listeners)           consumer SDK contracts)        gesture axis locking)
+                │                              │                              ▼
+                ▼                              ▼                       Local Regression Test
+    Fitness Linter                 Contract / Matrix Test       (Headless Node ESM test)
+    (`fitness_functions.py` &      (Headless Node ESM suite)
+        `sutram_consumer_linter.py`)
+
+```
+
+1. **Structural Anti-Pattern $\rightarrow$ Substrate & Consumer Fitness Linters (`tests/fitness_functions.py` & `tests/sutram_consumer_linter.py`):**
+* *Criterion:* If the defect is caused by a structural or presentation violation—such as `.innerHTML` assignment, upward references to host application domains (`inSetu`, `yomama://`, `vfs:diff:`), raw un-encapsulated HTML form controls, coarse store subscriptions, or bubbling toggle events—that an LLM or developer could repeat in another component tomorrow, codify it in the static fitness linters.
+
+
+2. **Behavioral Invariant $\rightarrow$ Headless ESM Contract Test (Node.js):**
+* *Criterion:* If the defect represents a breach of a cross-component or multi-tenant state contract (e.g., `StoreRegistry.beginScopeTransition()` / `endScopeTransition()` suppressing intermediate layout recompiles, non-destructive `localStorage`/`sessionStorage` hydration, `_scopeEpoch` stale-fetch discarding, or `SutramProjectionPool` mark-and-sweep retention), codify it as a deterministic headless Node.js ESM test.
+
+
+3. **Isolated Logic Flaw $\rightarrow$ Local Unit Regression Test:**
+* *Criterion:* If the defect is an algorithmic edge case inside a pure utility or physics function (e.g., `threeWayMergeText` Zombie-ACK subslice detection, `_applyMinimalDiff` cursor anchor mapping, or `anchorTopLayerPopover` viewport boundary flipping), add a targeted assertion to the unit test suite.
+
+

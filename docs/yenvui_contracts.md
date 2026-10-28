@@ -19,7 +19,7 @@ A compliant chassis must consume and respect the following CSS custom properties
 *   **Borders:** `--border`, `--border-dim`
 *   **Typography:** `--text`, `--text-muted`, `--font-mono`
 *   **Semantics:** `--intent-primary`, `--intent-success`, `--intent-danger`, `--intent-warning`, `--intent-highlight`, `--intent-neutral`
-*   **Spatial Grid & Rail Geometry:** `--yv-utility-height`, `--yv-header-height`, `--yv-gutter-x`, `--yv-rail-cell-width`, `--yv-icon-size`, `--yv-icon-gap`
+*   **Spatial Grid & Rail Geometry:** `--yv-utility-height`, `--yv-header-height`, `--yv-gutter-x`, `--yv-rail-cell-width`, `--yv-icon-size`, `--yv-icon-gap`, `--textarea-min-height`
 
 ## III. Component Interface Matrix
 
@@ -91,11 +91,22 @@ Any replacement library must export the following Custom Elements.
     *   *Events:* `@yenvui-diff-line-selected`, `@yenvui-diff-mode-changed`.
 *   **Physics & Gesture Utilities (`physics.js`)**:
     *   *Constants:* `PHYSICS` (`EDGE_START_BEZEL_PX`, `EDGE_MOVE_BEZEL_PX`, `AXIS_LOCK_THRESHOLD_PX`, `TAP_SLOP_PX`, `MIN_THROW_VELOCITY`, `THROW_DECAY`, `POPOVER_ESTIMATED_WIDTH_PX`).
-    *   *Functions:* `startKineticThrow(scrollEl, samples, options)`, `acquireBodyScrollLock()`, `releaseBodyScrollLock()`, `getDeepElementFromPoint(x, y, selector)`.
-
+    *   *Functions:* `startKineticThrow(scrollEl, samples, options)`, `acquireBodyScrollLock()`, `releaseBodyScrollLock()`, `getDeepElementFromPoint(x, y, selector)`, `anchorTopLayerPopover(triggerEl, popoverEl, options)`, `syncTopLayerPopover(triggerEl, popoverEl, isOpen, options)`.
 ### Inputs & Filtering
+*   **`<sutram-textarea>`**: Auto-resizing multiline text input primitive with minimum row clamping.
+    *   *Properties:* `.label`, `.value`, `.placeholder`, `.rows`, `?monospace`, `?disabled`, `?readOnly`, `?inline`, `?autoSize`, `.maxHeight`, `.minRows`, `?borderless`, `?flush`.
+    *   *Events:* `@sutram-input-changed`.
+*   **`<sutram-input>`**: Single-line text, password, or numeric input primitive.
+    *   *Properties:* `.label`, `.value`, `.placeholder`, `.type`, `?disabled`, `?inline`, `?flush`.
+    *   *Events:* `@sutram-input-changed`.
+*   **`<sutram-select>`**: Standardized dropdown selection primitive.
+    *   *Properties:* `.label`, `.value`, `.options` (Array of `{value, label}`), `?disabled`, `?inline`, `?flush`.
+    *   *Events:* `@sutram-input-changed`.
+*   **`<sutram-toggle>`**: Boolean toggle switch primitive.
+    *   *Properties:* `.label`, `?checked`, `?disabled`, `?flush`.
+    *   *Events:* `@sutram-input-changed`.
 *   **`<yenvui-dropdown>`**: Floating action menu utilizing native `#top-layer` Popover API.
-    *   *Properties:* `.items` (Array of `{id, label, icon, onClick, asyncAction, divider}`), `?open`, `.align` (`'auto'`|`'left'`|`'right'`).
+    *   *Properties:* `.items` (Array of `{id, label, icon, onClick, asyncAction, divider}`), `?open`, `.align` (`'auto'`|`'left'`|`'right'`), `.direction` (`'auto'`|`'up'`|`'down'`).
     *   *Slots:* `trigger`.
 *   **`<yenvui-filter-dropdown>`**: Column-anchored filter panel utilizing native `#top-layer` Popover API.
     *   *Properties:* `.filterText`, `?open`, `?hasFilters`.
