@@ -18,6 +18,7 @@ class TestSutramRegistry(unittest.TestCase):
         sutram_utils_path = SUTRAM_JS_DIR / "utils.js"
         projection_engine_path = SUTRAM_JS_DIR / "projection_engine.js"
         sutram_offline_path = SUTRAM_JS_DIR / "offline.js"
+        yenvui_physics_path = YENVUI_JS_DIR / "physics.js"
 
         if not sutram_sdk_path.exists():
             self.skipTest("sutram_sdk.js not found in repository.")
@@ -91,8 +92,9 @@ export const subscribeWithSelector = (fn) => (set, get, api) => {
             proj_src = projection_engine_path.read_text(encoding="utf-8")
             proj_src = proj_src.replace("from './sutram_sdk.js'", "from './sutram_sdk.mjs'")
             (tmp_path / "projection_engine.mjs").write_text(proj_src, encoding="utf-8")
-
             shutil.copy2(sutram_offline_path, tmp_path / "offline.mjs")
+            if yenvui_physics_path.exists():
+                shutil.copy2(yenvui_physics_path, tmp_path / "physics.mjs")
             test_script = r"""
 import assert from 'node:assert/strict';
 
@@ -124,6 +126,8 @@ globalThis.BroadcastChannel = BroadcastChannelMock;
 
 const et = new EventTarget();
 globalThis.window = {
+    innerWidth: 1200,
+    innerHeight: 800,
     location: { hash: '#/ws_alpha/center/', search: '', pathname: '/' },
     addEventListener: et.addEventListener.bind(et),
     removeEventListener: et.removeEventListener.bind(et),
@@ -153,6 +157,7 @@ const { createSutramStore, StoreRegistry, ExtensionRegistry } = await import('./
 const { SutramProjectionCompiler, SutramProjectionPool } = await import('./projection_engine.mjs');
 const { debounce, threeWayMergeText, HostPath, truncateFilename, clone, SutramWorker } = await import('./utils.mjs');
 const { SutramDB } = await import('./offline.mjs');
+const { anchorTopLayerPopover } = await import('./physics.mjs');
 
 // 1. Bound-Scope Persistence
 const DomainStore = createSutramStore('DomainTest', {
@@ -402,11 +407,46 @@ const cachedBlob = await SutramDB.getVFSBlob('ws_alpha', '/api/ws_alpha/fs/fetch
 assert.deepEqual(cachedBlob, { size: 42, text: 'hello' }, 'getVFSBlob must resolve the cached blob');
 assert.equal(txModes[0].mode, 'readonly', 'getVFSBlob must use a readonly transaction');
 assert.equal(SutramDB._lruBuffer.has('ws_alpha::/api/ws_alpha/fs/fetch?file=vfs://alpha/app.py'), true, 'getVFSBlob must stage access timestamp in _lruBuffer');
-
 await SutramDB._flushLRUQueue();
 assert.equal(SutramDB._lruBuffer.size, 0, '_flushLRUQueue must drain _lruBuffer');
 const lruIndex = mockStores.manifest_cache.get('vfs_lru_index');
 assert.ok(lruIndex && lruIndex['ws_alpha::/api/ws_alpha/fs/fetch?file=vfs://alpha/app.py'] >= 1000, '_flushLRUQueue must persist compact vfs_lru_index in manifest_cache');
+
+// 13. anchorTopLayerPopover (Bidirectional Collision Flipping & Direction Handling)
+const popoverMock = {
+    style: {},
+    offsetHeight: 200
+};
+
+// 13a. Sufficient bottom clearance: drops downward
+const topTrigger = {
+    getBoundingClientRect: () => ({ top: 50, bottom: 90, left: 100, right: 200 }),
+    parentElement: null,
+    getRootNode: () => ({ host: null })
+};
+anchorTopLayerPopover(topTrigger, popoverMock, { mode: 'menu', align: 'left', offset: 5 });
+assert.equal(popoverMock.style.top, '95px', 'Dropdown must drop downward when space below is sufficient');
+assert.equal(popoverMock.style.bottom, 'auto', 'Downward dropdown must clear style.bottom');
+
+// 13b. Viewport bottom collision: flips upward
+const bottomTrigger = {
+    getBoundingClientRect: () => ({ top: 700, bottom: 740, left: 100, right: 200 }),
+    parentElement: null,
+    getRootNode: () => ({ host: null })
+};
+anchorTopLayerPopover(bottomTrigger, popoverMock, { mode: 'menu', align: 'left', offset: 5 });
+assert.equal(popoverMock.style.bottom, '105px', 'Dropdown near viewport bottom must flip upward (800 - 700 + 5)');
+assert.equal(popoverMock.style.top, 'auto', 'Flipped dropdown must clear style.top to auto');
+
+// 13c. Explicit direction: 'up' forces upward drop even with ample bottom space
+anchorTopLayerPopover(topTrigger, popoverMock, { mode: 'menu', direction: 'up', offset: 5 });
+assert.equal(popoverMock.style.bottom, '755px', 'Explicit direction: up must drop upward (800 - 50 + 5)');
+assert.equal(popoverMock.style.top, 'auto');
+
+// 13d. Explicit direction: 'down' suppresses collision flipping near viewport bottom
+anchorTopLayerPopover(bottomTrigger, popoverMock, { mode: 'menu', direction: 'down', offset: 5 });
+assert.equal(popoverMock.style.top, '745px', 'Explicit direction: down must preserve downward positioning');
+assert.equal(popoverMock.style.bottom, 'auto');
 
 console.log('ALL_SUTRAM_TESTS_PASSED');
 process.exit(0);

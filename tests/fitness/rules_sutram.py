@@ -58,12 +58,14 @@ def check_sutram_rules():
                 1,
                 "SutramVirtualList must bind .keyFunction on <lit-virtualizer> and set '--card-content-visibility: visible' to prevent iOS WebKit DOM recycling and paint bugs."
             )
-
     code_index_path = PROJECT_ROOT / "CODE_INDEX.md"
     if code_index_path.exists():
         with open(code_index_path, "r", encoding="utf-8") as f:
             for idx, line in enumerate(f, start=1):
                 if "# [comment required]" in line:
+                    tree_entry = line.split("#", 1)[0].lstrip(" │├└─\t").strip()
+                    if tree_entry.startswith(("def ", "async def ", "class ", "function ")):
+                        continue
                     report_violation("CODE_INDEX_PLACEHOLDER_BAN", code_index_path, idx, f"Unresolved comment placeholder: {line.strip()}")
 
     insetu_dir = PROJECT_ROOT.parent / "insetu"

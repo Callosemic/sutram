@@ -38,7 +38,7 @@ sutram/
 │   │   ├── 0019_codemirror_tag_completion_defense_ligature_suppression_and_innerhtml_ban.md # ADR-0019: CodeMirror tag completion defense, ligature suppression, and innerHTML ban
 │   │   ├── 0020_multi_window_popout_lifecycle_broadcast_channel_and_declarative_job_runner.md # ADR-0020: Multi-window popout lifecycle, BroadcastChannel IPC synchronization, and declarative job runner
 │   │   ├── 0021_declarative_settings_form_engine_configuration_hooks_and_native_esm_caching.md # ADR-0021: Declarative settings form engine, configuration hooks, and native ESM caching
-│   │   ├── 0022_codemirror_viewport_preservation_prose_engine_and_virtualizer_sizing.md # [comment required]
+│   │   ├── 0022_codemirror_viewport_preservation_prose_engine_and_virtualizer_sizing.md # ADR-0022: CodeMirror viewport preservation, prose engine, and virtualizer sizing.
 │   │   ├── 0022_store_registry_multi_tenancy_three_way_merge_and_projection_rekeying.md # ADR-0022: StoreRegistry multi-tenancy scoping, three-way text merge, and projection rekeying
 │   │   ├── 0023_codemirror_viewport_preservation_prose_engine_and_virtualizer_sizing.md # ADR-0023: CodeMirror viewport preservation, prose typography engine, and virtualizer intrinsic sizing
 │   │   ├── 0024_generational_projection_pooling_debounced_persistence_and_lazy_lru_caching.md # ADR-0024: Generational projection pooling, debounced store persistence, and lazy LRU cache buffering
@@ -49,66 +49,211 @@ sutram/
 ├── sutram/                         # Core Sutram IoC Micro-Kernel runtime
 │   └── js/                         # Pure ES module frontend runtime kernel and utilities
 │       ├── app_shell.js            # Declarative web component app shell and tab layout router
+│       │   ├── function getSpatialMetrics(capacity, activeViewport, layout...) # [comment required]
+│       │   ├── function pinMatchesSlot(pin, slotOrId) # [comment required]
+│       │   └── class SutramAppShell # [comment required]
 │       ├── client.js               # Agnostic data provider client and HTTP transport provider interface
+│       │   ├── class SutramDataClient # sutram/js/client.js Phase 0: Sutram Micro-Kernel Data Provider Interface
+│       │   └── class HttpProvider  # [comment required]
 │       ├── drag-coordinator.js     # Spatial drag-and-drop overlay coordinator for interactive column reordering
+│       │   └── class SutramDragCoordinator # [comment required]
 │       ├── inputs.js               # Standard form input elements (text, select, textarea, toggle)
+│       │   ├── class SutramInput   # 1.
+│       │   ├── class SutramSelect  # 2.
+│       │   ├── class SutramTextarea # 3.
+│       │   └── class SutramToggle  # 4.
 │       ├── offline.js              # Offline IndexedDB persistence manager, outbox reconciler, and network hysteresis manager
+│       │   ├── class SutramDB      # [comment required]
+│       │   ├── class OfflineHttpProvider # [comment required]
+│       │   ├── class NetworkHysteresisManager # [comment required]
+│       │   ├── class OutboxReconciler # [comment required]
+│       │   ├── function purgeSutramCaches() # [comment required]
+│       │   └── function bootSutramServiceWorker() # [comment required]
 │       ├── poller.js               # Background job status polling factory with tier-0 API integration
+│       │   └── function createJobPoller(apiClient) # sutram/js/poller.js Standalone background job status polling routine
 │       ├── primitives.js           # Presentation primitives (buttons, modals, toast, selection, status)
+│       │   ├── class SutramVirtualList # 0.
+│       │   ├── class SutramBtn     # 1.
+│       │   ├── class SutramProjectionWindowControls # 1.25 Multi-Window Pop-Out / Dock-In Control Button
+│       │   ├── class SutramAsyncBtn # 1.5 Async Action Button
+│       │   ├── class SutramStatusBar # 2.
+│       │   ├── class SutramToastContainer # 3.
+│       │   ├── class SutramSelectionTray # 4.
+│       │   ├── class SutramCategorizedList # 5.
+│       │   ├── class SutramFolderBrowser # 6.
+│       │   ├── class SutramModal   # 7.
+│       │   ├── class SutramWindow  # [comment required]
+│       │   ├── class SutramFieldCard # 8.
+│       │   ├── class SutramSettingsForm # [comment required]
+│       │   ├── class SutramGenericSettingsModal # [comment required]
+│       │   ├── class SutramEntityActions # 8.5.
+│       │   ├── class SutramCard    # 9.
+│       │   ├── class SutramCardGroup # 10.
+│       │   ├── class SutramSearchBar # 11.
+│       │   ├── class SutramSpinner # [comment required]
+│       │   ├── class SutramEmptyState # [comment required]
+│       │   ├── class SutramBoard   # [comment required]
+│       │   ├── class SutramColumn  # [comment required]
+│       │   ├── class SutramTag     # [comment required]
+│       │   ├── class SutramLabel   # [comment required]
+│       │   ├── class SutramScrubTrack # [comment required]
+│       │   ├── class SutramScrollView # [comment required]
+│       │   ├── class SutramToolbar # [comment required]
+│       │   ├── class SutramDropdown # 12.
+│       │   ├── class SutramFilterDropdown # [comment required]
+│       │   ├── class SutramCollapsible # [comment required]
+│       │   ├── class SutramCategorySection # [comment required]
+│       │   ├── class SutramPill    # 13.
+│       │   ├── class SutramFilterGroup # [comment required]
+│       │   ├── class SutramEditor  # [comment required]
+│       │   ├── class SutramSelectorModal # 15.
+│       │   ├── class SutramReportProjection # 16.
+│       │   ├── class SutramDiffViewer # 17.
+│       │   └── class SutramSubtabMenu # 18.
 │       ├── projection_engine.js    # Declarative layout projection compiler (SutramProjectionCompiler)
+│       │   ├── class SutramProjectionCompiler # [comment required]
+│       │   └── class SutramProjectionPool # [comment required]
 │       ├── shared_styles.js        # Lit CSS intent tokens, presentation primitives, and theme styles
 │       ├── shortcuts.js            # Centralized context-aware keydown shortcut router
+│       │   └── function initShortcutRouter(registry, getActiveContexts) # sutram/js/shortcuts.js Centralized hierarchical shortcut router
 │       ├── sutram-boot.js          # Stage 1 bootloader for importmap synthesis, SemVer parsing, and guardrails
 │       ├── sutram_sdk.js           # IoC Micro-Kernel, SutramElement base class, SutramContextMixin, and ExtensionRegistry
+│       │   ├── function createSutramStore() # [comment required]
+│       │   ├── function bindStoreInput() # [comment required]
+│       │   ├── function SutramContextMixin(SuperClass) # [comment required]
+│       │   ├── class SutramElement # [comment required]
+│       │   └── function canUseMultiWindowPopout() # [comment required]
 │       ├── sw-core.js              # Abstracted Service Worker core runtime for offline caching and navigation fallbacks
 │       ├── utils.js                # Pure algorithmic utility helpers (fuzzy filter, debounce, coalescedAsync, slugify, time formatting, nativeShareFiles)
+│       │   ├── function threeWayMergeText(baseText, localText, remoteText) # [comment required]
+│       │   ├── function cleanCodeArtifacts(text) # [comment required]
+│       │   ├── function shallowEqual(a, b) # [comment required]
+│       │   ├── function normalizeAccentText(str) # [comment required]
+│       │   ├── function fuzzyFilterObjects(items, query, getSearchString =...) # [comment required]
+│       │   ├── function debounce(callback, delay = 300) # [comment required]
+│       │   ├── function coalescedAsync(asyncFn) # [comment required]
+│       │   ├── function slugify(str) # [comment required]
+│       │   ├── function truncateFilename(filename, maxLen = 24, ellipsis...) # [comment required]
+│       │   ├── function clone(obj) # [comment required]
+│       │   ├── function copyToClipboard(text) # [comment required]
+│       │   ├── function copyRichHtml(htmlStr, plainText = null) # [comment required]
+│       │   ├── function copyRawText(text, successCallback, errorCall...) # [comment required]
+│       │   ├── function downloadBlob(blob, filename) # [comment required]
+│       │   ├── function nativeShareFiles(fileObjects) # [comment required]
+│       │   ├── function downloadFile() # [comment required]
+│       │   ├── function bindGhostDrag() # [comment required]
+│       │   ├── function buildFileTree() # [comment required]
+│       │   ├── function resolveDirectoryState() # [comment required]
+│       │   ├── function timeAgo(timestamp) # [comment required]
+│       │   ├── function formatDate(timestamp) # [comment required]
+│       │   ├── function resolveSutramAsset(relativePath, fallbackMetaUrl =...) # [comment required]
+│       │   └── class SutramWorkerBroker # [comment required]
 │       ├── wordcount.js            # Ephemeral word count widget decoration plugin for CodeMirror 6
+│       │   ├── class WordCountWidget # [comment required]
+│       │   └── function buildDecorations(state) # [comment required]
 │       └── workers/                # Dedicated off-main-thread Web Worker scripts
 │           └── search-worker.js    # Web Worker for asynchronous fuzzy filtering and directory tree construction
 ├── tests/                          # Automated presentation chassis compliance tests and fitness functions
 │   ├── fitness/                    # Modular static analysis rules for Sutram and yenVUI architectural invariants
 │   │   ├── __init__.py             # Unit test package initializer
+│   │   │   └── def run_all()       # [comment required]
 │   │   ├── core.py                 # Shared file walker and violation reporting state
+│   │   │   ├── class FitnessState  # [comment required]
+│   │   │   ├── def report_violation(rule_name, filepath, line_num, message) # [comment required]
+│   │   │   └── def collect_unique_files(directories, extensions) # [comment required]
 │   │   ├── rules_sutram.py         # Sutram micro-kernel domain isolation, metronome, and store schema rules
+│   │   │   └── def check_sutram_rules() # [comment required]
 │   │   └── rules_yenvui.py         # yenVUI presentation token, dialog lifecycle, and container query rules
+│   │       └── def check_yenvui_rules() # [comment required]
 │   ├── fitness_functions.py        # CLI entrypoint for Sutram and yenVUI architectural fitness validation
 │   ├── run_unit_tests.py           # CLI test runner for platform behavioral unit tests
 │   ├── sutram_consumer_linter.py   # Reusable static analysis script for consumer UDF compliance
+│   │   ├── def run_consumer_lint(target_dir, allow_host_globals) # Sweeps a consumer frontend directory to ensure compliance with the Sutram IoC Micro-Kernel and yenVUI presentation standards.
+│   │   └── def check_host_domain_decoupling(target_dir) # Fitness Function: Enforces pure host-neutral Inversion of Control.
 │   └── unit/                       # Behavioral unit and integration tests for the Sutram runtime
 │       ├── __init__.py             # Unit test package initializer
 │       └── test_sutram_registry.py # Node.js and Python behavioral tests for StoreRegistry, ExtensionRegistry, and utilities
+│           └── class TestSutramRegistry(unittest.TestCase) # [comment required]
 └── yenvui/                         # Edge-Native presentation chassis and Web Component UI library
     ├── css/                        # Universal CSS theme tokens and layout resets
     │   ├── theme-tokens.css        # CSS custom property tokens for Dark, Light, and E-Ink brutalist themes
     │   └── yenvui-primitives.css   # Atomic presentation resets and utility classes
     └── js/                         # Pure ES module frontend runtime kernel and utilities
         ├── async-btn.js            # Agnostic asynchronous action button with status feedback state machine
+        │   ├── class YenvuiBtn     # [comment required]
+        │   └── class YenvuiAsyncBtn # [comment required]
         ├── board.js                # Multi-column container-query responsive layout grid and column container
+        │   ├── class YenvuiBoard   # [comment required]
+        │   └── class YenvuiColumn  # [comment required]
         ├── card-group.js           # Gesture-locked card container with edge-selection swipe detection, stacked layout rendering, and accordion deck physics
+        │   └── class YenvuiCardGroup # [comment required]
         ├── card.js                 # Polymorphic card primitive with drawer overlay and long-press selection
+        │   └── class YenvuiCard    # [comment required]
         ├── category-section.js     # Categorized list section wrapper with header action slot
+        │   └── class YenvuiCategorySection # [comment required]
         ├── collapsible.js          # Expandable accordion container with semantic intent styling
+        │   └── class YenvuiCollapsible # [comment required]
         ├── diff-utils.js           # Line-by-line diff calculation algorithms and patch formatting utilities
+        │   ├── function computeIntraLineTokens(oldText = '', newText = '') # sutram/yenvui/js/diff-utils.js Zero-dependency diff parsing and 1:1 line alignment utility (Tier 0)
+        │   ├── function computeMaxChars(searchLines, replaceLines, inter...) # [comment required]
+        │   ├── function parseRawHunks(searchStr = '', replaceStr = '') # [comment required]
+        │   ├── function parseNdiff(diffStr = '') # [comment required]
+        │   ├── function parseUnifiedDiff(diffStr = '') # [comment required]
+        │   └── function parseDiffPayload() # [comment required]
         ├── diff-viewer.js          # Dual-box and interleaved split-pane diff presentation component
+        │   └── class YenvuiDiffViewer # [comment required]
         ├── drop-zone.js            # Top-layer popover drop overlay and drop target presentation primitives
+        │   ├── class YenvuiDropOverlay # [comment required]
+        │   └── class YenvuiDropTarget # [comment required]
         ├── dropdown.js             # Context popover trigger menus and filter dropdown panels
+        │   ├── class YenvuiDropdown # [comment required]
+        │   └── class YenvuiFilterDropdown # [comment required]
         ├── editor.js               # CodeMirror 6 code editor wrapper with dynamic ESM language loading
+        │   ├── function loadLanguageExtension(lang) # [comment required]
+        │   └── class YenvuiEditor  # [comment required]
         ├── empty-state.js          # Centered empty state feedback container with icon and text slot
+        │   └── class YenvuiEmptyState # [comment required]
         ├── filter-group.js         # Interactive pill array for multi-attribute filtering
+        │   └── class YenvuiFilterGroup # [comment required]
         ├── label.js                # Standardized form label primitive with theme observation support
+        │   └── class YenvuiLabel   # [comment required]
         ├── modal.js                # Native HTML5 top-layer dialog modal overlay with backdrop handling
+        │   └── class YenvuiModal   # [comment required]
         ├── physics.js              # Universal gesture physics controller and Shadow DOM point resolution
+        │   ├── function acquireBodyScrollLock() # [comment required]
+        │   ├── function releaseBodyScrollLock() # [comment required]
+        │   ├── function getEventPath(e) # [comment required]
+        │   ├── function getEventTarget(e, selector = null) # Traverses the event path to find the first element matching a given CSS selector.
+        │   ├── function anchorTopLayerPopover() # Computes and applies true viewport coordinates for a #top-layer popover element.
+        │   ├── function syncTopLayerPopover() # Promotes or dismisses a popover element in the browser's #top-layer and synchronizes its anchor coordinates.
+        │   ├── function startKineticThrow() # 60fps Inertial Momentum Throw Engine Applies exponential decay (0.94 friction) to a scroll container's scrollLeft/scrollTop based on recent...
+        │   ├── class YenvuiViewportGuard # Singleton Root Viewport Physics Guard (Tier 0 Chassis) Centralizes iOS Safari edge-swipe history navigation prevention across the entire doc...
+        │   ├── function getDeepElementFromPoint(x, y, selector = null) # [comment required]
+        │   └── class YenvuiGestureController # Universal Gesture Controller Normalizes PointerEvents for unified desktop/mobile dragging while maintaining an invisible TouchEvent listener...
         ├── pill.js                 # Toggleable tag/badge primitive supporting standard and text variants
+        │   └── class YenvuiPill    # [comment required]
         ├── scroll-view.js          # Container-query responsive scrollable view container with adaptive edge padding
+        │   └── class YenvuiScrollView # [comment required]
         ├── search-bar.js           # Standardized text search input with instant clear action
+        │   └── class YenvuiSearchBar # [comment required]
         ├── selection-tray.js       # Floating action tray for batch selection operations
+        │   └── class YenvuiSelectionTray # [comment required]
         ├── shared_styles.js        # Lit CSS intent tokens, presentation primitives, and theme styles
         ├── spinner.js              # Asynchronous CSS loading indicator component with custom text label
+        │   └── class YenvuiSpinner # [comment required]
         ├── status-bar.js           # System status and background synchronization indicator bar
+        │   └── class YenvuiStatusBar # [comment required]
         ├── tabs.js                 # Horizontal swipe carousel tab navigation and cached view router
+        │   └── class YenvuiTabs    # [comment required]
         ├── tag.js                  # Semantic intent tag primitive with high-contrast theme overrides
+        │   └── class YenvuiTag     # [comment required]
         ├── toast.js                # Non-blocking toast notification alert container
+        │   └── class YenvuiToastContainer # [comment required]
         ├── toolbar.js              # Sticky header toolbar integrating search, filters, and action slots
+        │   └── class YenvuiToolbar # [comment required]
         ├── window.js               # Grid-constrained floating workspace dialog surface with column anchor and span layout control
+        │   └── class YenvuiWindow  # [comment required]
         └── yenvui-base.js          # Base presentation class encapsulating theme mutation observation and lifecycle hooks
+            ├── class YenvuiBase    # [comment required]
+            └── class YenvuiScrubTrack # [comment required]
 ```
