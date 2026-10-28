@@ -6,6 +6,7 @@ export class YenvuiDropdown extends YenvuiBase {
         items: { type: Array },
         open: { type: Boolean, reflect: true },
         align: { type: String },
+        direction: { type: String },
         _loadingItemId: { type: String, state: true }
     };
     static styles = css`
@@ -57,6 +58,7 @@ export class YenvuiDropdown extends YenvuiBase {
         this.items = [];
         this.open = false;
         this.align = 'auto';
+        this.direction = 'auto';
         this._loadingItemId = null;
     }
 
@@ -70,7 +72,7 @@ export class YenvuiDropdown extends YenvuiBase {
         this._boundReposition = () => {
             if (this.open) {
                 const menu = this.shadowRoot?.querySelector('.dropdown-menu');
-                if (menu) anchorTopLayerPopover(this, menu, { mode: 'menu', align: this.align || 'auto', offset: 5 });
+                if (menu) anchorTopLayerPopover(this, menu, { mode: 'menu', align: this.align || 'auto', direction: this.direction || 'auto', offset: 5 });
             }
         };
         window.addEventListener('resize', this._boundReposition);
@@ -86,14 +88,13 @@ export class YenvuiDropdown extends YenvuiBase {
         const menu = this.shadowRoot?.querySelector('.dropdown-menu');
         if (menu) syncTopLayerPopover(this, menu, false);
     }
-
     updated(changedProperties) {
         super.updated(changedProperties);
-        if (changedProperties.has('open') || changedProperties.has('items') || changedProperties.has('align')) {
+        if (changedProperties.has('open') || changedProperties.has('items') || changedProperties.has('align') || changedProperties.has('direction')) {
             const menu = this.shadowRoot?.querySelector('.dropdown-menu');
             if (menu) {
                 const hasItems = Boolean(this.open && this.items && this.items.length > 0);
-                syncTopLayerPopover(this, menu, hasItems, { mode: 'menu', align: this.align || 'auto', offset: 5 });
+                syncTopLayerPopover(this, menu, hasItems, { mode: 'menu', align: this.align || 'auto', direction: this.direction || 'auto', offset: 5 });
             }
         }
     }

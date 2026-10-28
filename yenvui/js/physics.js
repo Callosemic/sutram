@@ -120,21 +120,31 @@ export function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) {
         popoverEl.style.width = `${Math.round(width)}px`;
         return;
     }
-
     // Floating Menu Mode ('menu')
+    const direction = options.direction || 'auto';
     const maxRight = Math.min(window.innerWidth, colRect.right || window.innerWidth);
     const minLeft = Math.max(0, colRect.left || 0);
     const spaceOnRight = maxRight - triggerRect.left;
     const containerWidth = maxRight - minLeft;
     const isInRightHalf = containerWidth > 0 && (triggerRect.left - minLeft) > (containerWidth * 0.5);
     const estimatedWidth = options.estimatedWidth || 220;
+    const menuHeight = popoverEl.offsetHeight || 220;
+    const spaceBelow = window.innerHeight - triggerRect.bottom;
 
     const shouldAlignRight = align === 'right' || (align === 'auto' && (spaceOnRight < estimatedWidth + 12 || isInRightHalf));
+    const shouldDropUp = direction === 'up' || (direction === 'auto' && spaceBelow < menuHeight + 16 && triggerRect.top > spaceBelow);
 
     popoverEl.style.position = 'fixed';
     popoverEl.style.margin = '0';
     popoverEl.style.inset = 'auto';
-    popoverEl.style.top = `${Math.round(triggerRect.bottom + offset)}px`;
+    if (shouldDropUp) {
+        const bottomPx = Math.max(4, window.innerHeight - triggerRect.top + offset);
+        popoverEl.style.bottom = `${Math.round(bottomPx)}px`;
+        popoverEl.style.top = 'auto';
+    } else {
+        popoverEl.style.top = `${Math.round(triggerRect.bottom + offset)}px`;
+        popoverEl.style.bottom = 'auto';
+    }
 
     if (shouldAlignRight) {
         const rightPx = Math.max(4, window.innerWidth - triggerRect.right);

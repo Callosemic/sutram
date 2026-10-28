@@ -25,16 +25,17 @@ export class YenvuiBtn extends YenvuiBase {
         this.disabled = false;
         this.active = false;
     }
-
     render() {
+        const hasLabel = Boolean(this.label !== '' && this.label !== null && this.label !== undefined);
+        const mr = hasLabel ? '6px' : '0';
         const renderIcon = (iconStr) => {
             if (!iconStr) return '';
             if (typeof iconStr === 'object') return iconStr;
-            if (iconStr.includes('<')) return html`<span style="display: inline-flex; align-items: center; margin-right: 6px;">${iconStr}</span>`;
+            if (iconStr.includes('<')) return html`<span style="display: inline-flex; align-items: center; margin-right: ${mr};">${iconStr}</span>`;
             if (/^[a-zA-Z0-9-]+$/.test(iconStr)) {
-                return html`<yv-icon name="${iconStr}" style="width: 14px; height: 14px; margin-right: 6px; display: inline-block; vertical-align: middle;"></yv-icon>`;
+                return html`<yv-icon name="${iconStr}" style="width: 14px; height: 14px; margin-right: ${mr}; display: inline-block; vertical-align: middle;"></yv-icon>`;
             }
-            return html`<span style="margin-right: 6px;">${iconStr}</span>`;
+            return html`<span style="margin-right: ${mr};">${iconStr}</span>`;
         };
 
         return html`
@@ -143,15 +144,16 @@ export class YenvuiAsyncBtn extends YenvuiBase {
         let activeIntent = this.intent;
         if (this.status === 'success') activeIntent = 'success';
         if (this.status === 'error') activeIntent = 'danger';
-
+        const hasText = Boolean(text !== '' && text !== null && text !== undefined);
+        const mr = hasText ? '6px' : '0';
         const renderIcon = (iconStr) => {
             if (!iconStr) return '';
             if (typeof iconStr === 'object') return iconStr;
-            if (iconStr.includes('<')) return html`<span style="display: inline-flex; align-items: center; margin-right: 6px;">${iconStr}</span>`;
+            if (iconStr.includes('<')) return html`<span style="display: inline-flex; align-items: center; margin-right: ${mr};">${iconStr}</span>`;
             if (/^[a-zA-Z0-9-]+$/.test(iconStr)) {
-                return html`<yv-icon name="${iconStr}" style="width: 14px; height: 14px; margin-right: ${text ? '6px' : '0'}; display: inline-block; vertical-align: middle;"></yv-icon>`;
+                return html`<yv-icon name="${iconStr}" style="width: 14px; height: 14px; margin-right: ${mr}; display: inline-block; vertical-align: middle;"></yv-icon>`;
             }
-            return html`<span style="margin-right: ${text ? '6px' : '0'};">${iconStr}</span>`;
+            return html`<span style="margin-right: ${mr};">${iconStr}</span>`;
         };
 
         return html`
