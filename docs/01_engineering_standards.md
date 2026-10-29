@@ -2,6 +2,12 @@
 
 ## 1. Core Architectural Laws
 
+### Pluggable Chassis Provider Contract (`sutram-chassis`)
+All Layer 2 presentation primitives, spatial app shells, and layout coordinators MUST import presentation components exclusively via the bare specifier `'sutram-chassis'`. Hardcoding relative filesystem imports targeting chassis repositories (e.g., `../../yenvui/js/*`) is strictly prohibited. Consuming host applications map `'sutram-chassis'` to their active presentation library via HTML import maps. All chassis providers must export all 28 primitives defined in `REQUIRED_CHASSIS_PRIMITIVES`.
+
+### Higher-Order Form Input Event Bridging
+Sutram input primitives (`<sutram-input>`, `<sutram-select>`, `<sutram-textarea>`, `<sutram-toggle>`) MUST inherit directly from chassis input classes wrapped with `bridgeInputEvents`. This wrapper normalizes chassis `yenvui-input-changed` events into `@sutram-input-changed` events, eliminating duplicated template rendering while preserving standard UDF event dispatching.
+
 ### The "Dumb Component" Rule
 `yenVUI` UI primitives (e.g., `<yenvui-card>`, `<yenvui-modal>`) must remain zero-state, presentation-only components. They MUST NOT query application registries, maintain business logic, or trigger side effects. Communication flows strictly via top-down property binding and bottom-up bubbleable custom events (`yenvui-*` or `yv-*`).
 

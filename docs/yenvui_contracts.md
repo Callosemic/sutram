@@ -21,10 +21,26 @@ A compliant chassis must consume and respect the following CSS custom properties
 *   **Semantics:** `--intent-primary`, `--intent-success`, `--intent-danger`, `--intent-warning`, `--intent-highlight`, `--intent-neutral`
 *   **Spatial Grid & Rail Geometry:** `--yv-utility-height`, `--yv-header-height`, `--yv-gutter-x`, `--yv-rail-cell-width`, `--yv-icon-size`, `--yv-icon-gap`, `--textarea-min-height`
 
-## III. Component Interface Matrix
+### Layout Markers & Environmental Boundary Contracts
+To prevent upward coupling to host containers, the chassis standardizes on duck-typed layout markers:
+*   `[data-spatial-boundary]`: Applied to enclosing spatial track containers (windows, shells) to delimit column boundaries for top-layer popover anchoring (`mode: 'column-drawer'`).
+*   `[data-virtual-list]`: Applied to virtualized lists to automatically de-escalate nested card `content-visibility: visible; contain-intrinsic-size: none` and avoid double-virtualization artifacts on iOS WebKit.
+*   `[data-yv-card]`: Stamped on card component hosts to identify selectable targets across shadow DOM hit tests.
+
+## III. Chassis Provider Contract (`sutram-chassis`)
+
+Any chassis implementation mounted into Sutram must expose the 28 primitives defined in `REQUIRED_CHASSIS_PRIMITIVES`:
+*   `Btn`, `AsyncBtn`, `Card`, `CardGroup`, `CategorySection`, `Modal`, `Window`, `Tabs`, `Toolbar`, `SearchBar`, `Dropdown`, `FilterDropdown`, `Collapsible`, `Pill`, `FilterGroup`, `Tag`, `Label`, `Spinner`, `EmptyState`, `Board`, `Column`, `ScrubTrack`, `ScrollView`, `DiffViewer`, `Editor`, `Input`, `Select`, `Textarea`, `Toggle`
+*   Validation: `validateChassisContract(chassisProvider)` throws a descriptive error if any primitive is missing.
+*   Registration: `SutramUIAdapter.registerChassis(chassisProvider)` automatically binds pass-through custom element tags (`<sutram-btn>`, `<sutram-card-group>`, etc.).
+
+## IV. Component Interface Matrix
 
 Any replacement library must export the following Custom Elements.
 ### Core Layout & Overlays
+*   **`<sutram-dag-tree>`**: Universal wavefront & hierarchy DAG tree visualization primitive.
+    *   *Properties:* `.stages` (Array of wavefront stages), `.rootNode` (Object), `.nodes` (Array), `.renderNode` (Function), `?compact` (Boolean).
+    *   *Events:* `@sutram-dag-node-clicked`.
 *   **`<sutram-virtual-list>`**: High-performance virtualized list with double-virtualization protection.
     *   *Properties:* `.items` (Array), `.renderItem` (Function), `.keyFunction` (Function: `(item, idx) => string`).
 *   **`<sutram-projection-window-controls>`**: Multi-window popout and dock-in control button.
@@ -45,8 +61,9 @@ Any replacement library must export the following Custom Elements.
     *   *Events:* `@yenvui-window-close`, `@yenvui-window-dock`, `@yenvui-window-focus`, `@yenvui-window-drag-start`.
     *   *Slots:* default.
 *   **`<yenvui-card>`**: Polymorphic catalog container.
-    *   *Properties:* `.titleText`, `.descriptionText`, `.detailText`, `.detailPrefix`, `.detailSuffix`, `.statusText`, `.icon`, `.intent`, `.intentColor`, `?selected`, `?disableSelection`, `?compact`, `?flush`, `?stale`, `?has-actions`.
-    *   *Events:* `@yenvui-card-select-toggled`, `@yenvui-card-clicked`.
+    *   *Properties:* `.titleText`, `.descriptionText`, `.detailText`, `.detailPrefix`, `.detailSuffix`, `.statusText`, `.icon`, `.intent`, `.intentColor`, `?selected`, `?disableSelection`, `?compact`, `?flush`, `?stale`, `?has-actions`, `.actionsOpen` (Boolean getter/setter), `.hasActions` (Boolean getter/setter).
+    *   *Host Markers:* `[data-yv-card]`.
+    *   *Events:* `@yenvui-card-select-toggled`, `@yenvui-card-clicked`, `@yenvui-card-actions-opened`, `@yenvui-overlay-opened`.
     *   *Slots:* `header-actions`, `detail`, `inline-actions`, `actions`, default.
 *   **`<yenvui-collapsible>`**: Collapsible content section with semantic header styling.
     *   *Properties:* `.titleText`, `?open`, `.intent` (`primary`|`success`|`highlight`|`warning`|`danger`|`neutral`), `?flush`.
@@ -68,7 +85,8 @@ Any replacement library must export the following Custom Elements.
     *   *Properties:* `.label`, `.loadingLabel`, `.successLabel`, `.errorLabel`, `.intent`, `.variant`, `.size`, `?emphasis`, `.status` (`idle`|`loading`|`success`|`error`), `?disabled`, `?active`, `.jobRoute`, `.jobPayload`, `.onJobComplete`, `.onJobProgress`, `.onJobError`.
     *   *Events:* `@yv-click`.
 *   **`<yenvui-editor>`**: CodeMirror 6 text editor.
-    *   *Properties:* `.value`, `?readOnly`, `.language`, `?writingMode`, `.customExtensions`.
+    *   *Properties:* `.value`, `?readOnly`, `.language`, `?writingMode`, `.customExtensions`, `.languageResolver` (Async Function: `lang => string | { url }`).
+    *   *Static Properties:* `YenvuiEditor.languageResolver` (Global fallback resolver callback).
     *   *Methods:* `insertAtCursor(text)`, `getCursor()`, `setCursor(pos)`, `getScrollInfo()`, `setScrollInfo(top)`, `transformContent(transformFn)`.
     *   *Events:* `@yenvui-editor-changed`, `@yenvui-editor-selection`, `@yenvui-editor-scroll`.
 
@@ -93,20 +111,25 @@ Any replacement library must export the following Custom Elements.
     *   *Constants:* `PHYSICS` (`EDGE_START_BEZEL_PX`, `EDGE_MOVE_BEZEL_PX`, `AXIS_LOCK_THRESHOLD_PX`, `TAP_SLOP_PX`, `MIN_THROW_VELOCITY`, `THROW_DECAY`, `POPOVER_ESTIMATED_WIDTH_PX`).
     *   *Functions:* `startKineticThrow(scrollEl, samples, options)`, `acquireBodyScrollLock()`, `releaseBodyScrollLock()`, `getDeepElementFromPoint(x, y, selector)`, `anchorTopLayerPopover(triggerEl, popoverEl, options)`, `syncTopLayerPopover(triggerEl, popoverEl, isOpen, options)`.
 ### Inputs & Filtering
-*   **`<sutram-textarea>`**: Auto-resizing multiline text input primitive with minimum row clamping.
-    *   *Properties:* `.label`, `.value`, `.placeholder`, `.rows`, `?monospace`, `?disabled`, `?readOnly`, `?inline`, `?autoSize`, `.maxHeight`, `.minRows`, `?borderless`, `?flush`.
-    *   *Events:* `@sutram-input-changed`.
-*   **`<sutram-input>`**: Single-line text, password, or numeric input primitive.
+*   **`<yenvui-input>`**: Single-line text input presentation primitive.
     *   *Properties:* `.label`, `.value`, `.placeholder`, `.type`, `?disabled`, `?inline`, `?flush`.
-    *   *Events:* `@sutram-input-changed`.
-*   **`<sutram-select>`**: Standardized dropdown selection primitive.
+    *   *Events:* `@yenvui-input-changed`.
+*   **`<yenvui-select>`**: Dropdown select presentation primitive.
     *   *Properties:* `.label`, `.value`, `.options` (Array of `{value, label}`), `?disabled`, `?inline`, `?flush`.
-    *   *Events:* `@sutram-input-changed`.
-*   **`<sutram-toggle>`**: Boolean toggle switch primitive.
+    *   *Events:* `@yenvui-input-changed`.
+*   **`<yenvui-textarea>`**: Multiline auto-sizing textarea presentation primitive.
+    *   *Properties:* `.label`, `.value`, `.placeholder`, `.rows`, `?monospace`, `?disabled`, `?readOnly`, `?inline`, `?autoSize`, `.maxHeight`, `.minRows`, `?borderless`, `?flush`.
+    *   *Events:* `@yenvui-input-changed`.
+*   **`<yenvui-toggle>`**: Boolean toggle switch presentation primitive.
     *   *Properties:* `.label`, `?checked`, `?disabled`, `?flush`.
-    *   *Events:* `@sutram-input-changed`.
+    *   *Events:* `@yenvui-input-changed`.
+*   **`<sutram-textarea>`**: Higher-order bridged textarea bound to `@sutram-input-changed`.
+*   **`<sutram-input>`**: Higher-order bridged input bound to `@sutram-input-changed`.
+*   **`<sutram-select>`**: Higher-order bridged select bound to `@sutram-input-changed`.
+*   **`<sutram-toggle>`**: Higher-order bridged toggle bound to `@sutram-input-changed`.
 *   **`<yenvui-dropdown>`**: Floating action menu utilizing native `#top-layer` Popover API.
     *   *Properties:* `.items` (Array of `{id, label, icon, onClick, asyncAction, divider}`), `?open`, `.align` (`'auto'`|`'left'`|`'right'`), `.direction` (`'auto'`|`'up'`|`'down'`).
+    *   *Events:* `@yenvui-action-error` (dispatched on unhandled action exception).
     *   *Slots:* `trigger`.
 *   **`<yenvui-filter-dropdown>`**: Column-anchored filter panel utilizing native `#top-layer` Popover API.
     *   *Properties:* `.filterText`, `?open`, `?hasFilters`.
