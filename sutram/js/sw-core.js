@@ -80,7 +80,8 @@ self.addEventListener('fetch', (e) => {
                         throw err;
                     });
 
-                    if (finalCached) {
+                    const isLocalDev = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+                    if (finalCached && !isLocalDev) {
                         networkFetch.catch(() => {});
                         return finalCached;
                     }

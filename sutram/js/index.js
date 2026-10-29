@@ -79,7 +79,9 @@ import {
     SutramInput,
     SutramSelect,
     SutramTextarea,
-    SutramToggle
+    SutramToggle,
+    SutramCombobox,
+    SutramTargetBinding
 } from './inputs.js';
 import {
     fuzzyFilterObjects,
@@ -160,6 +162,7 @@ export {
     SutramModal,
     SutramWindow,
     SutramFieldCard,
+    SutramTargetBinding,
     SutramSettingsForm,
     SutramGenericSettingsModal,
     SutramEntityActions,
@@ -192,6 +195,7 @@ export {
     SutramSelect,
     SutramTextarea,
     SutramToggle,
+    SutramCombobox,
     fuzzyFilterObjects,
     normalizeAccentText,
     slugify,

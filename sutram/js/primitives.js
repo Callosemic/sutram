@@ -809,6 +809,37 @@ export class SutramFieldCard extends SutramElement {
             color: var(--text-muted);
             line-height: 1.4;
         }
+        .scope-badge {
+            font-family: var(--font-mono, monospace);
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 2px 8px;
+            border-radius: 4px;
+            line-height: 1.4;
+            white-space: nowrap;
+        }
+        .scope-badge.primary {
+            background: color-mix(in srgb, var(--intent-primary) 18%, transparent);
+            color: var(--intent-primary);
+            border: 1px solid color-mix(in srgb, var(--intent-primary) 40%, transparent);
+        }
+        .scope-badge.neutral {
+            background: var(--bg);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+        }
+        .scope-badge.highlight {
+            background: color-mix(in srgb, var(--intent-highlight) 18%, transparent);
+            color: var(--intent-highlight);
+            border: 1px solid color-mix(in srgb, var(--intent-highlight) 40%, transparent);
+        }
+        .scope-badge.warning {
+            background: color-mix(in srgb, var(--intent-warning) 18%, transparent);
+            color: var(--intent-warning);
+            border: 1px solid color-mix(in srgb, var(--intent-warning) 40%, transparent);
+        }
     `];
 
     constructor() {
@@ -822,15 +853,15 @@ export class SutramFieldCard extends SutramElement {
     _renderBadges() {
         const badges = [];
         if (this.secure) {
-            badges.push(html`<sutram-tag text="secure" intent="warning"></sutram-tag>`);
+            badges.push(html`<span class="scope-badge warning">secure</span>`);
         }
         const scope = this.scope || 'workspace';
         if (scope === 'daemon') {
-            badges.push(html`<sutram-tag text="daemon" intent="neutral"></sutram-tag>`);
+            badges.push(html`<span class="scope-badge neutral">daemon</span>`);
         } else if (scope === 'repo') {
-            badges.push(html`<sutram-tag text="repo" intent="highlight"></sutram-tag>`);
+            badges.push(html`<span class="scope-badge highlight">repo</span>`);
         } else if (scope !== 'none') {
-            badges.push(html`<sutram-tag text="workspace" intent="primary"></sutram-tag>`);
+            badges.push(html`<span class="scope-badge primary">workspace</span>`);
         }
         return html`<div style="display: inline-flex; gap: 6px; align-items: center;"><slot name="header-actions"></slot>${badges}</div>`;
     }
@@ -905,6 +936,7 @@ export class SutramSettingsForm extends SutramElement {
         this.filterQuery = '';
         this.hideSaveButton = false;
         this._jsonBuffers = {};
+        this.optionResolver = null;
     }
 
     willUpdate(changedProperties) {
@@ -1047,7 +1079,7 @@ export class SutramSettingsForm extends SutramElement {
                     inputHtml = html`
                         <sutram-async-btn
                             style="width: 100%;"
-                            label=${field.button_label || field.label || 'Execute Action'}
+                            label=${field.button_label || field.action_label || field.label || 'Execute Action'}
                             intent=${field.intent || 'primary'}
                             ?disabled=${isRepoFieldDisabled}
                             .onClick=${async (e) => {
@@ -1071,18 +1103,56 @@ export class SutramSettingsForm extends SutramElement {
                         </sutram-toggle>
                     `;
                 } else if (field.type === 'select') {
-                    const options = (field.options || []).map(opt => ({
+                    let rawOptions = field.options || [];
+                    if (field.options_from && typeof field.options_from === 'object') {
+                        const srcField = field.options_from.field;
+                        const valKey = field.options_from.value_key || 'id';
+                        const lblKey = field.options_from.label_key || 'title';
+                        const srcArr = Array.isArray(this.formData?.[srcField]) ? this.formData[srcField] : [];
+                        rawOptions = srcArr
+                            .filter(item => item && typeof item === 'object' && (item[valKey] || item[lblKey]))
+                            .map(item => ({
+                                value: String(item[valKey] || item[lblKey]),
+                                label: String(item[lblKey] || item[valKey])
+                            }));
+                    }
+                    const options = rawOptions.map(opt => ({
                         value: opt.value !== undefined ? opt.value : opt,
                         label: opt.label || opt.title || opt.value || opt
                     }));
+                    const effectiveVal = (val !== undefined && val !== '' && options.some(o => o.value === val))
+                        ? val
+                        : (options[0]?.value ?? val ?? '');
                     inputHtml = html`
                         <sutram-select
-                            .value=${val ?? ''}
+                            .value=${effectiveVal}
                             .options=${options}
                             ?disabled=${isRepoFieldDisabled}
                             ?flush=${true}
                             @sutram-input-changed=${e => this._emitFormMutation({ ...this.formData, [field.id]: e.detail.value })}>
                         </sutram-select>
+                    `;
+                } else if (field.type === 'target_binding') {
+                    const epField = field.endpoint_source || 'compute_endpoints';
+                    const epList = Array.isArray(this.formData?.[epField]) ? this.formData[epField] : [];
+                    const resolveModels = (epId) => {
+                        if (typeof this.optionResolver === 'function') {
+                            return this.optionResolver(field, epId, this.formData);
+                        }
+                        return [];
+                    };
+                    inputHtml = html`
+                        <sutram-target-binding
+                            ?flush=${true}
+                            ?disabled=${isRepoFieldDisabled}
+                            ?allowEmptyEndpoint=${Boolean(field.allow_empty)}
+                            .value=${val || { endpoint: '', model: '' }}
+                            .endpoints=${epList}
+                            .models=${resolveModels}
+                            .endpointPlaceholder=${field.endpoint_placeholder || 'Select endpoint...'}
+                            .modelPlaceholder=${field.placeholder || 'Select or type model...'}
+                            @sutram-input-changed=${e => this._emitFormMutation({ ...this.formData, [field.id]: e.detail.value })}>
+                        </sutram-target-binding>
                     `;
                 } else if (field.type === 'number') {
                     inputHtml = html`
