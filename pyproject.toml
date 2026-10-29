@@ -1,8 +1,8 @@
 [project]
 name = "sutram"
 version = "2.3.0"
-description = "Auto-generated project configuration"
-license = { text = "Apache-2.0" }
+description = "Zero-bundler Web Component micro-kernel (sutram) and presentation chassis (yenVUI)."
+license = "Apache-2.0"
 [tool.semantic_release]
 prerelease_token = "rc"
 vcs_release = true

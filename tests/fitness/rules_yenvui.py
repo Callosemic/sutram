@@ -22,6 +22,7 @@ def check_yenvui_rules():
     disconnect_pattern = re.compile(r'disconnectedCallback\s*\(\s*\)[\s\S]*?\.disconnect\(\)')
     inner_html_pattern = re.compile(r'\.innerHTML\s*=')
     body_overflow_pattern = re.compile(r'document\.body\.style\.overflow\s*=')
+    upward_kernel_leak_pattern = re.compile(r'\bsutram\b|sutram[-:]|\bExtensionRegistry\b', re.IGNORECASE)
     scan_dirs = [YENVUI_DIR / "js"]
     for filepath in collect_unique_files(scan_dirs, [".js"]):
         with open(filepath, "r", encoding="utf-8") as f:
@@ -77,12 +78,19 @@ def check_yenvui_rules():
             evt_match = event_pattern.search(line)
             if evt_match:
                 e_name = evt_match.group(1)
-                if not (e_name.startswith('yenvui-') or e_name.startswith('yv-') or e_name.startswith('sutram-') or e_name.startswith('sutram:')):
-                    report_violation("CUSTOM_EVENT_NAMESPACE", filepath, idx, f"CustomEvent '{e_name}' lacks namespace prefix ('yenvui-', 'yv-', or 'sutram-').")
+                if not (e_name.startswith('yenvui-') or e_name.startswith('yv-')):
+                    report_violation("CUSTOM_EVENT_NAMESPACE", filepath, idx, f"CustomEvent '{e_name}' in yenVUI must use 'yenvui-' or 'yv-' prefix (never 'sutram-').")
             if container_media_pattern.search(line):
                 report_violation("CONTAINER_QUERY_MANDATE", filepath, idx, "Viewport @media max-width detected. Use CSS @container queries instead.")
             if inner_html_pattern.search(line):
                 report_violation("NO_INNER_HTML_MANDATE", filepath, idx, "Banned .innerHTML assignment detected. Render declaratively with Lit.")
+            if upward_kernel_leak_pattern.search(line):
+                report_violation(
+                    "CHASSIS_PROVIDER_ISOLATION",
+                    filepath,
+                    idx,
+                    "Upward reference to Layer 2 Sutram ('Sutram', 'ExtensionRegistry', or 'SUTRAM-*') detected in yenVUI chassis."
+                )
             if body_overflow_pattern.search(line) and filepath.name != "physics.js":
                 report_violation(
                     "BODY_OVERFLOW_DIRECT_WRITE_BAN",

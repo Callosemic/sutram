@@ -2,6 +2,34 @@ import os
 import re
 import sys
 from pathlib import Path
+def strip_lit_expressions(line):
+    """
+    Replaces every Lit ${...} expression on a line with an empty '${}' (brace-balanced, so arrow
+    functions and object literals inside bindings are removed whole). Tag-content regexes can then
+    reason about markup without '=>' or '>' inside bindings ending a tag early. An expression left
+    open at the end of the line is stripped to the end of the line.
+    """
+    out = []
+    i = 0
+    n = len(line)
+    while i < n:
+        if line.startswith("${", i):
+            depth = 1
+            j = i + 2
+            while j < n and depth:
+                if line[j] == "{":
+                    depth += 1
+                elif line[j] == "}":
+                    depth -= 1
+                j += 1
+            out.append("${}")
+            i = j
+        else:
+            out.append(line[i])
+            i += 1
+    return "".join(out)
+
+
 def run_consumer_lint(target_dir, allow_host_globals=False):
     """
     Sweeps a consumer frontend directory to ensure compliance with the 
@@ -113,7 +141,7 @@ def run_consumer_lint(target_dir, allow_host_globals=False):
                 if is_lit_component and sutram_btn_class_pattern.search(line):
                     report("SUTRAM_BUTTON_MANDATE", "Raw <button class=\"btn-sm\"> detected in Lit template. Use <sutram-btn> or <sutram-async-btn>.")
 
-                if is_lit_component and sutram_btn_label_pattern.search(line) and 'slot=' not in line:
+                if is_lit_component and sutram_btn_label_pattern.search(strip_lit_expressions(line)) and 'slot=' not in line:
                     report("SUTRAM_BUTTON_DECLARATIVE_LABEL_MANDATE", "Raw text child detected in <sutram-btn>. Use declarative label=\"...\" property attribute.")
 
                 if sutram_card_intent_color_pattern.search(line):

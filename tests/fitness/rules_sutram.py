@@ -4,7 +4,8 @@ from pathlib import Path
 from .core import PROJECT_ROOT, SUTRAM_DIR, YENVUI_DIR, report_violation, collect_unique_files
 def check_sutram_rules():
     print("🔍 Sweeping Sutram Micro-Kernel & Domain Decoupling...")
-    domain_leak_pattern = re.compile(r'\bwindow\.inSetu\b|[\'"]insetu-[a-z0-9-]+[\'"]|yomama://|vfs:(?:diff|pairdiff):|/fs/save\b')
+    domain_leak_pattern = re.compile(r'\b(?:inSetu|insetu|Quickpack|cleanCodeArtifacts|cite_start|include_prompt|plan_uri)\b|[\'"]insetu-[a-z0-9-]+[\'"]|yomama://|vfs:(?:diff|pairdiff):|/fs/save\b')
+    relative_yenvui_import_pattern = re.compile(r'(?:from|import)\s+[\'"][^\'"]*yenvui/[^\'"]*[\'"]')
     interval_pattern = re.compile(r'\bsetInterval\s*\(')
     legacy_store_pattern = re.compile(r"create(?:Extension|Sutram)Store\s*\([\s\S]*?,\s*\[\s*['\"]")
     impure_render_pattern = re.compile(r"render\s*\(\s*\)\s*[{]\s*this\._rebuildMenu\s*\(")
@@ -33,13 +34,19 @@ def check_sutram_rules():
         for idx, line in enumerate(lines, start=1):
             if line.strip().startswith("//"):
                 continue
-
             if domain_leak_pattern.search(line):
                 report_violation(
                     "HOST_DOMAIN_ISOLATION",
                     filepath,
                     idx,
                     "Host domain reference ('window.inSetu', 'insetu-*', 'yomama://') detected. Sutram must remain purely host-agnostic."
+                )
+            if "sutram" in filepath.parts and relative_yenvui_import_pattern.search(line):
+                report_violation(
+                    "SUTRAM_CHASSIS_IMPORT_ISOLATION",
+                    filepath,
+                    idx,
+                    "Hardcoded relative 'yenvui/' import detected in Sutram kernel. Import the active chassis strictly via 'sutram-chassis'."
                 )
             if interval_pattern.search(line) and filepath.name != "sutram_sdk.js":
                 report_violation(
@@ -81,7 +88,8 @@ def check_sutram_rules():
                 for child in ast.walk(node):
                     if isinstance(child, (ast.Import, ast.ImportFrom)):
                         for alias in child.names:
-                            if not alias.asname or not alias.asname.startswith("_"):
+                            effective_name = alias.asname or alias.name
+                            if not effective_name.startswith("_"):
                                 report_violation(
                                     "PYTHON_INLINE_IMPORT_SAFETY",
                                     py_path,

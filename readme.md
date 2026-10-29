@@ -58,6 +58,14 @@ Atomic, zero-state presentation controls delivered via `yenVUI`:
 | **`<yenvui-spinner>`** | CSS loading spinner indicator | Text slot fallback. |
 | **`<yenvui-empty-state>`** | Empty list feedback container | Centered layout with icon and message slots. |
 | **`<yenvui-board>` & `<yenvui-column>`** | Multi-column flexible layout grid | Responsive container queries for layout collapse. |
+| **`<yenvui-btn>`** | Synchronous action button | `label`, `icon`, `intent`, `variant`, and `size` properties; the base for `<yenvui-async-btn>`. |
+| **`<yenvui-tag>`** & **`<yenvui-label>`** | Inline status tag and text label | Intent-colored, light-DOM rendering. |
+| **`<yenvui-scroll-view>`** | Padded scroll container | Flex column layout with configurable padding. |
+| **`<yenvui-scrub-track>`** | Horizontal scrub track | Touch pan locking (`touch-action: pan-y`) without horizontal overscroll. |
+| **`<yenvui-window>`** | Spatial workspace window | `titleText`, anchor column, span, and z-order for multi-window layouts. |
+| **`<yenvui-diff-viewer>`** | Search/replace diff viewer | Side-by-side and interleaved views of a patch or `SEARCH`/`REPLACE` pair. |
+| **`<yenvui-drop-target>`** & **`<yenvui-drop-overlay>`** | Drag-and-drop zones | Full-viewport drop overlay and inline drop targets. |
+| **`<yenvui-viewport>`** | Root viewport physics guard | Prevents iOS Safari edge-swipe history navigation while preserving vertical scroll and taps. |
 
 ---
 
@@ -94,6 +102,14 @@ State-aware wrappers, IoC brokers, and form controls delivered via `sutram`:
 | **`<sutram-empty-state>`** | Empty state wrapper | Wraps `<yenvui-empty-state>`. |
 | **`<sutram-board>` & `<sutram-column>`** | Board layout wrappers | Wraps `<yenvui-board>` and `<yenvui-column>`. |
 | **`<sutram-report-projection>`** | Spatial report projection primitive | Multi-tab dry-run and diff inspector with integrated text-blob action staging and async controls. |
+| **`<sutram-btn>`** | Synchronous button wrapper | Wraps `<yenvui-btn>`; buttons declare their label as a property (`SUTRAM_BUTTON_DECLARATIVE_LABEL_MANDATE`). |
+| **`<sutram-virtual-list>`** | Universal virtualized list | Renders large card collections through `lit-virtualizer`. |
+| **`<sutram-settings-form>`** | Schema-driven settings form | Renders an extension's settings schema, including per-repository scopes. |
+| **`<sutram-window>`** & **`<sutram-projection-window-controls>`** | Multi-window projection | Pop-out and dock-in controls for projecting views into spatial windows. |
+| **`<sutram-diff-viewer>`** | Synchronized diff viewer | Wraps `<yenvui-diff-viewer>` with dual-box and interleaved modes. |
+| **`<sutram-drag-coordinator>`** | Drag-and-drop coordinator | Coordinates drag state and drop zones across the shell. |
+| **`<sutram-scroll-view>`**, **`<sutram-scrub-track>`**, **`<sutram-tag>`**, **`<sutram-label>`** | Layout and text wrappers | Wrap their `yenVUI` counterparts. |
+| **`<yv-icon>`** | Icon micro-primitive | Defined by `sutram-boot.js`; renders icons from the `window.SutramIcons` dictionary as CSS masks. |
 
 ---
 
@@ -111,36 +127,55 @@ UDF-compliant form controls providing standard state bindings:
 
 ## 🚀 Quick Start (Zero Build Step)
 
-`sutram` requires zero bundlers, zero transpilation steps, and zero build toolchains. It is delivered directly to the browser via native HTML import maps:
+`sutram` requires zero bundlers, zero transpilation steps, and zero build toolchains. It is delivered directly to the browser via native HTML import maps.
 
-### 1. Configure the Upstream Import Map
+### 1. Vendor the Chassis
 
-Sutram and yenVUI operate entirely via **Inversion of Control for Dependency Resolution**. Components rely on bare specifiers and never hardcode CDN URLs. The host application MUST provide an HTML5 import map to resolve all third-party libraries (e.g., Lit, CodeMirror) and the chassis itself.
+Copy (or minify) `sutram/js/`, `yenvui/js/`, and `yenvui/css/` into your static directory, keeping them side by side. `sutram` modules import `yenVUI` modules by relative path, so the layout below must be preserved:
+
+```text
+static/vendor/
+├── sutram/js/     # from sutram/js/
+└── yenvui/
+    ├── js/        # from yenvui/js/
+    └── css/       # from yenvui/css/
+```
+
+inSetu does this with [`scripts/vendor_sutram.sh`](https://github.com/Callosemic/insetu/blob/main/scripts/vendor_sutram.sh), which also minifies with `esbuild` when it is installed.
+
+### 2. Configure the Upstream Import Map
+
+Sutram and yenVUI operate entirely via **Inversion of Control for Dependency Resolution**. Components rely on bare specifiers and never hardcode CDN URLs. The host application MUST provide an HTML5 import map that resolves these specifiers:
 
 ```html
 <script type="importmap">
 {
   "imports": {
     "lit": "/static/vendor/lit/lit-core.min.js",
+    "lit-virtualizer": "/static/vendor/lit/lit-virtualizer.min.js",
     "codemirror-core": "/static/vendor/codemirror/codemirror-core.js",
-    "@codemirror/lang-python": "/static/vendor/codemirror/lang-python.js",
-    "sutram/": "/static/vendor/sutram/js/",
-    "yenvui/": "/static/vendor/yenvui/js/"
+    "zustand/vanilla": "/static/vendor/zustand/vanilla.js",
+    "zustand/middleware": "/static/vendor/zustand/middleware.js"
   }
 }
 </script>
-
 ```
 
-### 2. Import the Bootloader & Render
+The `lit-core.min.js` bundle must re-export Lit's decorators and directives, as inSetu's `vendor_lit.sh` does.
+
+### 3. Load the Bootloader & Render
+
+`sutram-boot.js` is a classic script. It installs the duplicate-registration guard and `<yv-icon>`, then fires `sutram:boot-ready`, after which the host imports the component modules:
 
 ```html
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <link rel="stylesheet" href="./vendor/sutram/css/theme-tokens.css">
-  <script type="module" src="./vendor/sutram/js/sutram-boot.js"></script>
+  <!-- import map from step 2 goes here -->
+  <link rel="stylesheet" href="/static/vendor/yenvui/css/theme-tokens.css">
+  <link rel="stylesheet" href="/static/vendor/yenvui/css/yenvui-primitives.css">
+  <script src="/static/vendor/sutram/js/sutram-boot.js"></script>
 </head>
 <body>
 
@@ -151,15 +186,30 @@ Sutram and yenVUI operate entirely via **Inversion of Control for Dependency Res
     </div>
   </sutram-card>
 
+  <script>
+    window.addEventListener('sutram:boot-ready', () => {
+      import('/static/vendor/sutram/js/primitives.js');
+    });
+  </script>
 </body>
 </html>
-
 ```
+
+---
+
+## 🧪 Development & Testing
+
+```bash
+python tests/run_unit_tests.py      # unit suite (store and registry tests run in Node when it is installed)
+python tests/fitness_functions.py   # presentation and IoC fitness rules
+```
+
+The fitness suite enforces the three architectural laws above. CI runs it together with the akasa and inSetu suites, and re-vendors every sutram change into inSetu before testing it there.
 
 ---
 
 ## 📄 License
 
-Licensed under the Apache License, Version 2.0 (the "License"). You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0.
+Licensed under the **Apache License, Version 2.0**. See the [LICENSE](LICENSE) and [NOTICE](NOTICE) files for details.
 
 Copyright 2026 Sutram/yenVUI Contributors.

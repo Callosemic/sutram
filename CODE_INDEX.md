@@ -17,10 +17,6 @@ sutram/
 │   ├── 02_yenvui_blueprint.md      # Presentation chassis philosophy and atomic component arsenal
 │   ├── ADR_INDEX.md                # Global Architectural Decision Record (ADR) ledger index
 │   ├── adrs/                       # Centralized ADR chronological decision ledger
-│   │   ├── 0001_sutram_ioc_microkernel_architecture.md # ADR-0001: IoC microkernel and slot layout architecture
-│   │   ├── 0002_sutram_bootloader_and_resilience_patterns.md # ADR-0002: Stage 1 bootloader and error boundary standards
-│   │   ├── 0003_yenvui_theme_mutation_observers.md # ADR-0003: Dynamic theme mutation observer pattern
-│   │   ├── 0004_yenvui_codemirror6_tab_view_caching.md # ADR-0004: Encapsulated CodeMirror 6 and tab caching
 │   │   ├── 0005_yenvui_popover_toasts_gesture_selection.md # ADR-0005: Native popover API and selection physics
 │   │   ├── 0006_yenvui_gesture_swipe_axis_locking.md # ADR-0006: Gesture swipe axis locking and event handshakes
 │   │   ├── 0007_sutram_offline_microkernel_and_metronome_backoff.md # ADR-0007: Offline micro-kernel architecture and metronome visibility backoff
@@ -38,11 +34,17 @@ sutram/
 │   │   ├── 0019_codemirror_tag_completion_defense_ligature_suppression_and_innerhtml_ban.md # ADR-0019: CodeMirror tag completion defense, ligature suppression, and innerHTML ban
 │   │   ├── 0020_multi_window_popout_lifecycle_broadcast_channel_and_declarative_job_runner.md # ADR-0020: Multi-window popout lifecycle, BroadcastChannel IPC synchronization, and declarative job runner
 │   │   ├── 0021_declarative_settings_form_engine_configuration_hooks_and_native_esm_caching.md # ADR-0021: Declarative settings form engine, configuration hooks, and native ESM caching
-│   │   ├── 0022_codemirror_viewport_preservation_prose_engine_and_virtualizer_sizing.md # ADR-0022: CodeMirror viewport preservation, prose engine, and virtualizer sizing.
 │   │   ├── 0022_store_registry_multi_tenancy_three_way_merge_and_projection_rekeying.md # ADR-0022: StoreRegistry multi-tenancy scoping, three-way text merge, and projection rekeying
 │   │   ├── 0023_codemirror_viewport_preservation_prose_engine_and_virtualizer_sizing.md # ADR-0023: CodeMirror viewport preservation, prose typography engine, and virtualizer intrinsic sizing
 │   │   ├── 0024_generational_projection_pooling_debounced_persistence_and_lazy_lru_caching.md # ADR-0024: Generational projection pooling, debounced store persistence, and lazy LRU cache buffering
-│   │   └── 0025_root_viewport_physics_guard_kinetic_throw_and_reentrant_scroll_lock.md # ADR-0025: Root viewport physics guard, kinetic momentum throw engine, and reentrant scroll locking
+│   │   ├── 0025_root_viewport_physics_guard_kinetic_throw_and_reentrant_scroll_lock.md # ADR-0025: Root viewport physics guard, kinetic momentum throw engine, and reentrant scroll locking
+│   │   ├── 0026_pluggable_chassis_contract_ui_adapter_and_kernel_entrypoint.md # ADR-0026: Pluggable Chassis Provider Contract, SutramUIAdapter, Input Event Bridging, and Public Kernel Entrypoint
+│   │   ├── 0027_yenvui_autonomous_chassis_provider_and_input_primitives.md # ADR-0027: yenVUI Autonomous Chassis Provider Implementation, Input Primitives Extraction, and Upward Kernel Decoupling
+│   │   └── archived/               # Deeply embedded baseline architectural records preserved for historical reference
+│   │       ├── 0001_sutram_ioc_microkernel_architecture.md # ADR-0001: IoC microkernel and slot layout architecture
+│   │       ├── 0002_sutram_bootloader_and_resilience_patterns.md # ADR-0002: Stage 1 bootloader and error boundary standards
+│   │       ├── 0003_yenvui_theme_mutation_observers.md # ADR-0003: Dynamic theme mutation observer pattern
+│   │       └── 0004_yenvui_codemirror6_tab_view_caching.md # ADR-0004: Encapsulated CodeMirror 6 and tab caching
 │   └── yenvui_contracts.md         # Interface contract specification and CSS intent tokens for yenVUI presentation chassis
 ├── pyproject.toml                  # Python project metadata and semantic release configuration
 ├── readme.md                       # Master repository architecture map and component reference
@@ -57,11 +59,13 @@ sutram/
 │       │   └── class HttpProvider  # [comment required]
 │       ├── drag-coordinator.js     # Spatial drag-and-drop overlay coordinator for interactive column reordering
 │       │   └── class SutramDragCoordinator # [comment required]
+│       ├── index.js                # Public Layer 2 barrel entrypoint exporting Sutram stores, offline engines, and UI primitives
 │       ├── inputs.js               # Standard form input elements (text, select, textarea, toggle)
-│       │   ├── class SutramInput   # 1.
-│       │   ├── class SutramSelect  # 2.
-│       │   ├── class SutramTextarea # 3.
-│       │   └── class SutramToggle  # 4.
+│       │   ├── function bridgeInputEvents(BaseClass) # [comment required]
+│       │   ├── class SutramInput   # [stale?] 1.
+│       │   ├── class SutramSelect  # [stale?] 2.
+│       │   ├── class SutramTextarea # [stale?] 3.
+│       │   └── class SutramToggle  # [stale?] 4.
 │       ├── offline.js              # Offline IndexedDB persistence manager, outbox reconciler, and network hysteresis manager
 │       │   ├── class SutramDB      # [comment required]
 │       │   ├── class OfflineHttpProvider # [comment required]
@@ -72,22 +76,24 @@ sutram/
 │       ├── poller.js               # Background job status polling factory with tier-0 API integration
 │       │   └── function createJobPoller(apiClient) # sutram/js/poller.js Standalone background job status polling routine
 │       ├── primitives.js           # Presentation primitives (buttons, modals, toast, selection, status)
-│       │   ├── class SutramVirtualList # 0.
+│       │   ├── function validateChassisContract(chassisProvider) # [comment required]
+│       │   ├── class SutramUIAdapter # [comment required]
+│       │   ├── class SutramVirtualList # [stale?] 0.
 │       │   ├── class SutramBtn     # 1.
 │       │   ├── class SutramProjectionWindowControls # 1.25 Multi-Window Pop-Out / Dock-In Control Button
 │       │   ├── class SutramAsyncBtn # 1.5 Async Action Button
 │       │   ├── class SutramStatusBar # 2.
 │       │   ├── class SutramToastContainer # 3.
-│       │   ├── class SutramSelectionTray # 4.
-│       │   ├── class SutramCategorizedList # 5.
-│       │   ├── class SutramFolderBrowser # 6.
+│       │   ├── class SutramSelectionTray # [stale?] 4.
+│       │   ├── class SutramCategorizedList # [stale?] 5.
+│       │   ├── class SutramFolderBrowser # [stale?] 6.
 │       │   ├── class SutramModal   # 7.
 │       │   ├── class SutramWindow  # [comment required]
 │       │   ├── class SutramFieldCard # 8.
 │       │   ├── class SutramSettingsForm # [comment required]
 │       │   ├── class SutramGenericSettingsModal # [comment required]
-│       │   ├── class SutramEntityActions # 8.5.
-│       │   ├── class SutramCard    # 9.
+│       │   ├── class SutramEntityActions # [stale?] 8.5.
+│       │   ├── class SutramCard    # [stale?] 9.
 │       │   ├── class SutramCardGroup # 10.
 │       │   ├── class SutramSearchBar # 11.
 │       │   ├── class SutramSpinner # [comment required]
@@ -99,7 +105,8 @@ sutram/
 │       │   ├── class SutramScrubTrack # [comment required]
 │       │   ├── class SutramScrollView # [comment required]
 │       │   ├── class SutramToolbar # [comment required]
-│       │   ├── class SutramDropdown # 12.
+│       │   ├── class SutramDropdown # [stale?] 12.
+│       │   ├── class SutramTabs    # [comment required]
 │       │   ├── class SutramFilterDropdown # [comment required]
 │       │   ├── class SutramCollapsible # [comment required]
 │       │   ├── class SutramCategorySection # [comment required]
@@ -109,7 +116,8 @@ sutram/
 │       │   ├── class SutramSelectorModal # 15.
 │       │   ├── class SutramReportProjection # 16.
 │       │   ├── class SutramDiffViewer # 17.
-│       │   └── class SutramSubtabMenu # 18.
+│       │   ├── class SutramSubtabMenu # 18.
+│       │   └── class SutramDagTree # 19.
 │       ├── projection_engine.js    # Declarative layout projection compiler (SutramProjectionCompiler)
 │       │   ├── class SutramProjectionCompiler # [comment required]
 │       │   └── class SutramProjectionPool # [comment required]
@@ -126,7 +134,6 @@ sutram/
 │       ├── sw-core.js              # Abstracted Service Worker core runtime for offline caching and navigation fallbacks
 │       ├── utils.js                # Pure algorithmic utility helpers (fuzzy filter, debounce, coalescedAsync, slugify, time formatting, nativeShareFiles)
 │       │   ├── function threeWayMergeText(baseText, localText, remoteText) # [comment required]
-│       │   ├── function cleanCodeArtifacts(text) # [comment required]
 │       │   ├── function shallowEqual(a, b) # [comment required]
 │       │   ├── function normalizeAccentText(str) # [comment required]
 │       │   ├── function fuzzyFilterObjects(items, query, getSearchString =...) # [comment required]
@@ -135,6 +142,9 @@ sutram/
 │       │   ├── function slugify(str) # [comment required]
 │       │   ├── function truncateFilename(filename, maxLen = 24, ellipsis...) # [comment required]
 │       │   ├── function clone(obj) # [comment required]
+│       │   ├── function compileDagWavefronts() # [comment required]
+│       │   ├── function extractTemplateVariables() # [comment required]
+│       │   ├── function interpolateTemplateVariables() # [comment required]
 │       │   ├── function copyToClipboard(text) # [comment required]
 │       │   ├── function copyRichHtml(htmlStr, plainText = null) # [comment required]
 │       │   ├── function copyRawText(text, successCallback, errorCall...) # [comment required]
@@ -168,10 +178,13 @@ sutram/
 │   ├── fitness_functions.py        # CLI entrypoint for Sutram and yenVUI architectural fitness validation
 │   ├── run_unit_tests.py           # CLI test runner for platform behavioral unit tests
 │   ├── sutram_consumer_linter.py   # Reusable static analysis script for consumer UDF compliance
-│   │   ├── def run_consumer_lint(target_dir, allow_host_globals) # Sweeps a consumer frontend directory to ensure compliance with the Sutram IoC Micro-Kernel and yenVUI presentation standards.
+│   │   ├── def strip_lit_expressions(line) # Replaces every Lit ${...} expression on a line with an empty '${}' (brace-balanced, so arrow functions and object literals inside bindings a...
+│   │   ├── def run_consumer_lint(target_dir, allow_host_globals) # [stale?] Sweeps a consumer frontend directory to ensure compliance with the Sutram IoC Micro-Kernel and yenVUI presentation standards.
 │   │   └── def check_host_domain_decoupling(target_dir) # Fitness Function: Enforces pure host-neutral Inversion of Control.
 │   └── unit/                       # Behavioral unit and integration tests for the Sutram runtime
 │       ├── __init__.py             # Unit test package initializer
+│       ├── test_consumer_linter.py # Tests that the consumer linter ignores '=>' inside Lit ${...} bindings when checking sutram-btn labels
+│       │   └── class TestConsumerLinterButtonLabels(unittest.TestCase) # SUTRAM_BUTTON_DECLARATIVE_LABEL_MANDATE must ignore '=>' and '>' inside Lit ${...} bindings.
 │       └── test_sutram_registry.py # Node.js and Python behavioral tests for StoreRegistry, ExtensionRegistry, and utilities
 │           └── class TestSutramRegistry(unittest.TestCase) # [comment required]
 └── yenvui/                         # Edge-Native presentation chassis and Web Component UI library
@@ -209,12 +222,18 @@ sutram/
         │   ├── class YenvuiDropdown # [comment required]
         │   └── class YenvuiFilterDropdown # [comment required]
         ├── editor.js               # CodeMirror 6 code editor wrapper with dynamic ESM language loading
-        │   ├── function loadLanguageExtension(lang) # [comment required]
+        │   ├── function loadLanguageExtension(lang, customResolver = null) # [comment required]
         │   └── class YenvuiEditor  # [comment required]
         ├── empty-state.js          # Centered empty state feedback container with icon and text slot
         │   └── class YenvuiEmptyState # [comment required]
         ├── filter-group.js         # Interactive pill array for multi-attribute filtering
         │   └── class YenvuiFilterGroup # [comment required]
+        ├── index.js                # Public Layer 1 chassis provider entrypoint exporting all yenVUI primitive classes, styles, and physics
+        ├── inputs.js               # Standard form input elements (text, select, textarea, toggle)
+        │   ├── class YenvuiInput   # [comment required]
+        │   ├── class YenvuiSelect  # [comment required]
+        │   ├── class YenvuiTextarea # [comment required]
+        │   └── class YenvuiToggle  # [comment required]
         ├── label.js                # Standardized form label primitive with theme observation support
         │   └── class YenvuiLabel   # [comment required]
         ├── modal.js                # Native HTML5 top-layer dialog modal overlay with backdrop handling
@@ -227,7 +246,7 @@ sutram/
         │   ├── function anchorTopLayerPopover() # Computes and applies true viewport coordinates for a #top-layer popover element.
         │   ├── function syncTopLayerPopover() # Promotes or dismisses a popover element in the browser's #top-layer and synchronizes its anchor coordinates.
         │   ├── function startKineticThrow() # 60fps Inertial Momentum Throw Engine Applies exponential decay (0.94 friction) to a scroll container's scrollLeft/scrollTop based on recent...
-        │   ├── class YenvuiViewportGuard # Singleton Root Viewport Physics Guard (Tier 0 Chassis) Centralizes iOS Safari edge-swipe history navigation prevention across the entire doc...
+        │   ├── class YenvuiViewportGuard # [stale?] Singleton Root Viewport Physics Guard (Tier 0 Chassis) Centralizes iOS Safari edge-swipe history navigation prevention across the entire doc...
         │   ├── function getDeepElementFromPoint(x, y, selector = null) # [comment required]
         │   └── class YenvuiGestureController # Universal Gesture Controller Normalizes PointerEvents for unified desktop/mobile dragging while maintaining an invisible TouchEvent listener...
         ├── pill.js                 # Toggleable tag/badge primitive supporting standard and text variants

@@ -31,7 +31,7 @@ class TestSutramRegistry(unittest.TestCase):
                 encoding="utf-8",
             )
             (tmp_path / "physics_stub.mjs").write_text(
-                "export const getEventPath = () => [];\nexport const getEventTarget = () => null;\n",
+                "export const getEventPath = () => [];\nexport const getEventTarget = () => null;\nexport const physics = { getEventPath, getEventTarget };\n",
                 encoding="utf-8",
             )
             # Lightweight in-memory stub of Zustand vanilla and middleware
@@ -87,6 +87,7 @@ export const subscribeWithSelector = (fn) => (set, get, api) => {
             sdk_src = sdk_src.replace("from 'zustand/vanilla'", "from './vanilla.mjs'")
             sdk_src = sdk_src.replace("from 'zustand/middleware'", "from './middleware.mjs'")
             sdk_src = sdk_src.replace("from '../../yenvui/js/physics.js'", "from './physics_stub.mjs'")
+            sdk_src = sdk_src.replace("from 'sutram-chassis'", "from './physics_stub.mjs'")
             sdk_src = sdk_src.replace("from './utils.js'", "from './utils.mjs'")
             (tmp_path / "sutram_sdk.mjs").write_text(sdk_src, encoding="utf-8")
             proj_src = projection_engine_path.read_text(encoding="utf-8")
@@ -167,17 +168,17 @@ const DomainStore = createSutramStore('DomainTest', {
     localSync: ['items', 'nonExistentKey'],
     sessionSync: ['ephemeral'],
     onEvict: { 'dom:view': { ephemeral: 'evicted' } }
-}, () => activeWs, 'insetu');
+}, () => activeWs, 'sutram');
 DomainStore.setState({ items: ['alpha_intermediate'], ephemeral: 'alpha_temp' });
 DomainStore.setState({ items: ['alpha_1', 'alpha_2'], ephemeral: 'alpha_session' });
 assert.equal(
-    localStorage.getItem('insetu_local_ws_alpha_DomainTest_items'),
+    localStorage.getItem('sutram_local_ws_alpha_DomainTest_items'),
     null,
     'Trailing-edge debounce must defer synchronous localStorage writes during rapid state mutations'
 );
 DomainStore.flushPersistence();
 assert.equal(
-    localStorage.getItem('insetu_local_ws_alpha_DomainTest_items'),
+    localStorage.getItem('sutram_local_ws_alpha_DomainTest_items'),
     JSON.stringify(['alpha_1', 'alpha_2']),
     'flushPersistence() must commit the settled state under ws_alpha key'
 );
@@ -336,11 +337,10 @@ assert.equal(conflictMerge.clean, false);
 ExtensionRegistry.setTabOrder(['tasks', 'context']);
 const compiledSlots = SutramProjectionCompiler.getCompiledLayout();
 assert.ok(Array.isArray(compiledSlots), 'getCompiledLayout() must return a compiled slot array');
-
 const pool = new SutramProjectionPool();
 pool.beginPass();
-const editorNodeA = pool.resolve('insetu-editor-projection', 'vfs://alpha/old.md', { filepath: 'vfs://alpha/old.md' });
-const toolNodeB = pool.resolve('insetu-ext-git', 'git:status');
+const editorNodeA = pool.resolve('sutram-editor-projection', 'vfs://alpha/old.md', { filepath: 'vfs://alpha/old.md' });
+const toolNodeB = pool.resolve('sutram-ext-git', 'git:status');
 pool.commitPass();
 
 assert.equal(editorNodeA.dataset.subId, 'vfs://alpha/old.md');
@@ -352,18 +352,18 @@ assert.equal(editorNodeA.dataset.subId, 'vfs://alpha/new.md');
 
 // Next render pass: resolving under the new ID returns the preserved DOM instance, while unreferenced toolNodeB is swept
 pool.beginPass();
-const editorNodeAfterRename = pool.resolve('insetu-editor-projection', 'vfs://alpha/new.md');
+const editorNodeAfterRename = pool.resolve('sutram-editor-projection', 'vfs://alpha/new.md');
 pool.commitPass();
 assert.strictEqual(editorNodeAfterRename, editorNodeA, 'Rekeyed projection must reuse the exact DOM element instance');
-assert.equal(pool._activeNodes.has('insetu-ext-git:git:status'), false, 'Unreferenced nodes must be swept on commitPass()');
+assert.equal(pool._activeNodes.has('sutram-ext-git:git:status'), false, 'Unreferenced nodes must be swept on commitPass()');
 
 // Extension eviction removes matching extension nodes
 pool.beginPass();
-const extNode = pool.resolve('insetu-ext-notes', 'notes:main');
+const extNode = pool.resolve('sutram-ext-notes', 'notes:main');
 pool.commitPass();
 assert.equal(pool.evictExtension('notes'), true);
 assert.equal(extNode.removed, true);
-assert.equal(pool._activeNodes.has('insetu-ext-notes:notes:main'), false);
+assert.equal(pool._activeNodes.has('sutram-ext-notes:notes:main'), false);
 // 11. RFC 4: SutramWorker < 500 synchronous fast-path and >= 500 fallback/worker search
 const smallList = ['vfs://alpha/app.py', 'vfs://alpha/utils.py', 'vfs://alpha/readme.md'];
 const smallSearch = await SutramWorker.dispatch('FUZZY_SEARCH', { items: smallList, query: 'utils' });
@@ -417,20 +417,20 @@ const popoverMock = {
     style: {},
     offsetHeight: 200
 };
-
 // 13a. Sufficient bottom clearance: drops downward
 const topTrigger = {
     getBoundingClientRect: () => ({ top: 50, bottom: 90, left: 100, right: 200 }),
+    hasAttribute: () => false,
     parentElement: null,
     getRootNode: () => ({ host: null })
 };
 anchorTopLayerPopover(topTrigger, popoverMock, { mode: 'menu', align: 'left', offset: 5 });
 assert.equal(popoverMock.style.top, '95px', 'Dropdown must drop downward when space below is sufficient');
 assert.equal(popoverMock.style.bottom, 'auto', 'Downward dropdown must clear style.bottom');
-
 // 13b. Viewport bottom collision: flips upward
 const bottomTrigger = {
     getBoundingClientRect: () => ({ top: 700, bottom: 740, left: 100, right: 200 }),
+    hasAttribute: () => false,
     parentElement: null,
     getRootNode: () => ({ host: null })
 };
@@ -461,6 +461,318 @@ process.exit(0);
             )
             self.assertEqual(res.returncode, 0, f"Node test failed:\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}")
             self.assertIn("ALL_SUTRAM_TESTS_PASSED", res.stdout)
+
+    def test_yenvui_chassis_provider_contract_and_ui_adapter_in_node(self):
+        """Verifies yenvui/js/index.js fulfills REQUIRED_CHASSIS_PRIMITIVES and SutramUIAdapter registers all pass-through <sutram-*> elements."""
+        node_bin = shutil.which("node")
+        if not node_bin:
+            self.skipTest("Node.js binary not available in PATH.")
+
+        yenvui_index_path = YENVUI_JS_DIR / "index.js"
+        sutram_prim_path = SUTRAM_JS_DIR / "primitives.js"
+        self.assertTrue(yenvui_index_path.exists(), "yenvui/js/index.js must exist")
+        self.assertTrue(sutram_prim_path.exists(), "sutram/js/primitives.js must exist")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            (tmp_path / "package.json").write_text(json.dumps({"type": "module"}), encoding="utf-8")
+
+            # Copy all yenvui/js/*.js files and stub 'lit' + 'lit/directives/*' + 'codemirror-core'
+            for js_file in YENVUI_JS_DIR.glob("*.js"):
+                src = js_file.read_text(encoding="utf-8")
+                src = src.replace("from 'lit'", "from './lit_stub.mjs'").replace('from "lit"', 'from "./lit_stub.mjs"')
+                src = src.replace("from 'lit/directives/live.js'", "from './lit_stub.mjs'")
+                src = src.replace("from 'lit/directives/unsafe-html.js'", "from './lit_stub.mjs'")
+                (tmp_path / js_file.name).write_text(src, encoding="utf-8")
+
+            (tmp_path / "lit_stub.mjs").write_text(
+                "export class LitElement { static properties = {}; static styles = []; connectedCallback() {} disconnectedCallback() {} updated() {} requestUpdate() {} }\n"
+                "export const html = () => '';\n"
+                "export const css = () => '';\n"
+                "export const unsafeCSS = () => '';\n"
+                "export const live = (v) => v;\n"
+                "export const unsafeHTML = (v) => v;\n",
+                encoding="utf-8",
+            )
+
+            prim_src = sutram_prim_path.read_text(encoding="utf-8")
+            start_idx = prim_src.index("export const REQUIRED_CHASSIS_PRIMITIVES")
+            end_idx = prim_src.index("SutramUIAdapter.registerChassis(Chassis);")
+            adapter_code = prim_src[start_idx:end_idx]
+
+            test_mjs = f"""
+import assert from 'node:assert/strict';
+
+const definedTags = new Map();
+globalThis.HTMLElement = class HTMLElement {{}};
+globalThis.customElements = {{
+    get: (tag) => definedTags.get(tag),
+    define: (tag, cls) => definedTags.set(tag, cls)
+}};
+globalThis.window = {{
+    addEventListener: () => {{}},
+    removeEventListener: () => {{}},
+    dispatchEvent: () => {{}},
+    matchMedia: () => ({{ matches: false }})
+}};
+globalThis.document = {{
+    body: {{ getAttribute: () => 'dark', style: {{}} }},
+    head: {{ appendChild: () => {{}} }},
+    getElementById: () => ({{}}),
+    createElement: () => ({{ style: {{}}, setAttribute: () => {{}} }}),
+    addEventListener: () => {{}},
+    removeEventListener: () => {{}}
+}};
+
+const YenvuiChassis = await import('./index.js');
+{adapter_code}
+
+// 1. Validate real YenvuiChassis exports against REQUIRED_CHASSIS_PRIMITIVES
+assert.equal(YenvuiChassis.CHASSIS_PROVIDER_META.name, 'yenvui');
+assert.equal(validateChassisContract(YenvuiChassis), true);
+assert.ok(YenvuiChassis.sharedStyles !== undefined);
+assert.equal(typeof YenvuiChassis.physics.getEventPath, 'function');
+assert.equal(typeof YenvuiChassis.physics.anchorTopLayerPopover, 'function');
+
+// 2. Verify SutramUIAdapter.registerChassis mounts all pass-through <sutram-*> custom elements
+SutramUIAdapter.registerChassis(YenvuiChassis);
+for (const [sutramTag, exportKey] of Object.entries(SutramUIAdapter.PASSTHROUGH_MAP)) {{
+    const registeredCls = customElements.get(sutramTag);
+    assert.equal(typeof registeredCls, 'function', `Expected ${{sutramTag}} to be registered by SutramUIAdapter`);
+    assert.ok(
+        registeredCls.prototype instanceof YenvuiChassis[exportKey],
+        `${{sutramTag}} must inherit from YenvuiChassis.${{exportKey}}`
+    );
+}}
+
+// 3. Verify validateChassisContract rejects incomplete chassis providers
+const BadChassis = {{ ...YenvuiChassis, CHASSIS_PROVIDER_META: {{ name: 'broken-chassis' }} }};
+delete BadChassis.Modal;
+delete BadChassis.Editor;
+assert.throws(
+    () => validateChassisContract(BadChassis),
+    /\\[Sutram Boot Error\\] Chassis 'broken-chassis' fails contract\\. Missing primitives: Modal, Editor/
+);
+console.log('CHASSIS_CONTRACT_TESTS_PASSED');
+"""
+            (tmp_path / "test_chassis.mjs").write_text(test_mjs, encoding="utf-8")
+            res = subprocess.run(
+                [node_bin, "test_chassis.mjs"],
+                cwd=tmp_path.as_posix(),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(res.returncode, 0, f"Chassis contract test failed:\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}")
+            self.assertIn("CHASSIS_CONTRACT_TESTS_PASSED", res.stdout)
+
+    def test_yenvui_diff_utils_and_sutram_ring0_algorithms_in_node(self):
+        """Tests Ring 0 pure algorithms in yenvui/js/diff-utils.js and sutram/js/utils.js."""
+        node_bin = shutil.which("node")
+        if not node_bin:
+            self.skipTest("Node.js binary not available in PATH.")
+
+        diff_utils_path = YENVUI_JS_DIR / "diff-utils.js"
+        sutram_utils_path = SUTRAM_JS_DIR / "utils.js"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            (tmp_path / "package.json").write_text(json.dumps({"type": "module"}), encoding="utf-8")
+            shutil.copy2(diff_utils_path, tmp_path / "diff-utils.mjs")
+            shutil.copy2(sutram_utils_path, tmp_path / "utils.mjs")
+
+            test_mjs = """
+import assert from 'node:assert/strict';
+import {
+    computeIntraLineTokens,
+    parseRawHunks,
+    parseUnifiedDiff,
+    parseDiffPayload
+} from './diff-utils.mjs';
+import {
+    compileDagWavefronts,
+    extractTemplateVariables,
+    interpolateTemplateVariables,
+    buildFileTree,
+    resolveDirectoryState,
+    shallowEqual,
+    slugify,
+    fuzzyFilterObjects
+} from './utils.mjs';
+
+// 1. diff-utils.js: Intra-line token diffing & unified diff parsing
+const intra = computeIntraLineTokens('const x = 10;', 'const x = 20;');
+assert.equal(intra.oldTokens.some(t => t.changed && t.text.includes('1')), true);
+assert.equal(intra.newTokens.some(t => t.changed && t.text.includes('2')), true);
+const rawHunks = parseRawHunks('line1\\nold_line\\nline3', 'line1\\nnew_line\\nline3');
+assert.equal(rawHunks.interleaved.some(r => r.type === 'removed' && r.text === 'old_line'), true);
+assert.equal(rawHunks.interleaved.some(r => r.type === 'added' && r.text === 'new_line'), true);
+
+const unified = parseUnifiedDiff('@@ -1,2 +1,2 @@\\n-foo\\n+bar\\n baz');
+assert.equal(unified.split.searchLines.some(l => l.text === 'foo' && l.type === 'removed'), true);
+assert.equal(unified.split.replaceLines.some(l => l.text === 'bar' && l.type === 'added'), true);
+
+const payload = parseDiffPayload({ searchStr: 'a\\nb', replaceStr: 'a\\nc' });
+assert.equal(payload.maxChars >= 1, true);
+
+// 2. utils.js: compileDagWavefronts
+const waves = compileDagWavefronts([
+    { id: 'step_1', parents: [] },
+    { id: 'step_2a', parents: ['step_1'] },
+    { id: 'step_2b', parents: ['step_1'] },
+    { id: 'step_3', parents: ['step_2a', 'step_2b'] }
+]);
+assert.deepEqual(waves.map(w => w.map(n => n.id)), [['step_1'], ['step_2a', 'step_2b'], ['step_3']]);
+
+// Cyclic fallback terminates cleanly without infinite loop
+const cyclicWaves = compileDagWavefronts([
+    { id: 'a', parents: ['b'] },
+    { id: 'b', parents: ['a'] }
+]);
+assert.equal(cyclicWaves.length, 1);
+assert.equal(cyclicWaves[0].length, 2);
+
+// 3. utils.js: extractTemplateVariables & interpolateTemplateVariables
+const tpl = 'Hello {{ user_name }}, role is {{ macro_role | Architect }}.';
+const vars = extractTemplateVariables(tpl);
+assert.deepEqual(
+    vars.map(v => ({ name: v.name, default: v.default, required: v.required })),
+    [
+        { name: 'user_name', default: null, required: true },
+        { name: 'role', default: 'Architect', required: false }
+    ]
+);
+assert.equal(
+    interpolateTemplateVariables(tpl, { user_name: 'Ada' }),
+    'Hello Ada, role is Architect.'
+);
+
+// 4. utils.js: buildFileTree & resolveDirectoryState
+const tree = buildFileTree(['alpha/src/index.js', 'alpha/README.md', 'alpha/.gitkeep']);
+const rootState = resolveDirectoryState(tree, ['alpha'], { ignoreDotKeep: true });
+assert.deepEqual(rootState.validPath, ['alpha']);
+assert.equal(rootState.entries.length, 2, '.gitkeep must be filtered when ignoreDotKeep is true');
+assert.equal(rootState.entries[0].type, 'directory');
+assert.equal(rootState.entries[0].name, 'src');
+// 5. utils.js: shallowEqual, slugify & fuzzyFilterObjects
+assert.equal(shallowEqual(new Set(['a', 'b']), new Set(['a', 'b'])), true);
+assert.equal(shallowEqual(new Set(['a']), new Set(['b'])), false);
+assert.equal(slugify('Hello World! 2026'), 'hello_world_2026');
+
+const ranked = fuzzyFilterObjects(['src/components/modal.js', 'src/utils/math.js'], 'modal');
+assert.equal(ranked[0], 'src/components/modal.js');
+
+console.log('RING0_ALGORITHM_TESTS_PASSED');
+"""
+            (tmp_path / "test_ring0.mjs").write_text(test_mjs, encoding="utf-8")
+            res = subprocess.run(
+                [node_bin, "test_ring0.mjs"],
+                cwd=tmp_path.as_posix(),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(res.returncode, 0, f"Ring 0 algorithm test failed:\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}")
+            self.assertIn("RING0_ALGORITHM_TESTS_PASSED", res.stdout)
+
+    def test_sutram_poller_shortcuts_and_network_hysteresis_in_node(self):
+        """Tests createJobPoller sequential chaining, initShortcutRouter context precedence, and NetworkHysteresisManager."""
+        node_bin = shutil.which("node")
+        if not node_bin:
+            self.skipTest("Node.js binary not available in PATH.")
+
+        poller_path = SUTRAM_JS_DIR / "poller.js"
+        shortcuts_path = SUTRAM_JS_DIR / "shortcuts.js"
+        offline_path = SUTRAM_JS_DIR / "offline.js"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            (tmp_path / "package.json").write_text(json.dumps({"type": "module"}), encoding="utf-8")
+            shutil.copy2(poller_path, tmp_path / "poller.mjs")
+            shutil.copy2(shortcuts_path, tmp_path / "shortcuts.mjs")
+            shutil.copy2(offline_path, tmp_path / "offline.mjs")
+
+            test_mjs = """
+import assert from 'node:assert/strict';
+
+const et = new EventTarget();
+globalThis.window = {
+    addEventListener: et.addEventListener.bind(et),
+    removeEventListener: et.removeEventListener.bind(et),
+    dispatchEvent: et.dispatchEvent.bind(et),
+    Sutram: { stores: { Environment: { getState: () => ({ isOffline: false }) } } }
+};
+globalThis.document = { hidden: false };
+
+const { createJobPoller } = await import('./poller.mjs');
+const { initShortcutRouter } = await import('./shortcuts.mjs');
+const { NetworkHysteresisManager } = await import('./offline.mjs');
+// 1. createJobPoller: Sequential job chaining (job_1 -> job_2 -> completed)
+const visitedUrls = [];
+const responses = {
+    'jobs/job_1': { status: 'completed', message: 'Step 1 done', artifact: { next_job_id: 'job_2', step1: true } },
+    'jobs/job_2': { status: 'completed', message: 'Step 2 done', artifact: { step2: true } }
+};
+const poller = createJobPoller({
+    get: async (url) => {
+        visitedUrls.push(url);
+        return {
+            ok: true,
+            status: 200,
+            json: async () => responses[url]
+        };
+    }
+});
+const finalData = await new Promise((resolve, reject) => {
+    poller('job_1', {
+        interval: 10,
+        onComplete: (data) => resolve(data),
+        onError: (err) => reject(err)
+    });
+});
+assert.ok(finalData, 'Poller must resolve chained jobs to completion');
+assert.equal(finalData.artifact.step2, true);
+assert.deepEqual(visitedUrls, ['jobs/job_1', 'jobs/job_2']);
+
+// 2. initShortcutRouter: Context precedence (modal > subtab > global)
+let triggered = null;
+const mockRegistry = {
+    shortcuts: {
+        'global': { 'ctrl+s': () => { triggered = 'global'; } },
+        'modal:settings': { 'ctrl+s': () => { triggered = 'modal'; } }
+    }
+};
+initShortcutRouter(mockRegistry, () => ['modal:settings', 'global']);
+const keyEv = new Event('keydown', { cancelable: true });
+Object.assign(keyEv, { key: 's', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false });
+window.dispatchEvent(keyEv);
+assert.equal(triggered, 'modal', 'Higher-priority context (modal:settings) must win over global');
+
+// 3. NetworkHysteresisManager: Burst verification inside check()
+let pingCalls = 0;
+globalThis.fetch = async () => {
+    pingCalls++;
+    return { ok: true, status: 200 };
+};
+const hysteresis = new NetworkHysteresisManager('/?t={t}', 2);
+let onlineResolved = 0;
+await hysteresis.check(async () => { onlineResolved++; });
+assert.equal(pingCalls, 2, 'NetworkHysteresisManager must execute threshold (2) pings before restoring');
+assert.equal(onlineResolved, 1, 'Consecutive successful burst pings must invoke onRestored callback');
+
+console.log('ORCHESTRATOR_TESTS_PASSED');
+"""
+            (tmp_path / "test_orchestrators.mjs").write_text(test_mjs, encoding="utf-8")
+            res = subprocess.run(
+                [node_bin, "test_orchestrators.mjs"],
+                cwd=tmp_path.as_posix(),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(res.returncode, 0, f"Orchestrator test failed:\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}")
+            self.assertIn("ORCHESTRATOR_TESTS_PASSED", res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
