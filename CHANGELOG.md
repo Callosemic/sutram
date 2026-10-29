@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v2.5.0 (2026-10-29)
+
+### Chores
+
+- Sweep remaining state
+  ([`e62c822`](https://github.com/Callosemic/sutram/commit/e62c822e96fa3c2bf8ce5096d03b1750a30a355a))
+
+- **tests**: Add test vectors for combobox, target binding, and dynamic settings schemas
+  ([`8aa0910`](https://github.com/Callosemic/sutram/commit/8aa0910d866a24be2e63aad899486186406c44af))
+
+### Features
+
+- Add SutramCombobox, SutramTargetBinding, dynamic settings options, and service worker dev cache
+  bypass
+  ([`3678975`](https://github.com/Callosemic/sutram/commit/36789752d5cf49057435e76e9fac910266101cc9))
+
+
 ## v2.4.0 (2026-10-29)
 
 ### Bug Fixes
