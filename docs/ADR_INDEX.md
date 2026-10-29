@@ -15,6 +15,7 @@
 * [ADR-0022: StoreRegistry Multi-Tenancy Scoping, Three-Way Text Merge Engine, and Projection Rekeying](./adrs/0022_store_registry_multi_tenancy_three_way_merge_and_projection_rekeying.md)
 * [ADR-0024: Generational Projection Pooling, Debounced Store Persistence, and Lazy LRU Cache Buffering](./adrs/0024_generational_projection_pooling_debounced_persistence_and_lazy_lru_caching.md)
 * [ADR-0026: Pluggable Chassis Provider Contract, SutramUIAdapter, Input Event Bridging, and Public Kernel Entrypoint](./adrs/0026_pluggable_chassis_contract_ui_adapter_and_kernel_entrypoint.md)
+* [ADR-0028: Compound Target Binding Controls, Dynamic Schema Option Sources, and Development Service Worker Cache Bypass](./adrs/0028_compound_target_binding_and_sw_dev_cache_bypass.md)
 ### yenVUI Presentation Chassis
 * [ADR-0005: Native Popover API Toast Container Elevation](./adrs/0005_yenvui_popover_toasts_gesture_selection.md)
 * [ADR-0006: Gesture Swipe Axis Locking](./adrs/0006_yenvui_gesture_swipe_axis_locking.md)

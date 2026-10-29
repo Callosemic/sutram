@@ -127,6 +127,12 @@ Any replacement library must export the following Custom Elements.
 *   **`<sutram-input>`**: Higher-order bridged input bound to `@sutram-input-changed`.
 *   **`<sutram-select>`**: Higher-order bridged select bound to `@sutram-input-changed`.
 *   **`<sutram-toggle>`**: Higher-order bridged toggle bound to `@sutram-input-changed`.
+*   **`<sutram-combobox>`**: Searchable and filterable text combobox with dropdown option list and keyboard navigation.
+    *   *Properties:* `.label`, `.value`, `.placeholder`, `.options` (Array of strings or `{value, label, badge}`), `?disabled`, `?flush`, `?inline`.
+    *   *Events:* `@sutram-input-changed`.
+*   **`<sutram-target-binding>`**: Compound endpoint and model selector pairing `<sutram-select>` with `<sutram-combobox>`.
+    *   *Properties:* `.label`, `.value` (String `endpoint::model` or Object `{endpoint, model}`), `.endpoints` (Array), `.models` (Array or Function `endpointId => Array`), `.endpointKey`, `.modelKey`, `.endpointPlaceholder`, `.modelPlaceholder`, `?allowEmptyEndpoint`, `?disabled`, `?flush`.
+    *   *Events:* `@sutram-input-changed`.
 *   **`<yenvui-dropdown>`**: Floating action menu utilizing native `#top-layer` Popover API.
     *   *Properties:* `.items` (Array of `{id, label, icon, onClick, asyncAction, divider}`), `?open`, `.align` (`'auto'`|`'left'`|`'right'`), `.direction` (`'auto'`|`'up'`|`'down'`).
     *   *Events:* `@yenvui-action-error` (dispatched on unhandled action exception).
