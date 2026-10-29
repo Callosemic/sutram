@@ -2,33 +2,111 @@
 // Pure Agnostic Presentation Primitives
 import { LitElement, html, css } from 'lit';
 import { SutramElement, SutramContextMixin, SelectionStore, ToastStore, EnvironmentStore } from './sutram_sdk.js';
-import { YenvuiBtn, YenvuiAsyncBtn } from '../../yenvui/js/async-btn.js';
-import { YenvuiStatusBar } from '../../yenvui/js/status-bar.js';
-import { YenvuiToastContainer } from '../../yenvui/js/toast.js';
-import { YenvuiModal } from '../../yenvui/js/modal.js';
-import { YenvuiWindow } from '../../yenvui/js/window.js';
-import { YenvuiCategorySection } from '../../yenvui/js/category-section.js';
-import { YenvuiCard } from '../../yenvui/js/card.js';
-import { YenvuiCardGroup } from '../../yenvui/js/card-group.js';
-import { YenvuiEditor } from '../../yenvui/js/editor.js';
-import { YenvuiToolbar } from '../../yenvui/js/toolbar.js';
-import { YenvuiCollapsible } from '../../yenvui/js/collapsible.js';
-import { YenvuiPill } from '../../yenvui/js/pill.js';
-import { YenvuiFilterGroup } from '../../yenvui/js/filter-group.js';
-import { YenvuiSelectionTray } from '../../yenvui/js/selection-tray.js';
-import { YenvuiSearchBar } from '../../yenvui/js/search-bar.js';
-import { YenvuiSpinner } from '../../yenvui/js/spinner.js';
-import { YenvuiEmptyState } from '../../yenvui/js/empty-state.js';
-import { YenvuiBoard, YenvuiColumn } from '../../yenvui/js/board.js';
-import { YenvuiTag } from '../../yenvui/js/tag.js';
-import { YenvuiLabel } from '../../yenvui/js/label.js';
-import { YenvuiDropdown, YenvuiFilterDropdown } from '../../yenvui/js/dropdown.js';
-import { YenvuiScrubTrack } from '../../yenvui/js/yenvui-base.js';
-import { YenvuiScrollView } from '../../yenvui/js/scroll-view.js';
-import { YenvuiDiffViewer } from '../../yenvui/js/diff-viewer.js';
+import * as Chassis from 'sutram-chassis';
 import { sharedStyles } from './shared_styles.js';
 import { buildFileTree, resolveDirectoryState, SutramWorker } from './utils.js';
+import './inputs.js';
 import 'lit-virtualizer';
+
+export const REQUIRED_CHASSIS_PRIMITIVES = [
+    'Btn', 'AsyncBtn', 'Card', 'CardGroup', 'CategorySection',
+    'Modal', 'Window', 'Tabs', 'Toolbar', 'SearchBar',
+    'Dropdown', 'FilterDropdown', 'Collapsible', 'Pill', 'FilterGroup',
+    'Tag', 'Label', 'Spinner', 'EmptyState', 'Board', 'Column',
+    'ScrubTrack', 'ScrollView', 'DiffViewer', 'Editor',
+    'Input', 'Select', 'Textarea', 'Toggle'
+];
+export function validateChassisContract(chassisProvider) {
+    if (!chassisProvider || typeof chassisProvider !== 'object') {
+        throw new Error('[Sutram Boot Error] Invalid or missing chassis provider object.');
+    }
+    const missing = REQUIRED_CHASSIS_PRIMITIVES.filter(p => typeof chassisProvider[p] !== 'function');
+    if (missing.length > 0) {
+        throw new Error(
+            `[Sutram Boot Error] Chassis '${chassisProvider.CHASSIS_PROVIDER_META?.name || 'Custom'}' fails contract. Missing primitives: ${missing.join(', ')}`
+        );
+    }
+    return true;
+}
+
+export class SutramUIAdapter {
+    static PASSTHROUGH_MAP = Object.freeze({
+        'sutram-btn': 'Btn',
+        'sutram-card-group': 'CardGroup',
+        'sutram-category-section': 'CategorySection',
+        'sutram-spinner': 'Spinner',
+        'sutram-empty-state': 'EmptyState',
+        'sutram-board': 'Board',
+        'sutram-column': 'Column',
+        'sutram-tag': 'Tag',
+        'sutram-label': 'Label',
+        'sutram-scrub-track': 'ScrubTrack',
+        'sutram-scroll-view': 'ScrollView',
+        'sutram-filter-dropdown': 'FilterDropdown',
+        'sutram-tabs': 'Tabs',
+        'sutram-input': 'Input',
+        'sutram-select': 'Select',
+        'sutram-textarea': 'Textarea',
+        'sutram-toggle': 'Toggle',
+        'sutram-drop-overlay': 'DropOverlay',
+        'sutram-drop-target': 'DropTarget'
+    });
+
+    static registerChassis(chassisProvider) {
+        validateChassisContract(chassisProvider);
+        Object.entries(this.PASSTHROUGH_MAP).forEach(([tag, exportKey]) => {
+            const BaseClass = chassisProvider[exportKey];
+            if (typeof BaseClass === 'function' && !customElements.get(tag)) {
+                customElements.define(tag, class extends BaseClass {});
+            }
+        });
+    }
+}
+
+SutramUIAdapter.registerChassis(Chassis);
+
+const {
+    Btn: YenvuiBtn,
+    AsyncBtn: YenvuiAsyncBtn,
+    StatusBar: YenvuiStatusBar,
+    ToastContainer: YenvuiToastContainer,
+    Modal: YenvuiModal,
+    Window: YenvuiWindow,
+    CategorySection: YenvuiCategorySection,
+    Card: YenvuiCard,
+    CardGroup: YenvuiCardGroup,
+    Editor: YenvuiEditor,
+    Toolbar: YenvuiToolbar,
+    Collapsible: YenvuiCollapsible,
+    Pill: YenvuiPill,
+    FilterGroup: YenvuiFilterGroup,
+    SelectionTray: YenvuiSelectionTray,
+    SearchBar: YenvuiSearchBar,
+    Spinner: YenvuiSpinner,
+    EmptyState: YenvuiEmptyState,
+    Board: YenvuiBoard,
+    Column: YenvuiColumn,
+    Tag: YenvuiTag,
+    Label: YenvuiLabel,
+    Dropdown: YenvuiDropdown,
+    FilterDropdown: YenvuiFilterDropdown,
+    ScrubTrack: YenvuiScrubTrack,
+    ScrollView: YenvuiScrollView,
+    DiffViewer: YenvuiDiffViewer,
+    Tabs: YenvuiTabs
+} = Chassis;
+
+if (YenvuiEditor) {
+    YenvuiEditor.languageResolver = async (lang) => {
+        if (window.ExtensionRegistry && typeof window.ExtensionRegistry.executeUIHook === 'function') {
+            return await window.ExtensionRegistry.executeUIHook('sutram:vendorize-language', lang);
+        }
+        if (window.Sutram && typeof window.Sutram.vendorizeLanguage === 'function') {
+            return await window.Sutram.vendorizeLanguage(lang);
+        }
+        return null;
+    };
+}
 // 0. Universal Virtualized List
 export class SutramVirtualList extends LitElement {
     static properties = {
@@ -84,6 +162,10 @@ export class SutramVirtualList extends LitElement {
             return `${kind}::${uri}`;
         };
     }
+    connectedCallback() {
+        super.connectedCallback();
+        this.setAttribute('data-virtual-list', '');
+    }
 
     render() {
         if (!this.items || this.items.length === 0) return html``;
@@ -101,7 +183,7 @@ customElements.define('sutram-virtual-list', SutramVirtualList);
 
 // 1. Synchronous Action Button
 export class SutramBtn extends YenvuiBtn {}
-customElements.define('sutram-btn', SutramBtn);
+if (!customElements.get('sutram-btn')) customElements.define('sutram-btn', SutramBtn);
 // 1.25 Multi-Window Pop-Out / Dock-In Control Button
 export class SutramProjectionWindowControls extends SutramElement {
     static properties = {
@@ -334,12 +416,13 @@ export class SutramToastContainer extends SutramContextMixin(YenvuiToastContaine
     }
 }
 customElements.define('sutram-toast-container', SutramToastContainer);
-
 // 4. Selection Store & Tray
 export class SutramSelectionTray extends SutramElement {
     static properties = { 
         selectedItems: { type: Object },
-        modalOpen: { type: Boolean }
+        modalOpen: { type: Boolean },
+        trayTitle: { type: String },
+        itemBadge: { type: String }
     };
 
     static styles = [sharedStyles, css`
@@ -430,11 +513,12 @@ export class SutramSelectionTray extends SutramElement {
             display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg-deep); border-radius: 0 0 12px 12px; width: 100%; box-sizing: border-box; overflow: hidden;
         }
     `];
-
     constructor() {
         super();
         this.selectedItems = new Map();
         this.modalOpen = false;
+        this.trayTitle = 'Selection Tray';
+        this.itemBadge = 'ITEM';
     }
 
     connectedCallback() {
@@ -505,7 +589,7 @@ export class SutramSelectionTray extends SutramElement {
                 <div style="padding: 15px 20px; border-bottom: 1px solid var(--border); background: var(--bg-deep); display: flex; justify-content: space-between; align-items: flex-start; border-radius: 12px 12px 0 0;">
                     <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; padding-right: 15px;">
                         <span style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase; font-weight: bold;">SELECTION STAGING</span>
-                        <span style="font-weight: bold; font-size: 1.15rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center;">Quickpack Deck <span class="cart-badge" style="display: inline-flex; margin-left: 8px;">${count}</span></span>${sizeDisplay ? html`<span style="font-size: 0.8rem; color: var(--intent-highlight); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${sizeDisplay}</span>` : ''}
+                        <span style="font-weight: bold; font-size: 1.15rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center;">${this.trayTitle || 'Selection Tray'} <span class="cart-badge" style="display: inline-flex; margin-left: 8px;">${count}</span></span>${sizeDisplay ? html`<span style="font-size: 0.8rem; color: var(--intent-highlight); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${sizeDisplay}</span>` : ''}
                     </div>
                     <button class="sync-btn" @click=${() => this.modalOpen = false} style="background: var(--input-bg); color: var(--text-muted); border: 1px solid var(--border); padding: 4px; font-size: 1.2rem; line-height: 1;">✕</button>
                 </div>
@@ -521,7 +605,7 @@ export class SutramSelectionTray extends SutramElement {
                         <div class="tray-item">
                             <div class="tray-item-info">
                                 <div class="tray-item-title">
-                                    <div style="display: flex; align-items: center; gap: 8px;"><span class="pack-tag">PACK</span> ${name}</div>${sizeText ? html`<span style="color: var(--text-muted); font-weight: normal; font-size: 0.85rem; font-family: monospace;">${sizeText}</span>` : ''}
+                                    <div style="display: flex; align-items: center; gap: 8px;"><span class="pack-tag">${this.itemBadge || 'ITEM'}</span> ${name}</div>${sizeText ? html`<span style="color: var(--text-muted); font-weight: normal; font-size: 0.85rem; font-family: monospace;">${sizeText}</span>` : ''}
                                 </div>
                                 <div class="tray-item-path">${rawPath}</div>
                             </div>
@@ -588,12 +672,12 @@ export class SutramCategorizedList extends LitElement {
         return html`
             <div style="display: flex; flex-direction: column;">
                 ${sortedCats.map(cat => html`
-                    <yenvui-category-section titleText=${cat}>
+                    <sutram-category-section titleText=${cat}>
                         ${this.renderCategoryHeader ? this.renderCategoryHeader(cat) : ''}
-                        <yenvui-card-group>
+                        <sutram-card-group>
                             ${categories[cat].map(item => this.renderItem(item))}
-                        </yenvui-card-group>
-                    </yenvui-category-section>
+                        </sutram-card-group>
+                    </sutram-category-section>
                 `)}
             </div>
         `;
@@ -649,9 +733,9 @@ export class SutramFolderBrowser extends LitElement {
         return html`
             <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; overflow: hidden;">
                 <sutram-btn intent="neutral" icon="corner-left-up" label="Up" ?disabled=${validPath.length === 0} @click=${() => this._setPath(validPath.slice(0, -1))}></sutram-btn>
-                <yenvui-scrub-track style="flex: 1; min-width: 0; font-family: monospace; color: var(--text); opacity: 0.7; font-size: 0.9rem;">
+                <sutram-scrub-track style="flex: 1; min-width: 0; font-family: monospace; color: var(--text); opacity: 0.7; font-size: 0.9rem;">
                     /${validPath.join('/')}
-                </yenvui-scrub-track>
+                </sutram-scrub-track>
             </div>
             <div style="flex: 1; overflow-y: auto;">
                 ${entries.length === 0 ? html`<div style="color: var(--text-muted); font-style: italic; font-size: 0.9rem; margin-top: 10px;">No sub-folders available.</div>` : entries.map(node => html`
@@ -679,6 +763,7 @@ customElements.define('sutram-modal', SutramModal);
 export class SutramWindow extends SutramContextMixin(YenvuiWindow) {
     connectedCallback() {
         super.connectedCallback();
+        this.setAttribute('data-spatial-boundary', '');
         this.addEventListener('yenvui-window-close', e => this.dispatchEvent(new CustomEvent('sutram-window-closed', { bubbles: true, composed: true })));
         this.addEventListener('yenvui-window-span', e => this.dispatchEvent(new CustomEvent('sutram-window-span', { detail: e.detail, bubbles: true, composed: true })));
         this.addEventListener('yenvui-window-focused', e => this.dispatchEvent(new CustomEvent('sutram-window-focused', { bubbles: true, composed: true })));
@@ -958,10 +1043,10 @@ export class SutramSettingsForm extends SutramElement {
                 const val = this.formData && this.formData[field.id] !== undefined ? this.formData[field.id] : field.default;
                 const displayLabel = field.title || field.label || field.id;
                 let inputHtml = '';
-
                 if (field.type === 'action') {
                     inputHtml = html`
                         <sutram-async-btn
+                            style="width: 100%;"
                             label=${field.button_label || field.label || 'Execute Action'}
                             intent=${field.intent || 'primary'}
                             ?disabled=${isRepoFieldDisabled}
@@ -1168,13 +1253,12 @@ export class SutramGenericSettingsModal extends SutramElement {
         const registry = window.ExtensionRegistry;
         const manifest = registry?._manifests?.get(this.extName);
         const title = (manifest?.name || this.extName) + ' Settings';
-
         return html`
-            <yenvui-modal
+            <sutram-modal
                 ?open=${true}
                 titleText=${title}
                 ?fullscreen=${true}
-                @yenvui-modal-closed=${(e) => { if (e.target === e.currentTarget) this.open = false; }}>
+                @sutram-modal-closed=${(e) => { if (e.target === e.currentTarget) this.open = false; }}>
                 <div slot="body">
                     <sutram-settings-form
                         .extName=${this.extName}
@@ -1197,7 +1281,7 @@ export class SutramGenericSettingsModal extends SutramElement {
                         this.open = false;
                     }}>
                 </sutram-async-btn>
-            </yenvui-modal>
+            </sutram-modal>
         `;
     }
 }
@@ -1394,12 +1478,12 @@ export class SutramEntityActions extends SutramElement {
                 </div>
             `;
         }
-
+        const isFooterBar = this.variant === 'footer';
         const primaryActions = [];
         const secondaryActions = [];
 
         actions.forEach(act => {
-            if ((act.order || 99) < 20) primaryActions.push(act);
+            if (isFooterBar || (act.order || 99) < 20) primaryActions.push(act);
             else secondaryActions.push(act);
         });
         const renderDirectAction = (act) => {
@@ -1410,11 +1494,12 @@ export class SutramEntityActions extends SutramElement {
             const rawIcon = typeof act.icon === 'function' ? act.icon(this.entityData) : (act.icon || '');
             const intent = typeof act.intent === 'function' ? act.intent(this.entityData) : (act.intent || 'primary');
             const isActive = typeof act.isActive === 'function' ? act.isActive(this.entityData) : !!act.isActive;
+            const flexStyle = isFooterBar ? 'flex: 1; width: 100%;' : '';
 
             if (act.asyncAction || (window.ExtensionRegistry.executeEntityAction && act.vfsBound)) {
                 return html`
                     <sutram-async-btn 
-                        style="margin: 0; order: ${act.order || 99};" 
+                        style="margin: 0; order: ${act.order || 99}; ${flexStyle}" 
                         .label=${label}
                         .icon=${rawIcon}
                         intent="${intent}" 
@@ -1437,7 +1522,7 @@ export class SutramEntityActions extends SutramElement {
                 <sutram-btn 
                     intent=${intent} 
                     ?active=${isActive}
-                    style="order: ${act.order || 99}; gap: 4px;"
+                    style="margin: 0; order: ${act.order || 99}; gap: 4px; ${flexStyle}"
                     .label=${label}
                     .icon=${rawIcon}
                     @click=${clickHandler}>
@@ -1526,7 +1611,7 @@ export class SutramEntityActions extends SutramElement {
             `;
         };
         const content = html`
-            ${actions.length > 0 ? html`
+            ${actions.length > 0 && !isFooterBar ? html`
                 <sutram-btn intent="neutral" style="order: -1; margin-right: 4px;"
                     label="⋮"
                     @click=${(e) => { e.stopPropagation(); this._trayOpen = true; }}>
@@ -1641,15 +1726,14 @@ export class SutramCard extends SutramContextMixin(YenvuiCard) {
         if (super.firstUpdated) super.firstUpdated();
         this._injectEntityActions();
     }
-
     _injectEntityActions() {
         if (!this.entityType || !window.ExtensionRegistry?.getEntityActions) return;
         const actions = window.ExtensionRegistry.getEntityActions(this.entityType, this.entityData || {});
         if (actions.length > 0) {
-            if (!this._hasActions) this._hasActions = true;
+            if (!this.hasActions) this.hasActions = true;
 
             // LAZY-LOAD: Only physically build and inject the DOM nodes when the user opens the tray
-            if (!this._overlayActive) return;
+            if (!this.actionsOpen) return;
 
             let actionsContainer = this.querySelector('.sutram-injected-actions');
             if (!actionsContainer) {
@@ -1670,7 +1754,7 @@ export class SutramCard extends SutramContextMixin(YenvuiCard) {
                 actionsNode.scrollable = true;
                 actionsContainer.appendChild(actionsNode);
                 this.appendChild(actionsContainer);
-                this._hasActions = true;
+                this.hasActions = true;
             } else {
                 const actionsNode = actionsContainer.querySelector('sutram-entity-actions');
                 if (actionsNode) {
@@ -1694,7 +1778,7 @@ export class SutramCard extends SutramContextMixin(YenvuiCard) {
 customElements.define('sutram-card', SutramCard);
 // 10. Card Group Container
 export class SutramCardGroup extends YenvuiCardGroup {}
-customElements.define('sutram-card-group', SutramCardGroup);
+if (!customElements.get('sutram-card-group')) customElements.define('sutram-card-group', SutramCardGroup);
 
 // 11. Search Bar & Toolbar
 export class SutramSearchBar extends YenvuiSearchBar {
@@ -1708,27 +1792,27 @@ export class SutramSearchBar extends YenvuiSearchBar {
 customElements.define('sutram-search-bar', SutramSearchBar);
 
 export class SutramSpinner extends YenvuiSpinner {}
-customElements.define('sutram-spinner', SutramSpinner);
+if (!customElements.get('sutram-spinner')) customElements.define('sutram-spinner', SutramSpinner);
 
 export class SutramEmptyState extends YenvuiEmptyState {}
-customElements.define('sutram-empty-state', SutramEmptyState);
+if (!customElements.get('sutram-empty-state')) customElements.define('sutram-empty-state', SutramEmptyState);
 
 export class SutramBoard extends YenvuiBoard {}
-customElements.define('sutram-board', SutramBoard);
+if (!customElements.get('sutram-board')) customElements.define('sutram-board', SutramBoard);
 
 export class SutramColumn extends YenvuiColumn {}
-customElements.define('sutram-column', SutramColumn);
+if (!customElements.get('sutram-column')) customElements.define('sutram-column', SutramColumn);
 
 export class SutramTag extends YenvuiTag {}
-customElements.define('sutram-tag', SutramTag);
+if (!customElements.get('sutram-tag')) customElements.define('sutram-tag', SutramTag);
 
 export class SutramLabel extends YenvuiLabel {}
-customElements.define('sutram-label', SutramLabel);
+if (!customElements.get('sutram-label')) customElements.define('sutram-label', SutramLabel);
 export class SutramScrubTrack extends YenvuiScrubTrack {}
-customElements.define('sutram-scrub-track', SutramScrubTrack);
+if (!customElements.get('sutram-scrub-track')) customElements.define('sutram-scrub-track', SutramScrubTrack);
 
 export class SutramScrollView extends YenvuiScrollView {}
-customElements.define('sutram-scroll-view', SutramScrollView);
+if (!customElements.get('sutram-scroll-view')) customElements.define('sutram-scroll-view', SutramScrollView);
 export class SutramToolbar extends YenvuiToolbar {
     connectedCallback() {
         super.connectedCallback();
@@ -1738,10 +1822,21 @@ export class SutramToolbar extends YenvuiToolbar {
     }
 }
 customElements.define('sutram-toolbar', SutramToolbar);
-
 // 12. Dropdown & Collapsible
-export class SutramDropdown extends YenvuiDropdown {}
+export class SutramDropdown extends YenvuiDropdown {
+    connectedCallback() {
+        super.connectedCallback();
+        this.addEventListener('yenvui-action-error', (e) => {
+            window.dispatchEvent(new CustomEvent('sutram-status-update', {
+                detail: { msg: e.detail?.msg || 'Action failed', timeout: 4000, isError: true }
+            }));
+        });
+    }
+}
 customElements.define('sutram-dropdown', SutramDropdown);
+
+export class SutramTabs extends YenvuiTabs {}
+if (!customElements.get('sutram-tabs')) customElements.define('sutram-tabs', SutramTabs);
 
 export class SutramFilterDropdown extends YenvuiFilterDropdown {}
 if (!customElements.get('sutram-filter-dropdown')) {
@@ -1758,9 +1853,8 @@ export class SutramCollapsible extends YenvuiCollapsible {
     }
 }
 customElements.define('sutram-collapsible', SutramCollapsible);
-
 export class SutramCategorySection extends YenvuiCategorySection {}
-customElements.define('sutram-category-section', SutramCategorySection);
+if (!customElements.get('sutram-category-section')) customElements.define('sutram-category-section', SutramCategorySection);
 
 // 13. Pills & Filter Groups
 export class SutramPill extends YenvuiPill {
@@ -2215,4 +2309,221 @@ export class SutramSubtabMenu extends SutramElement {
 }
 if (!customElements.get('sutram-subtab-menu')) {
     customElements.define('sutram-subtab-menu', SutramSubtabMenu);
+}
+
+// 19. Universal Wavefront & Hierarchy DAG Tree Primitive
+export class SutramDagTree extends SutramElement {
+    static properties = {
+        stages: { type: Array },
+        rootNode: { type: Object },
+        nodes: { type: Array },
+        renderNode: { type: Object },
+        compact: { type: Boolean, reflect: true }
+    };
+    static styles = [sharedStyles, css`
+        :host {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .wavefront-stage {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 12px 14px;
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--stage-accent, var(--intent-primary));
+            border-radius: 8px;
+            position: relative;
+        }
+        .wavefront-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .wavefront-title {
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .wavefront-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 10px;
+        }
+        .stage-connector {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 14px;
+            margin: -7px 0;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            user-select: none;
+        }
+        .dag-node-card {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 10px 12px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: border-color 0.15s ease, background 0.15s ease;
+        }
+        .dag-node-card:hover {
+            border-color: var(--intent-primary);
+            background: var(--bg-hover);
+        }
+        .tree-branch {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            padding-left: var(--branch-indent, 0px);
+        }
+        .tree-line-v {
+            position: absolute;
+            left: 10px;
+            top: -12px;
+            bottom: 0;
+            width: 2px;
+            background: var(--border);
+            z-index: 1;
+        }
+        .tree-line-v.last {
+            bottom: auto;
+            height: 44px;
+        }
+        .tree-line-h {
+            position: absolute;
+            left: 10px;
+            top: 30px;
+            width: 18px;
+            height: 2px;
+            background: var(--border);
+            z-index: 1;
+        }
+    `];
+
+    constructor() {
+        super();
+        this.stages = [];
+        this.rootNode = null;
+        this.nodes = [];
+        this.renderNode = null;
+        this.compact = false;
+    }
+    _renderDefaultStageNode(node, stageIdx) {
+        if (typeof this.renderNode === 'function') {
+            return this.renderNode(node, stageIdx);
+        }
+        const nodeTitle = typeof node === 'string' ? node : (node.title || node.label || node.id || node.name || 'node');
+        const badges = (typeof node === 'object' && Array.isArray(node.badges)) ? node.badges : [];
+        const subtitle = (typeof node === 'object' && node.subtitle) ? String(node.subtitle) : '';
+        const parents = (typeof node === 'object' && Array.isArray(node.parents)) ? node.parents : [];
+
+        return html`
+            <div class="dag-node-card" @click=${() => this.dispatch('sutram-dag-node-clicked', { node, stageIdx })}>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+                    <span style="font-weight: bold; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text);">${nodeTitle}</span>
+                    ${badges.length > 0 ? html`
+                        <div style="display: inline-flex; gap: 4px; align-items: center;">
+                            ${badges.map(b => {
+                                const text = typeof b === 'string' ? b : (b?.text || '');
+                                const intent = (typeof b === 'object' && b?.intent) ? b.intent : 'primary';
+                                return text ? html`<sutram-tag text=${text} intent=${intent}></sutram-tag>` : '';
+                            })}
+                        </div>
+                    ` : ''}
+                </div>
+                ${subtitle ? html`<div style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--intent-warning);">${subtitle}</div>` : ''}
+                ${parents.length > 0 ? html`
+                    <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin-top: 2px;">
+                        <span style="font-size: 0.7rem; color: var(--text-muted);">🔗 Parents:</span>
+                        ${parents.map(p => html`<span style="font-size: 0.7rem; font-family: var(--font-mono); background: var(--input-bg); border: 1px solid var(--border); padding: 1px 6px; border-radius: 4px;">${p}</span>`)}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    _renderHierarchyBranch(node, childMap, depth = 0, isLast = true) {
+        if (!node) return '';
+        const nodeId = node.id;
+        const children = childMap[nodeId] || [];
+        return html`
+            <div class="tree-branch" style="--branch-indent: ${depth > 0 ? '28px' : '0px'};">
+                ${depth > 0 ? html`
+                    <div class="tree-line-v ${isLast ? 'last' : ''}"></div>
+                    <div class="tree-line-h"></div>
+                ` : ''}
+                ${typeof this.renderNode === 'function' ? this.renderNode(node, depth) : this._renderDefaultStageNode(node, depth)}
+                ${children.length > 0 ? html`
+                    <div style="display: flex; flex-direction: column; margin-left: ${depth === 0 ? '8px' : '0px'};">
+                        ${children.map((c, idx) => this._renderHierarchyBranch(c, childMap, depth + 1, idx === children.length - 1))}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    render() {
+        if (Array.isArray(this.stages) && this.stages.length > 0) {
+            return html`
+                ${this.stages.map((stageNodes, sIdx) => {
+                    const list = Array.isArray(stageNodes) ? stageNodes : [stageNodes];
+                    const isParallel = list.length > 1;
+                    const accent = isParallel ? 'var(--intent-highlight)' : (sIdx === 0 ? 'var(--intent-primary)' : 'var(--intent-success)');
+                    return html`
+                        ${sIdx > 0 ? html`<div class="stage-connector">↓</div>` : ''}
+                        <div class="wavefront-stage" style="--stage-accent: ${accent};">
+                            <div class="wavefront-header">
+                                <span class="wavefront-title">
+                                    <yv-icon name=${isParallel ? 'git-branch' : 'layers'} style="width: 14px; height: 14px; color: ${accent};"></yv-icon>
+                                    <span>Wavefront Stage ${sIdx + 1}${sIdx === 0 ? ' (Root)' : ''}</span>
+                                </span>
+                                <sutram-tag
+                                    text=${isParallel ? `∥ Parallel Stage (${list.length} branches)` : 'Sequential Step'}
+                                    intent=${isParallel ? 'highlight' : 'neutral'}>
+                                </sutram-tag>
+                            </div>
+                            <div class="wavefront-grid">
+                                ${list.map(n => this._renderDefaultStageNode(n, sIdx))}
+                            </div>
+                        </div>
+                    `;
+                })}
+            `;
+        }
+
+        if (this.rootNode) {
+            const allNodes = Array.isArray(this.nodes) ? this.nodes : [];
+            const childMap = allNodes.reduce((acc, item) => {
+                const pid = item.parentId || item.parent_id;
+                if (pid) {
+                    if (!acc[pid]) acc[pid] = [];
+                    acc[pid].push(item);
+                }
+                return acc;
+            }, {});
+            return html`${this._renderHierarchyBranch(this.rootNode, childMap, 0, true)}`;
+        }
+
+        return html`<slot></slot>`;
+    }
+}
+if (!customElements.get('sutram-dag-tree')) {
+    customElements.define('sutram-dag-tree', SutramDagTree);
 }

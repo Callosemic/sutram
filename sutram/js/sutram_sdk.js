@@ -3,7 +3,9 @@
 import { LitElement, html } from 'lit';
 import { createStore } from 'zustand/vanilla';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
-import { getEventPath, getEventTarget } from '../../yenvui/js/physics.js';
+import { physics } from 'sutram-chassis';
+const { getEventPath, getEventTarget } = physics;
+export { getEventPath, getEventTarget };
 import { shallowEqual, coalescedAsync, slugify, debounce } from './utils.js';
 function _cloneInitialValue(val) {
     if (val instanceof Set) return new Set(val);

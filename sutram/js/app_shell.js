@@ -5,8 +5,8 @@ import { sharedStyles } from './shared_styles.js';
 import { debounce } from './utils.js';
 import { SutramProjectionCompiler, SutramProjectionPool } from './projection_engine.js';
 import './drag-coordinator.js';
-import '../../yenvui/js/tabs.js';
-import { YenvuiGestureController, YenvuiViewportGuard, getDeepElementFromPoint } from '../../yenvui/js/physics.js';
+import { physics } from 'sutram-chassis';
+const { YenvuiGestureController, YenvuiViewportGuard, getDeepElementFromPoint } = physics;
 const getSpatialMetrics = (capacity, activeViewport, layoutRatios) => {
     const layout = (Array.isArray(layoutRatios) && layoutRatios.length > 0) ? layoutRatios : [1, 1, 1];
     const safeViewport = Math.max(0, Math.min(activeViewport, layout.length - capacity));
@@ -473,7 +473,7 @@ export class SutramAppShell extends SutramElement {
         // Auto-scroll active sub-tabs into view
         const activeTabs = this.shadowRoot.querySelectorAll('.sub-tab.active');
         activeTabs.forEach(tab => {
-            const track = tab.closest('yenvui-scrub-track');
+            const track = tab.closest('sutram-scrub-track, yenvui-scrub-track');
             if (track && track.shadowRoot) {
                 const container = track.shadowRoot.querySelector('.scrub-container');
                 if (container) {
@@ -489,10 +489,10 @@ export class SutramAppShell extends SutramElement {
             }
         });
     }
-
     connectedCallback() {
         try {
         super.connectedCallback();
+        this.setAttribute('data-spatial-boundary', '');
         // Ensure Tier 0 viewport gesture & edge-swipe shield is active
         YenvuiViewportGuard.install();
 
@@ -1047,7 +1047,7 @@ export class SutramAppShell extends SutramElement {
                                 </button>
                             </div>
                         ` : html`
-                            <yenvui-scrub-track class="desktop-only-folders" @scroll=${() => { if (this._launcherDropdown) { this._launcherDropdown = null; this.requestUpdate(); } }} style="flex: 1; min-width: 0; height: 100%; background: transparent; --scrub-gap: 2px;">
+                            <sutram-scrub-track class="desktop-only-folders" @scroll=${() => { if (this._launcherDropdown) { this._launcherDropdown = null; this.requestUpdate(); } }} style="flex: 1; min-width: 0; height: 100%; background: transparent; --scrub-gap: 2px;">
                                 ${primarySlots.map(tab => {
                                     const children = subSlots.filter(s => (s.targetParent || '').toLowerCase() === tab.id.toLowerCase());
                                     return html`
@@ -1071,7 +1071,7 @@ export class SutramAppShell extends SutramElement {
                                         </button>
                                     `;
                                 })}
-                            </yenvui-scrub-track>
+                            </sutram-scrub-track>
                         `}
                         <!-- Centered Dots (1-Column Mobile View) -->
                         ${capacity === 1 && capacity < layoutRatios.length ? html`
@@ -1246,7 +1246,7 @@ export class SutramAppShell extends SutramElement {
                         }}>
                             <!-- Local Column Header (Projection Stack) -->
                             <div class="col-header" style="justify-content: space-between; padding: 0 0 0 12px; --active-sub-intent: ${activeSubInCol && activeSubInCol.intent ? `var(--intent-${activeSubInCol.intent})` : 'var(--intent-primary)'};">
-                                <yenvui-scrub-track class="sub-tabs" style="flex: 1; padding: 0; height: 100%;">
+                                <sutram-scrub-track class="sub-tabs" style="flex: 1; padding: 0; height: 100%;">
                                     ${colSubSlots.map(sub => {
                                         const isActive = activeSubInCol && pinMatchesSlot(sub, activeSubInCol.id);
                                         const intentColor = sub.intent ? `var(--intent-${sub.intent})` : 'var(--intent-primary)';
@@ -1291,7 +1291,7 @@ export class SutramAppShell extends SutramElement {
                                             ${sub.label}${registry?.executeUIHook && registry.executeUIHook('sutram:is-projection-dirty', sub.id) ? '*' : ''}
                                         </div>
                                     `})}
-                                </yenvui-scrub-track>
+                                </sutram-scrub-track>
                                 <!-- Projection Top Actions -->
                                 <div style="display: flex; align-items: stretch; height: 100%;">
                                     ${activeSubInCol && activeSubInCol.headerActionComponent ? html`

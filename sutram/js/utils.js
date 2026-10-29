@@ -159,27 +159,6 @@ export function threeWayMergeText(baseText, localText, remoteText) {
     return { merged: mergedStr, clean: true };
 }
 
-export function cleanCodeArtifacts(text) {
-    if (!text || typeof text !== 'string') return '';
-    let result = text;
-    const firstDollar = result.indexOf('$');
-    const lastDollar = result.lastIndexOf('$');
-    if (firstDollar !== -1 && lastDollar > firstDollar && result.includes('\\vert{}')) {
-        result = result.slice(0, firstDollar + 1)
-            + result.slice(firstDollar + 1, lastDollar).replace(/\\vert\{\}/g, '|')
-            + result.slice(lastDollar);
-    }
-    result = result.replace(/\{\{\s*(.)\s*\*\s*(\d+)\s*\}\}/g, (_, char, count) => char.repeat(parseInt(count, 10)));
-    result = result.replace(/\{\{\s*triple(.)\s*\}\}/g, (_, char) => char.repeat(3));
-    result = result.replace(/_(?:[^_\n]_){3,}/g, (match) => match.replace(/_/g, ''));
-    result = result.replace(/\x5b\x73\x6f\x75\x72\x63\x65:\s*\d+\x5d/gi, '');
-    result = result.replace(/\x5b\x63\x69\x74\x65:\s*[\d\s,]+\x5d/gi, '');
-    result = result.replace(/\x5b\x63\x69\x74\x65_start\x5d/gi, '');
-    result = result.replace(/\x5b\x63\x69\x74\x65_end\x5d/gi, '');
-    result = result.replace(/\x5b\x63\x69\x74\x65\x5d/gi, '');
-    result = result.replace(/<\/?(?:span|cite)[^>]*>/gi, '');
-    return result;
-}
 export function shallowEqual(a, b) {
     if (Object.is(a, b)) return true;
     if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) {
@@ -357,7 +336,6 @@ export function truncateFilename(filename, maxLen = 24, ellipsis = '…') {
     const frontLen = maxLen - ext.length - ellipsis.length;
     return `${base.slice(0, frontLen)}${ellipsis}${ext}`;
 }
-
 export function clone(obj) {
     if (obj === undefined || obj === null) return obj;
     try {
@@ -365,6 +343,122 @@ export function clone(obj) {
     } catch (e) {
         return JSON.parse(JSON.stringify(obj));
     }
+}
+
+export function compileDagWavefronts(nodes, options = {}) {
+    const { idKey = 'id', parentsKey = 'parents' } = options;
+    const valid = (nodes || []).filter(n => n && n[idKey]);
+    if (valid.length === 0) return [];
+    const remaining = new Map(
+        valid.map(n => [
+            n[idKey],
+            new Set((Array.isArray(n[parentsKey]) ? n[parentsKey] : []).filter(p => p && p !== n[idKey]))
+        ])
+    );
+    const nodeById = new Map(valid.map(n => [n[idKey], n]));
+    const waves = [];
+    while (remaining.size > 0) {
+        const readyIds = [];
+        for (const [nid, deps] of remaining.entries()) {
+            const unsatisfied = Array.from(deps).filter(d => remaining.has(d));
+            if (unsatisfied.length === 0) readyIds.push(nid);
+        }
+        if (readyIds.length === 0) {
+            waves.push(Array.from(remaining.keys()).map(id => nodeById.get(id)));
+            break;
+        }
+        waves.push(readyIds.map(id => nodeById.get(id)));
+        readyIds.forEach(id => remaining.delete(id));
+    }
+    return waves;
+}
+const _TEMPLATE_VAR_RE = /\{\{\s*(?:macro_)?([a-zA-Z0-9_.\[\]-]+)(?:\s*\|\s*([^{}]*?))?\s*\}\}/g;
+const _INNERMOST_MUSTACHE_RE = /\{\{\s*([^{}|]+?)(?:\s*\|\s*([^{}]*?))?\s*\}\}/g;
+const _DEFAULT_RESERVED_MACROS = new Set(['inputs', 'nodes', 'item', 'loop', 'global']);
+const _DEFAULT_RESERVED_PREFIXES = ['wordcount_', 'nodes.', 'inputs.', 'global.', 'item.', 'loop.'];
+
+export function extractTemplateVariables(text, options = {}) {
+    if (!text || typeof text !== 'string' || !text.includes('{{')) return [];
+    const reservedMacros = options.reservedMacros instanceof Set
+        ? options.reservedMacros
+        : (Array.isArray(options.reservedMacros) ? new Set(options.reservedMacros) : _DEFAULT_RESERVED_MACROS);
+    const reservedPrefixes = Array.isArray(options.reservedPrefixes)
+        ? options.reservedPrefixes
+        : _DEFAULT_RESERVED_PREFIXES;
+    const varsMap = new Map();
+    for (const match of text.matchAll(_TEMPLATE_VAR_RE)) {
+        const name = (match[1] || '').trim();
+        if (
+            !name ||
+            name.includes('.') ||
+            name.includes('[') ||
+            reservedPrefixes.some(p => name.startsWith(p)) ||
+            reservedMacros.has(name)
+        ) {
+            continue;
+        }
+        let defaultVal = match[2] !== undefined ? match[2].trim() : null;
+        if (defaultVal && reservedPrefixes.some(p => defaultVal.startsWith(p))) {
+            defaultVal = null;
+        }
+        if (!varsMap.has(name)) {
+            varsMap.set(name, {
+                name,
+                default: defaultVal,
+                required: defaultVal === null,
+                description: `Template parameter '${name}'` + (defaultVal ? ` (default: ${defaultVal})` : '')
+            });
+        } else if (varsMap.get(name).default === null && defaultVal !== null) {
+            const entry = varsMap.get(name);
+            entry.default = defaultVal;
+            entry.required = false;
+            entry.description = `Template parameter '${name}' (default: ${defaultVal})`;
+        }
+    }
+    return Array.from(varsMap.values());
+}
+
+export function interpolateTemplateVariables(text, values = {}, options = {}) {
+    if (!text || typeof text !== 'string' || !text.includes('{{')) return text || '';
+    const reservedMacros = options.reservedMacros instanceof Set
+        ? options.reservedMacros
+        : (Array.isArray(options.reservedMacros) ? new Set(options.reservedMacros) : _DEFAULT_RESERVED_MACROS);
+    const reservedPrefixes = Array.isArray(options.reservedPrefixes)
+        ? options.reservedPrefixes
+        : _DEFAULT_RESERVED_PREFIXES;
+    const normVals = {};
+    Object.entries(values || {}).forEach(([k, v]) => {
+        if (v === undefined || v === null) return;
+        const cleanK = k.startsWith('macro_') ? k.slice(6) : k;
+        normVals[cleanK] = String(v);
+    });
+    let current = text;
+    for (let pass = 0; pass < 4; pass++) {
+        if (!current.includes('{{')) break;
+        const nextStr = current.replace(_INNERMOST_MUSTACHE_RE, (full, rawName, rawDef) => {
+            const name = (rawName || '').trim().replace(/^macro_/, '');
+            if (!name || reservedPrefixes.some(p => name.startsWith(p)) || reservedMacros.has(name) || name.includes('*')) {
+                return full;
+            }
+            if (Object.prototype.hasOwnProperty.call(normVals, name) && normVals[name] !== '') {
+                return normVals[name];
+            }
+            if (rawDef !== undefined) {
+                const parts = rawDef.split('|').map(s => s.trim()).filter(Boolean);
+                for (let i = 0; i < parts.length; i++) {
+                    const cand = parts[i].replace(/^macro_/, '');
+                    if (Object.prototype.hasOwnProperty.call(normVals, cand) && normVals[cand] !== '') {
+                        return normVals[cand];
+                    }
+                    if (i === parts.length - 1) return parts[i];
+                }
+            }
+            return full;
+        });
+        if (nextStr === current) break;
+        current = nextStr;
+    }
+    return current;
 }
 
 export const HostPath = {

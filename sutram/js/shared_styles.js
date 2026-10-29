@@ -1,7 +1,8 @@
 // sutram/js/shared_styles.js
 // Architectural Proxy: Wraps yenVUI primitives and injects Sutram-specific structural overrides
 import { css } from 'lit';
-import { sharedStyles as yenvuiSharedStyles } from '../../yenvui/js/shared_styles.js';
+import { sharedStyles as yenvuiSharedStyles, Btn as YenvuiBtn } from 'sutram-chassis';
+export { YenvuiBtn };
 export const sharedStyles = css`
     ${yenvuiSharedStyles}
 
@@ -14,6 +15,24 @@ export const sharedStyles = css`
         box-sizing: border-box;
         -webkit-text-size-adjust: 100%;
         text-size-adjust: 100%;
+    }
+    sutram-btn, sutram-async-btn {
+        display: inline-flex;
+        vertical-align: middle;
+        min-width: max-content;
+        flex-shrink: 0;
+    }
+    sutram-pill { display: inline-flex; }
+    sutram-tag { display: inline-flex; align-items: center; }
+    sutram-label { display: inline-block; margin-bottom: 4px; }
+    sutram-input, sutram-select, sutram-textarea, sutram-toggle {
+        display: block;
+        margin-bottom: 15px;
+        font-family: inherit;
+    }
+    sutram-input[flush], sutram-select[flush], sutram-textarea[flush], sutram-toggle[flush],
+    sutram-input[inline], sutram-select[inline], sutram-textarea[inline], sutram-toggle[inline] {
+        margin-bottom: 0 !important;
     }
     yenvui-dropdown, sutram-dropdown { display: inline-flex; align-items: stretch; height: 100%; }
 
@@ -29,3 +48,10 @@ export const sharedStyles = css`
     }
     .system-action-btn i { color: currentColor !important; }
 `;
+
+if (typeof document !== 'undefined' && !document.getElementById('sutram-shared-styles')) {
+    const style = document.createElement('style');
+    style.id = 'sutram-shared-styles';
+    style.textContent = sharedStyles.cssText;
+    document.head.appendChild(style);
+}

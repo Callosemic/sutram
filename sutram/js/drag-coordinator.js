@@ -1,7 +1,9 @@
 // sutram/sutram/js/drag-coordinator.js
 import { html, css } from 'lit';
 import { SutramElement } from './sutram_sdk.js';
-import '../../yenvui/js/drop-zone.js';
+import { DropOverlay, DropTarget } from 'sutram-chassis';
+if (!customElements.get('sutram-drop-overlay')) customElements.define('sutram-drop-overlay', class extends DropOverlay {});
+if (!customElements.get('sutram-drop-target')) customElements.define('sutram-drop-target', class extends DropTarget {});
 export class SutramDragCoordinator extends SutramElement {
     static properties = {
         dragState: { type: Object },
