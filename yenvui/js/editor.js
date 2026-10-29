@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'lit';
-async function loadLanguageExtension(lang) {
+async function loadLanguageExtension(lang, customResolver = null) {
     try {
         const cm = await import('codemirror-core');
         if (lang === 'python') return cm.python();
@@ -26,12 +26,12 @@ async function loadLanguageExtension(lang) {
             const fn = langMod[lang] || langMod.default;
             if (typeof fn === 'function') return fn();
         } catch (importErr) {
-            // Stage A Fallback: Trigger host-injected JIT vendorization provider via ExtensionRegistry hook or Sutram bridge
-            const vendorizePromise = (window.ExtensionRegistry?.executeUIHook && window.ExtensionRegistry.executeUIHook('sutram:vendorize-language', lang))
-                || (typeof window.Sutram?.vendorizeLanguage === 'function' ? window.Sutram.vendorizeLanguage(lang) : null);
-            if (vendorizePromise) {
+            // Stage A Fallback: Trigger injected JIT language resolver callback
+            const resolver = customResolver || YenvuiEditor.languageResolver;
+            if (typeof resolver === 'function') {
                 try {
-                    const vendorPath = await vendorizePromise;
+                    const vendorRes = await resolver(lang);
+                    const vendorPath = typeof vendorRes === 'string' ? vendorRes : vendorRes?.url;
                     if (vendorPath) {
                         const staticMod = await import(/* webpackIgnore: true */ vendorPath);
                         const fn = staticMod[lang] || staticMod.default;
@@ -51,12 +51,15 @@ async function loadLanguageExtension(lang) {
     }
 }
 export class YenvuiEditor extends LitElement {
+    static languageResolver = null;
+
     static properties = {
         value: { type: String },
         readOnly: { type: Boolean },
         language: { type: String },
         writingMode: { type: Boolean },
-        customExtensions: { type: Array } // Accepts an array of CodeMirror extensions from the host
+        customExtensions: { type: Array }, // Accepts an array of CodeMirror extensions from the host
+        languageResolver: { attribute: false }
     };
     static styles = css`
         :host { 
@@ -231,7 +234,7 @@ export class YenvuiEditor extends LitElement {
                 });
             }
             if (changedProperties.has('language') && this.languageConf) {
-                loadLanguageExtension(this.language).then(ext => {
+                loadLanguageExtension(this.language, this.languageResolver).then(ext => {
                     if (this._view) {
                         this._view.dispatch({ effects: this.languageConf.reconfigure(ext) });
                     }
@@ -497,7 +500,7 @@ export class YenvuiEditor extends LitElement {
 
         // Await the language pack to prevent Lezer tree reconfiguration race conditions 
         // with the autocomplete worker during the initial EditorView boot.
-        let initialLangExt = await loadLanguageExtension(this.language);
+        let initialLangExt = await loadLanguageExtension(this.language, this.languageResolver);
 
         if (!this.isConnected) {
             this._initializingEditor = false;

@@ -38,7 +38,7 @@ export class YenvuiCard extends YenvuiBase {
         }
         :host([_overlayactive]),
         :host-context(lit-virtualizer),
-        :host-context(sutram-virtual-list) {
+        :host-context([data-virtual-list]) {
             content-visibility: visible;
             contain-intrinsic-size: none;
         }
@@ -277,7 +277,7 @@ export class YenvuiCard extends YenvuiBase {
             margin: 0;
         }
         /* Unstyled slots for host-injected buttons */
-        ::slotted(button), ::slotted(sutram-btn), ::slotted(sutram-async-btn), ::slotted(yenvui-btn), ::slotted(yenvui-async-btn) {
+        ::slotted(button), ::slotted([slot="actions"]), ::slotted(yenvui-btn), ::slotted(yenvui-async-btn) {
             height: 30px;
             padding: 0 10px !important;
             font-size: 0.75rem !important;
@@ -494,9 +494,24 @@ export class YenvuiCard extends YenvuiBase {
             }
         });
     }
+    get actionsOpen() {
+        return !!this._overlayActive;
+    }
 
+    set actionsOpen(val) {
+        this._overlayActive = !!val;
+    }
+
+    get hasActions() {
+        return !!this._hasActions;
+    }
+
+    set hasActions(val) {
+        this._hasActions = !!val;
+    }
     connectedCallback() {
         super.connectedCallback();
+        this.setAttribute('data-yv-card', '');
         this.addEventListener('focusout', this._focusOutListener);
         document.addEventListener('yenvui-overlay-opened', this._overlayListener);
         this.registerOutsideClick(() => {
@@ -515,6 +530,11 @@ export class YenvuiCard extends YenvuiBase {
         super.updated(changedProperties);
         if (changedProperties.has('_overlayActive') && this._overlayActive) {
             this.dispatchEvent(new CustomEvent('yenvui-overlay-opened', {
+                bubbles: true,
+                composed: true,
+                detail: { source: this }
+            }));
+            this.dispatchEvent(new CustomEvent('yenvui-card-actions-opened', {
                 bubbles: true,
                 composed: true,
                 detail: { source: this }
@@ -624,7 +644,7 @@ export class YenvuiCard extends YenvuiBase {
                 <div class="actions-tray" @click=${{handleEvent: (e) => { 
                     if (this._isPanning) { e.stopPropagation(); e.preventDefault(); return; }
                     const path = getEventPath(e);
-                    const isDropdownTrigger = path.some(el => el.tagName === 'SUTRAM-DROPDOWN' || el.tagName === 'YENVUI-DROPDOWN');
+                    const isDropdownTrigger = path.some(el => el.tagName && el.tagName.endsWith('-DROPDOWN'));
                     const isMenuItem = path.some(el => el.classList && el.classList.contains('menu-item'));
 
                     // If we clicked the dropdown trigger itself, abort so the menu can open
@@ -632,7 +652,7 @@ export class YenvuiCard extends YenvuiBase {
                     const isActionable = path.some(el => {
                         if (!el.tagName) return false;
                         const tag = el.tagName.toUpperCase();
-                        if (tag === 'BUTTON' || tag === 'SUTRAM-ASYNC-BTN' || tag === 'YENVUI-ASYNC-BTN') return true;
+                        if (tag === 'BUTTON' || tag.endsWith('-ASYNC-BTN') || tag.endsWith('-BTN')) return true;
                         if (isMenuItem) return true;
                         return false;
                     });

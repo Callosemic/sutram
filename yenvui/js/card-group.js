@@ -98,7 +98,7 @@ export class YenvuiCardGroup extends LitElement {
                     const deltaX = endX - this._gestureController.startX;
                     const deltaY = Math.abs(endY - this._gestureController.startY);
                     if (deltaX > 30 && deltaX > deltaY) {
-                        const card = getDeepElementFromPoint(endX, endY, 'yenvui-card, sutram-card');
+                        const card = getDeepElementFromPoint(endX, endY, '[data-yv-card], yenvui-card');
                         if (card && !card.disableSelection) {
                             card.selected = !card.selected;
                             card.dispatchEvent(new CustomEvent('yenvui-card-select-toggled', {
@@ -162,7 +162,7 @@ export class YenvuiCardGroup extends LitElement {
             if (!el || !el.tagName) return false;
             if (el._overlayActive) return true;
             const tag = el.tagName.toLowerCase();
-            if (tag === 'button' || tag === 'sutram-async-btn' || tag === 'yenvui-async-btn' || tag === 'sutram-entity-actions') return true;
+            if (tag === 'button' || tag.endsWith('-async-btn') || tag.endsWith('-btn') || tag.endsWith('-entity-actions')) return true;
             if (el.classList && (el.classList.contains('actions-tray') || el.classList.contains('trigger-bar') || el.classList.contains('actions-wrapper') || el.classList.contains('selection-gutter'))) return true;
             return false;
         });

@@ -104,8 +104,10 @@ export class YenvuiDropdown extends YenvuiBase {
     }
     _notifyError(err) {
         console.error(err);
-        window.dispatchEvent(new CustomEvent('sutram-status-update', {
-            detail: { msg: `Action Failed: ${err.message}`, timeout: 4000, isError: true }
+        this.dispatchEvent(new CustomEvent('yenvui-action-error', {
+            detail: { msg: `Action Failed: ${err.message}`, error: err },
+            bubbles: true,
+            composed: true
         }));
     }
     async _executeItem(item, e) {

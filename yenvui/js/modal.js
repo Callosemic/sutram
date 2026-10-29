@@ -151,13 +151,12 @@ export class YenvuiModal extends LitElement {
             border: none !important; 
             cursor: pointer; 
         }
-        ::slotted(yenvui-async-btn[slot="footer"]),
-        ::slotted(sutram-async-btn[slot="footer"]) {
+        ::slotted(:not(button)[slot="footer"]) {
             flex: 1;
             margin: 0 !important;
             padding: 0 !important;
             border: none !important;
-            display: block;
+            display: flex;
             --btn-padding: 12px;
             --btn-font-size: 1.05rem;
             --btn-border-radius: 6px;

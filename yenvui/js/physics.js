@@ -94,7 +94,7 @@ export function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) {
                 break;
             }
         }
-        if (curr.tagName && ['SUTRAM-WINDOW', 'SUTRAM-APP-SHELL'].includes(curr.tagName.toUpperCase())) {
+        if (curr.hasAttribute && curr.hasAttribute('data-spatial-boundary')) {
             if (!colEl) colEl = curr;
             break;
         }
@@ -256,7 +256,7 @@ export class YenvuiViewportGuard {
             let curr = startEl;
             while (curr && curr !== document.body && curr !== document.documentElement) {
                 if (curr instanceof Element) {
-                    if (curr.tagName === 'SUTRAM-VIRTUAL-LIST' && curr.shadowRoot) {
+                    if (curr.shadowRoot) {
                         const virt = curr.shadowRoot.querySelector('lit-virtualizer');
                         if (virt && virt.scrollHeight > virt.clientHeight) return virt;
                     }
