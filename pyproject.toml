@@ -1,6 +1,6 @@
 [project]
 name = "sutram"
-version = "2.3.0"
+version = "2.4.0"
 description = "Zero-bundler Web Component micro-kernel (sutram) and presentation chassis (yenVUI)."
 license = "Apache-2.0"
 [tool.semantic_release]

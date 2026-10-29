@@ -2,6 +2,42 @@
 
 <!-- version list -->
 
+## v2.4.0 (2026-10-29)
+
+### Bug Fixes
+
+- Bidirectional popover collision flip, icon margin normalization, and textarea min-height token
+  ([`8d7adf4`](https://github.com/Callosemic/sutram/commit/8d7adf47a64b0bd26dfbb24e63c9b496415c4f23))
+
+- **inputs**: Enforce minRows floor and empty-state baseline height in SutramTextarea auto-sizing
+  ([`7295ced`](https://github.com/Callosemic/sutram/commit/7295ced6b2b35383fe697a0447200c595b7b232a))
+
+### Chores
+
+- Global workspace sweep
+  ([`c9cd373`](https://github.com/Callosemic/sutram/commit/c9cd373fd5dc01ca6613ddc07895ad3f57a69234))
+
+- Global workspace sweep
+  ([`71b4bb3`](https://github.com/Callosemic/sutram/commit/71b4bb3c295cc7b44c6b933984466f14224df36f))
+
+- Integrate CI battery workflow, harden fitness rules, and expand contract test suites
+  ([`9e594c5`](https://github.com/Callosemic/sutram/commit/9e594c5f2368c32020b51bae1bf5ce653601256b))
+
+### Features
+
+- Pluggable chassis provider contract, sutram ui adapter, dag tree primitive, and kernel entrypoint
+  ([`b80738f`](https://github.com/Callosemic/sutram/commit/b80738f62df9e7afa6794c6e304c098e948435b4))
+
+- **yenvui**: Establish autonomous chassis provider entrypoint, form input primitives, and decouple
+  upward kernel dependencies
+  ([`9c5a15c`](https://github.com/Callosemic/sutram/commit/9c5a15cd33982a773a4581b8f920c3b1868a6867))
+
+### Testing
+
+- Add top-layer popover anchoring test vectors and refine code index placeholder fitness rule
+  ([`798e954`](https://github.com/Callosemic/sutram/commit/798e954f865e4344e71965165ed662ccdc809f51))
+
+
 ## v2.3.0 (2026-10-26)
 
 ### Chores
