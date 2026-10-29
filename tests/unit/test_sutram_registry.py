@@ -773,6 +773,235 @@ console.log('ORCHESTRATOR_TESTS_PASSED');
             self.assertEqual(res.returncode, 0, f"Orchestrator test failed:\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}")
             self.assertIn("ORCHESTRATOR_TESTS_PASSED", res.stdout)
 
+    def test_sutram_combobox_target_binding_and_settings_schema_in_node(self):
+        """Tests SutramCombobox normalization & navigation, SutramTargetBinding, and dynamic settings schema options."""
+        node_bin = shutil.which("node")
+        if not node_bin:
+            self.skipTest("Node.js binary not available in PATH.")
+
+        inputs_path = SUTRAM_JS_DIR / "inputs.js"
+        if not inputs_path.exists():
+            self.skipTest("inputs.js not found in repository.")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            (tmp_path / "package.json").write_text(json.dumps({"type": "module"}), encoding="utf-8")
+            (tmp_path / "lit_stub.mjs").write_text(
+                "export class LitElement { connectedCallback() {} disconnectedCallback() {} requestUpdate() {} dispatchEvent() {} }\n"
+                "export const html = () => '';\n"
+                "export const css = () => '';\n",
+                encoding="utf-8",
+            )
+            (tmp_path / "chassis_stub.mjs").write_text(
+                "export class Input { connectedCallback() {} addEventListener() {} dispatchEvent() {} }\n"
+                "export class Select { connectedCallback() {} addEventListener() {} dispatchEvent() {} }\n"
+                "export class Textarea { connectedCallback() {} addEventListener() {} dispatchEvent() {} }\n"
+                "export class Toggle { connectedCallback() {} addEventListener() {} dispatchEvent() {} }\n",
+                encoding="utf-8",
+            )
+            (tmp_path / "sutram_sdk_stub.mjs").write_text(
+                "import { LitElement } from './lit_stub.mjs';\n"
+                "export class SutramElement extends LitElement {\n"
+                "    constructor() {\n"
+                "        super();\n"
+                "        this._outsideClickCallbacks = [];\n"
+                "    }\n"
+                "    registerOutsideClick(cb) {\n"
+                "        this._outsideClickCallbacks.push(cb);\n"
+                "    }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            (tmp_path / "shared_styles_stub.mjs").write_text("export const sharedStyles = '';\n", encoding="utf-8")
+
+            inputs_src = inputs_path.read_text(encoding="utf-8")
+            inputs_src = inputs_src.replace("from 'sutram-chassis'", "from './chassis_stub.mjs'")
+            inputs_src = inputs_src.replace("from 'lit'", "from './lit_stub.mjs'")
+            inputs_src = inputs_src.replace("from './sutram_sdk.js'", "from './sutram_sdk_stub.mjs'")
+            inputs_src = inputs_src.replace("from './shared_styles.js'", "from './shared_styles_stub.mjs'")
+            (tmp_path / "inputs.mjs").write_text(inputs_src, encoding="utf-8")
+
+            test_mjs = """
+import assert from 'node:assert/strict';
+
+const tags = new Map();
+globalThis.customElements = {
+    get: (t) => tags.get(t),
+    define: (t, c) => tags.set(t, c)
+};
+class CustomEventMock extends Event {
+    constructor(type, opt = {}) {
+        super(type, opt);
+        this.detail = opt.detail ?? null;
+    }
+}
+globalThis.CustomEvent = globalThis.CustomEvent || CustomEventMock;
+
+const { SutramCombobox, SutramTargetBinding } = await import('./inputs.mjs');
+
+// 1. SutramCombobox option normalization & filtering
+const combo = new SutramCombobox();
+combo.options = [
+    'simple-model',
+    { value: 'gpt-4o', label: 'GPT-4o Omnichannel', badge: 'OpenAI' },
+    { id: 'claude-3-5', name: 'Claude 3.5 Sonnet', detail: 'Anthropic' }
+];
+const normalized = combo._getNormalizedOptions();
+assert.equal(normalized.length, 3);
+assert.deepEqual(normalized[0], { value: 'simple-model', label: 'simple-model', badge: '' });
+assert.deepEqual(normalized[1], { value: 'gpt-4o', label: 'GPT-4o Omnichannel', badge: 'OpenAI' });
+assert.deepEqual(normalized[2], { value: 'claude-3-5', label: 'Claude 3.5 Sonnet', badge: 'Anthropic' });
+
+combo._filterText = 'simple';
+assert.equal(combo._getFilteredOptions().length, 1);
+assert.equal(combo._getFilteredOptions()[0].value, 'simple-model');
+
+combo._filterText = 'anthropic';
+assert.equal(combo._getFilteredOptions().length, 1);
+assert.equal(combo._getFilteredOptions()[0].value, 'claude-3-5');
+
+combo._filterText = '';
+combo.options = Array.from({ length: 80 }, (_, i) => `model-${i}`);
+assert.equal(combo._getFilteredOptions().length, 60, 'SutramCombobox must cap rendered items at 60');
+
+// 2. SutramCombobox keyboard navigation & outside-click dismissal
+combo.options = ['alpha', 'beta', 'gamma'];
+combo._open = false;
+combo._highlightedIndex = -1;
+combo._filterText = null;
+
+combo._handleKeyDown({ key: 'ArrowDown', preventDefault() {} });
+assert.equal(combo._open, true);
+assert.equal(combo._highlightedIndex, 0);
+
+combo._handleKeyDown({ key: 'ArrowDown', preventDefault() {} });
+assert.equal(combo._highlightedIndex, 1);
+
+combo._handleKeyDown({ key: 'ArrowDown', preventDefault() {} });
+assert.equal(combo._highlightedIndex, 2);
+
+// Wrap modulo length
+combo._handleKeyDown({ key: 'ArrowDown', preventDefault() {} });
+assert.equal(combo._highlightedIndex, 0);
+
+// ArrowUp wrap
+combo._handleKeyDown({ key: 'ArrowUp', preventDefault() {} });
+assert.equal(combo._highlightedIndex, 2);
+
+// Enter commits highlighted value
+let committedEvt = null;
+combo.dispatchEvent = (e) => { committedEvt = e; };
+combo._handleKeyDown({ key: 'Enter', preventDefault() {} });
+assert.equal(combo.value, 'gamma');
+assert.equal(combo._open, false);
+assert.equal(committedEvt.detail.value, 'gamma');
+
+// Escape closes menu and resets filterText
+combo._open = true;
+combo._filterText = 'gam';
+combo._handleKeyDown({ key: 'Escape', preventDefault() {} });
+assert.equal(combo._open, false);
+assert.equal(combo._filterText, null);
+
+// Outside click callback dismisses open menu
+combo.connectedCallback();
+combo._open = true;
+combo._filterText = 'temp';
+assert.equal(combo._outsideClickCallbacks.length, 1);
+combo._outsideClickCallbacks[0]();
+assert.equal(combo._open, false);
+assert.equal(combo._filterText, null);
+
+// 3. SutramTargetBinding value normalization & event dispatch
+const binding = new SutramTargetBinding();
+binding.value = 'openai::gpt-4o';
+assert.deepEqual(binding._normalizeValue(), { endpoint: 'openai', model: 'gpt-4o' });
+
+binding.value = 'claude-3-opus';
+assert.deepEqual(binding._normalizeValue(), { endpoint: '', model: 'claude-3-opus' });
+
+binding.value = { endpoint: 'local-ollama', model: 'mistral-7b' };
+assert.deepEqual(binding._normalizeValue(), { endpoint: 'local-ollama', model: 'mistral-7b' });
+
+binding.value = { endpoint_id: 'modal-cluster', model: 'deepseek-v3' };
+assert.deepEqual(binding._normalizeValue(), { endpoint: 'modal-cluster', model: 'deepseek-v3' });
+
+binding.value = null;
+assert.deepEqual(binding._normalizeValue(), { endpoint: '', model: '' });
+
+// Custom keys
+binding.endpointKey = 'provider';
+binding.modelKey = 'engine';
+binding.value = 'groq::llama-3';
+assert.deepEqual(binding._normalizeValue(), { provider: 'groq', engine: 'llama-3' });
+
+// Functional model candidates resolution
+const modelCatalog = {
+    'aws-bedrock': ['claude-3-sonnet', 'titan-embed'],
+    'ollama': ['llama-3', 'qwen-2.5']
+};
+binding.models = (epId) => modelCatalog[epId] || [];
+assert.deepEqual(binding.models('ollama'), ['llama-3', 'qwen-2.5']);
+assert.deepEqual(binding.models('aws-bedrock'), ['claude-3-sonnet', 'titan-embed']);
+assert.deepEqual(binding.models('missing'), []);
+
+let bindingEvt = null;
+binding.dispatchEvent = (e) => { bindingEvt = e; };
+binding._emitBinding({ provider: 'groq', engine: 'llama-3-70b' });
+assert.deepEqual(binding.value, { provider: 'groq', engine: 'llama-3-70b' });
+assert.deepEqual(bindingEvt.detail.value, { provider: 'groq', engine: 'llama-3-70b' });
+
+// 4. Dynamic options_from schema extraction and effectiveVal fallback
+const formData = {
+    compute_endpoints: [
+        { id: 'ep-alpha', name: 'Alpha Cluster' },
+        { id: 'ep-beta', name: 'Beta VPC' }
+    ]
+};
+const selectField = {
+    id: 'active_ep',
+    type: 'select',
+    options_from: {
+        field: 'compute_endpoints',
+        value_key: 'id',
+        label_key: 'name'
+    }
+};
+const srcArr = Array.isArray(formData[selectField.options_from.field]) ? formData[selectField.options_from.field] : [];
+const extractedOptions = srcArr.map(item => ({
+    value: String(item[selectField.options_from.value_key] || item[selectField.options_from.label_key]),
+    label: String(item[selectField.options_from.label_key] || item[selectField.options_from.value_key])
+}));
+assert.deepEqual(extractedOptions, [
+    { value: 'ep-alpha', label: 'Alpha Cluster' },
+    { value: 'ep-beta', label: 'Beta VPC' }
+]);
+
+const validVal = 'ep-beta';
+const effValid = (validVal !== undefined && validVal !== '' && extractedOptions.some(o => o.value === validVal))
+    ? validVal
+    : (extractedOptions[0]?.value ?? validVal ?? '');
+assert.equal(effValid, 'ep-beta');
+
+const invalidVal = 'ep-deleted';
+const effFallback = (invalidVal !== undefined && invalidVal !== '' && extractedOptions.some(o => o.value === invalidVal))
+    ? invalidVal
+    : (extractedOptions[0]?.value ?? invalidVal ?? '');
+assert.equal(effFallback, 'ep-alpha', 'effectiveVal must clamp to first available option when active value is missing');
+
+console.log('INPUTS_AND_SETTINGS_TESTS_PASSED');
+"""
+            (tmp_path / "test_inputs.mjs").write_text(test_mjs, encoding="utf-8")
+            res = subprocess.run(
+                [node_bin, "test_inputs.mjs"],
+                cwd=tmp_path.as_posix(),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(res.returncode, 0, f"Inputs test failed:\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}")
+            self.assertIn("INPUTS_AND_SETTINGS_TESTS_PASSED", res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -136,7 +136,7 @@ def run_consumer_lint(target_dir, allow_host_globals=False):
                     report("LIT_INNER_HTML_BAN", "Direct '.innerHTML=' assignment in Lit component detected. Render text nodes declaratively using Lit interpolation.")
 
                 if is_lit_component and sutram_form_control_pattern.search(line):
-                    report("SUTRAM_FORM_CONTROL_MANDATE", "Native HTML form control (<input>, <select>, <textarea>) detected in Lit template. Use <sutram-input>, <sutram-select>, <sutram-textarea>, or <sutram-toggle>.")
+                    report("SUTRAM_FORM_CONTROL_MANDATE", "Native HTML form control (<input>, <select>, <textarea>) detected in Lit template. Use <sutram-input>, <sutram-select>, <sutram-textarea>, <sutram-toggle>, <sutram-combobox>, or <sutram-target-binding>.")
 
                 if is_lit_component and sutram_btn_class_pattern.search(line):
                     report("SUTRAM_BUTTON_MANDATE", "Raw <button class=\"btn-sm\"> detected in Lit template. Use <sutram-btn> or <sutram-async-btn>.")

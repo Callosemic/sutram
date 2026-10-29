@@ -40,6 +40,7 @@ sutram/
 │   │   ├── 0025_root_viewport_physics_guard_kinetic_throw_and_reentrant_scroll_lock.md # ADR-0025: Root viewport physics guard, kinetic momentum throw engine, and reentrant scroll locking
 │   │   ├── 0026_pluggable_chassis_contract_ui_adapter_and_kernel_entrypoint.md # ADR-0026: Pluggable Chassis Provider Contract, SutramUIAdapter, Input Event Bridging, and Public Kernel Entrypoint
 │   │   ├── 0027_yenvui_autonomous_chassis_provider_and_input_primitives.md # ADR-0027: yenVUI Autonomous Chassis Provider Implementation, Input Primitives Extraction, and Upward Kernel Decoupling
+│   │   ├── 0028_compound_target_binding_and_sw_dev_cache_bypass.md # ADR-0028: Compound Target Binding Controls, Dynamic Schema Option Sources, and Development Service Worker Cache Bypass
 │   │   └── archived/               # Deeply embedded baseline architectural records preserved for historical reference
 │   │       ├── 0001_sutram_ioc_microkernel_architecture.md # ADR-0001: IoC microkernel and slot layout architecture
 │   │       ├── 0002_sutram_bootloader_and_resilience_patterns.md # ADR-0002: Stage 1 bootloader and error boundary standards
@@ -60,12 +61,14 @@ sutram/
 │       ├── drag-coordinator.js     # Spatial drag-and-drop overlay coordinator for interactive column reordering
 │       │   └── class SutramDragCoordinator # [comment required]
 │       ├── index.js                # Public Layer 2 barrel entrypoint exporting Sutram stores, offline engines, and UI primitives
-│       ├── inputs.js               # Standard form input elements (text, select, textarea, toggle)
+│       ├── inputs.js               # Standard form input elements (text, select, textarea, toggle, combobox, target binding)
 │       │   ├── function bridgeInputEvents(BaseClass) # [comment required]
 │       │   ├── class SutramInput   # [stale?] 1.
 │       │   ├── class SutramSelect  # [stale?] 2.
 │       │   ├── class SutramTextarea # [stale?] 3.
-│       │   └── class SutramToggle  # [stale?] 4.
+│       │   ├── class SutramToggle  # [stale?] 4.
+│       │   ├── class SutramCombobox # [comment required]
+│       │   └── class SutramTargetBinding # [comment required]
 │       ├── offline.js              # Offline IndexedDB persistence manager, outbox reconciler, and network hysteresis manager
 │       │   ├── class SutramDB      # [comment required]
 │       │   ├── class OfflineHttpProvider # [comment required]
@@ -89,7 +92,7 @@ sutram/
 │       │   ├── class SutramFolderBrowser # [stale?] 6.
 │       │   ├── class SutramModal   # 7.
 │       │   ├── class SutramWindow  # [comment required]
-│       │   ├── class SutramFieldCard # 8.
+│       │   ├── class SutramFieldCard # [stale?] 8.
 │       │   ├── class SutramSettingsForm # [comment required]
 │       │   ├── class SutramGenericSettingsModal # [comment required]
 │       │   ├── class SutramEntityActions # [stale?] 8.5.
