@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v2.6.0 (2026-11-03)
+
+### Chores
+
+- Global workspace sweep
+  ([`6b5922d`](https://github.com/Callosemic/sutram/commit/6b5922dbd91d9174c80d1f62c3a85470f8b35e1d))
+
+- Sweep remaining state
+  ([`234e6e8`](https://github.com/Callosemic/sutram/commit/234e6e8295abdd3096b669d9f814245beed8bed8))
+
+### Features
+
+- **substrate**: Introduce zero-css lego layout primitives, semantic token parameterization,
+  sutram-composer, and adr-0029 language descriptors
+  ([`a4f44c9`](https://github.com/Callosemic/sutram/commit/a4f44c98247a5c075760657e827571e993826798))
+
+
 ## v2.5.0 (2026-10-29)
 
 ### Chores
