@@ -156,7 +156,7 @@ export class SutramVirtualList extends LitElement {
             -webkit-overflow-scrolling: touch;
             overscroll-behavior-x: none;
             touch-action: pan-y;
-            padding: 8px 16px;
+            padding: 8px 0;
             box-sizing: border-box;
             -webkit-text-size-adjust: 100%;
             text-size-adjust: 100%;
@@ -172,8 +172,17 @@ export class SutramVirtualList extends LitElement {
             }
         }
         lit-virtualizer > * {
-            width: 100%;
+            width: calc(100% - 24px) !important;
+            max-width: calc(100% - 24px) !important;
+            margin-left: 12px !important;
+            margin-right: 12px !important;
             box-sizing: border-box;
+        }
+        :host([flush]) lit-virtualizer > * {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
         }
         lit-virtualizer sutram-card,
         lit-virtualizer yenvui-card {
@@ -184,6 +193,12 @@ export class SutramVirtualList extends LitElement {
             --card-contain-intrinsic-size: none;
         }
         @container (max-width: 480px) {
+            lit-virtualizer > * {
+                width: 100% !important;
+                max-width: 100% !important;
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+            }
             lit-virtualizer sutram-card,
             lit-virtualizer yenvui-card {
                 margin-bottom: 0;

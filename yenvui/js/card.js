@@ -16,6 +16,7 @@ export class YenvuiCard extends YenvuiBase {
         disableSelection: { type: Boolean },
         _overlayActive: { type: Boolean, reflect: true },
         _hasActions: { type: Boolean, reflect: true, attribute: 'has-actions' },
+        _hasBodySlot: { type: Boolean, state: true },
         compact: { type: Boolean, reflect: true },
         flush: { type: Boolean, reflect: true },
         stale: { type: Boolean, reflect: true }
@@ -128,6 +129,7 @@ export class YenvuiCard extends YenvuiBase {
             flex: 1;
             display: flex;
             flex-direction: column;
+            justify-content: center;
             min-width: 0;
             padding: 12px;
             transform: translateY(var(--peek-content-y, 0px));
@@ -136,9 +138,12 @@ export class YenvuiCard extends YenvuiBase {
         .card-header {
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
+            align-items: center;
             margin-bottom: 4px;
             gap: 8px;
+        }
+        .card-header.single-row {
+            margin-bottom: 0;
         }
         .card-title {
             font-weight: 700;
@@ -164,15 +169,16 @@ export class YenvuiCard extends YenvuiBase {
             margin-bottom: 4px;
         }
         .card-body {
-            display: flex;
+            display: none;
             flex-direction: column;
             overflow: hidden;
             min-width: 0;
             font-size: 0.8rem;
             line-height: 1.4;
-        }
-        .card-body:not(:empty) {
             margin-top: 4px;
+        }
+        .card-body.has-content {
+            display: flex;
         }
         :host([flush]) .card-body {
             padding: 0;
@@ -422,6 +428,7 @@ export class YenvuiCard extends YenvuiBase {
         this.stale = false;
         this._overlayActive = false;
         this._hasActions = false;
+        this._hasBodySlot = false;
         this.selected = false;
         this._isPanning = false;
 
@@ -597,8 +604,15 @@ export class YenvuiCard extends YenvuiBase {
     _handleSlotChange(e) {
         this._checkActions();
     }
+    _handleBodySlotChange(e) {
+        const nodes = e.target.assignedNodes({ flatten: true });
+        this._hasBodySlot = nodes.some(n =>
+            n.nodeType === Node.ELEMENT_NODE ||
+            (n.nodeType === Node.TEXT_NODE && n.textContent.trim().length > 0)
+        );
+    }
     render() {
-        const isSingleRow = !this.descriptionText && !this.detailText;
+        const isSingleRow = !this.descriptionText && !this.detailText && !this._hasBodySlot;
         const resolvedIntent = this.intent ? `var(--intent-${this.intent})` : 'var(--intent-neutral)';
         return html`
             <div class="card-wrapper" style="--card-intent: ${resolvedIntent}"
@@ -618,7 +632,7 @@ export class YenvuiCard extends YenvuiBase {
                         composed: true
                     }));
                 }} style="cursor: pointer;">
-                    <div class="card-header">
+                    <div class="card-header ${isSingleRow ? 'single-row' : ''}">
                         <div class="card-title">
                             ${this.icon ? (/^[a-zA-Z0-9-]+$/.test(this.icon) ? html`<yenvui-icon name="${this.icon}" size="sm" style="color: var(--card-intent, var(--intent-primary)); flex-shrink: 0;"></yenvui-icon>` : html`<span style="flex-shrink: 0;">${this.icon}</span>`) : ''}
                             <yenvui-scrub-track ?grow=${true}>
@@ -647,8 +661,8 @@ export class YenvuiCard extends YenvuiBase {
                         </div>
                     ` : ''}
 
-                    <div class="card-body">
-                        <slot></slot>
+                    <div class="card-body ${this._hasBodySlot ? 'has-content' : ''}">
+                        <slot @slotchange=${this._handleBodySlotChange}></slot>
                     </div>
 
                     <slot name="detail"></slot>
