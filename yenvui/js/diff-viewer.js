@@ -634,16 +634,16 @@ export class YenvuiDiffViewer extends YenvuiBase {
                 </span>
                 <div class="mode-toggle-group">
                     <button class="mode-btn ${this.mode === 'auto' ? 'active' : ''}" @click=${() => this._setMode('auto')} title="Responsive Container Split">
-                        <yv-icon name="sparkles" style="width: 12px; height: 12px;"></yv-icon><span class="mode-text">Auto</span>
+                        <yenvui-icon name="sparkles" size="xs"></yenvui-icon><span class="mode-text">Auto</span>
                     </button>
                     <button class="mode-btn ${this.mode === 'split-side' ? 'active' : ''}" @click=${() => this._setMode('split-side')} title="Side-by-Side Split">
-                        <yv-icon name="columns" style="width: 12px; height: 12px;"></yv-icon><span class="mode-text">Side</span>
+                        <yenvui-icon name="columns" size="xs"></yenvui-icon><span class="mode-text">Side</span>
                     </button>
                     <button class="mode-btn ${this.mode === 'split-stacked' ? 'active' : ''}" @click=${() => this._setMode('split-stacked')} title="Top/Bottom Stacked Split">
-                        <yv-icon name="rows" style="width: 12px; height: 12px;"></yv-icon><span class="mode-text">Stacked</span>
+                        <yenvui-icon name="rows" size="xs"></yenvui-icon><span class="mode-text">Stacked</span>
                     </button>
                     <button class="mode-btn ${this.mode === 'interleaved' ? 'active' : ''}" @click=${() => this._setMode('interleaved')} title="Interleaved Unified Lines">
-                        <yv-icon name="align-justify" style="width: 12px; height: 12px;"></yv-icon><span class="mode-text">Unified</span>
+                        <yenvui-icon name="align-justify" size="xs"></yenvui-icon><span class="mode-text">Unified</span>
                     </button>
                 </div>
             </div>

@@ -5,7 +5,7 @@ export class YenvuiPill extends YenvuiBase {
         pillId: { type: String },
         labelText: { type: String },
         active: { type: Boolean },
-        small: { type: Boolean },
+        compact: { type: Boolean, reflect: true },
         variant: { type: String } // 'standard' or 'text'
     };
 
@@ -13,11 +13,12 @@ export class YenvuiPill extends YenvuiBase {
 
     constructor() {
         super();
+        this.compact = false;
         this.variant = 'standard';
     }
     render() {
         const activeClass = this.active ? 'yv-pill--active' : 'yv-pill--inactive';
-        const smallClass = this.small ? 'yv-pill--small' : '';
+        const smallClass = this.compact ? 'yv-pill--small' : '';
         const variantClass = `yv-pill--${this.variant || 'standard'}`;
         return html`
             <button 

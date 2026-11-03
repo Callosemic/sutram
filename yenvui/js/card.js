@@ -11,7 +11,6 @@ export class YenvuiCard extends YenvuiBase {
         descriptionText: { type: String },
         statusText: { type: String },
         icon: { type: String },
-        intentColor: { type: String },
         intent: { type: String },
         selected: { type: Boolean, reflect: true },
         disableSelection: { type: Boolean },
@@ -139,20 +138,23 @@ export class YenvuiCard extends YenvuiBase {
             justify-content: space-between;
             align-items: flex-start;
             margin-bottom: 4px;
+            gap: 8px;
         }
         .card-title {
-            font-weight: bold;
+            font-weight: 700;
             color: var(--text, #e0e0e0);
-            font-size: 0.95rem;
+            font-size: 0.88rem;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
+            min-width: 0;
+            overflow: hidden;
             overflow-wrap: anywhere;
             word-break: break-word;
         }
         .card-desc {
             color: var(--text-muted, #888);
-            font-size: 0.8rem;
+            font-size: 0.76rem;
             overflow-wrap: anywhere;
             word-break: break-word;
             display: -webkit-box;
@@ -166,6 +168,11 @@ export class YenvuiCard extends YenvuiBase {
             flex-direction: column;
             overflow: hidden;
             min-width: 0;
+            font-size: 0.8rem;
+            line-height: 1.4;
+        }
+        .card-body:not(:empty) {
+            margin-top: 4px;
         }
         :host([flush]) .card-body {
             padding: 0;
@@ -248,8 +255,12 @@ export class YenvuiCard extends YenvuiBase {
             flex-wrap: nowrap;
             gap: 6px;
             overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-x pan-y;
             scrollbar-width: none;
             width: 100%;
+            min-width: 0;
             box-sizing: border-box;
         }
         .actions-wrapper::-webkit-scrollbar {
@@ -277,7 +288,7 @@ export class YenvuiCard extends YenvuiBase {
             margin: 0;
         }
         /* Unstyled slots for host-injected buttons */
-        ::slotted(button), ::slotted([slot="actions"]), ::slotted(yenvui-btn), ::slotted(yenvui-async-btn) {
+        ::slotted(button), ::slotted(yenvui-btn), ::slotted(yenvui-async-btn) {
             height: 30px;
             padding: 0 10px !important;
             font-size: 0.75rem !important;
@@ -287,6 +298,14 @@ export class YenvuiCard extends YenvuiBase {
             gap: 5px;
             white-space: nowrap;
             margin: 0 !important;
+        }
+        ::slotted([slot="actions"]) {
+            display: inline-flex !important;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+            margin: 0 !important;
+            flex-shrink: 0;
         }
 
         /* E-Ink High Contrast Overrides */
@@ -396,7 +415,6 @@ export class YenvuiCard extends YenvuiBase {
         this.descriptionText = '';
         this.statusText = '';
         this.icon = '';
-        this.intentColor = '';
         this.intent = '';
         this.disableSelection = false;
         this.compact = false;
@@ -581,7 +599,7 @@ export class YenvuiCard extends YenvuiBase {
     }
     render() {
         const isSingleRow = !this.descriptionText && !this.detailText;
-        const resolvedIntent = this.intent ? `var(--intent-${this.intent})` : (this.intentColor || 'var(--intent-neutral)');
+        const resolvedIntent = this.intent ? `var(--intent-${this.intent})` : 'var(--intent-neutral)';
         return html`
             <div class="card-wrapper" style="--card-intent: ${resolvedIntent}"
                 @mouseleave=${() => { if (window.matchMedia('(hover: hover)').matches && (!this._gestureController || !this._gestureController.active)) this._overlayActive = false; }}
@@ -599,19 +617,19 @@ export class YenvuiCard extends YenvuiBase {
                         bubbles: true,
                         composed: true
                     }));
-                }} style="cursor: pointer; padding: 12px; min-width: 0;">
-                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; gap: 8px;">
-                        <div class="card-title" style="display: flex; align-items: center; gap: 6px; font-weight: bold; color: var(--text); font-size: 0.85rem; min-width: 0; overflow: hidden;">
-                            ${this.icon ? (/^[a-zA-Z0-9-]+$/.test(this.icon) ? html`<yv-icon name="${this.icon}" style="width: 14px; height: 14px; color: var(--card-intent, var(--intent-primary)); flex-shrink: 0;"></yv-icon>` : html`<span style="flex-shrink: 0;">${this.icon}</span>`) : ''}
-                            <yenvui-scrub-track style="flex: 1; min-width: 0;">
+                }} style="cursor: pointer;">
+                    <div class="card-header">
+                        <div class="card-title">
+                            ${this.icon ? (/^[a-zA-Z0-9-]+$/.test(this.icon) ? html`<yenvui-icon name="${this.icon}" size="sm" style="color: var(--card-intent, var(--intent-primary)); flex-shrink: 0;"></yenvui-icon>` : html`<span style="flex-shrink: 0;">${this.icon}</span>`) : ''}
+                            <yenvui-scrub-track ?grow=${true}>
                                 ${this.titleText}
                             </yenvui-scrub-track>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-                            ${this.statusText ? html`<span style="font-size: 0.85rem; color: var(--text-muted); font-style: italic; margin-right: 4px;">${this.statusText}</span>` : ''}
+                            ${this.statusText ? html`<span style="font-size: 0.8rem; color: var(--text-muted); font-style: italic; margin-right: 4px;">${this.statusText}</span>` : ''}
                             <slot name="header-actions"></slot>
                             ${this.detailSuffix ? html`
-                                <div class="card-detail-suffix" style="font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); opacity: 0.8; flex-shrink: 0; margin-left: 8px;">
+                                <div class="card-detail-suffix" style="font-family: var(--font-mono); font-size: 0.68rem; color: var(--text-muted); opacity: 0.85; flex-shrink: 0; margin-left: 8px;">
                                     ${this.detailSuffix.replace(/^[\s|]+/, '')}
                                 </div>
                             ` : ''}
@@ -619,12 +637,12 @@ export class YenvuiCard extends YenvuiBase {
                     </div>
 
                     ${this.descriptionText ? html`
-                        <div class="card-desc" style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                        <div class="card-desc">
                             ${this.descriptionText}
                         </div>
                     ` : ''}
                     ${this.detailText ? html`
-                        <div class="card-detail" style="font-family: var(--font-mono); font-size: 10px; color: var(--card-intent, var(--intent-primary)); opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        <div class="card-detail" style="color: var(--card-intent, var(--intent-primary));">
                             ${this.detailPrefix || ''}${this.detailText}
                         </div>
                     ` : ''}
@@ -639,7 +657,7 @@ export class YenvuiCard extends YenvuiBase {
                 <div class="action-grip-rail"  
                     @pointerenter=${(e) => { if (e.pointerType === 'mouse') this._overlayActive = true; }}
                     @click=${(e) => { e.stopPropagation(); e.preventDefault(); this._overlayActive = !this._overlayActive; }}>
-                    <yv-icon name="chevron-left" style="width: 14px; height: 14px;"></yv-icon>
+                    <yenvui-icon name="chevron-left" size="sm"></yenvui-icon>
                 </div>
                 <div class="actions-tray" @click=${{handleEvent: (e) => { 
                     if (this._isPanning) { e.stopPropagation(); e.preventDefault(); return; }

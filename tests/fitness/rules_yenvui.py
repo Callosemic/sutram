@@ -23,6 +23,18 @@ def check_yenvui_rules():
     inner_html_pattern = re.compile(r'\.innerHTML\s*=')
     body_overflow_pattern = re.compile(r'document\.body\.style\.overflow\s*=')
     upward_kernel_leak_pattern = re.compile(r'\bsutram\b|sutram[-:]|\bExtensionRegistry\b', re.IGNORECASE)
+    banned_presentational_prop_pattern = re.compile(
+        r'^\s*(intentColor|minColWidth|maxWidth|bottomBorder|minRows|maxHeight|borderless|preWrap|strikethrough|radius|minHeight|alignSelf|transparent)\s*:\s*\{',
+        re.MULTILINE
+    )
+    legacy_scale_token_pattern = re.compile(
+        r'<(?:sutram|yenvui)-(?:view|modal|btn|async-btn)\b[^>]*\bsize=["\'](?:xs|sm|md|lg|xl)["\']'
+        r'|<(?:sutram|yenvui)-stack\b[^>]*\bcolumns=["\'](?:xs|sm|md|lg)["\']'
+        r'|<(?:sutram|yenvui)-pill\b[^>]*\?small='
+    )
+    # Consumers bind public booleans as ?camelCase=${...}; Lit sets that as the lowercased attribute, so a public
+    # property with a custom attribute name ('full-width') silently ignores every such binding.
+    custom_attribute_prop_pattern = re.compile(r'^\s*([A-Za-z]\w*)\s*:\s*\{[^}]*\battribute\s*:\s*[\'"]([^\'"]+)[\'"]')
     scan_dirs = [YENVUI_DIR / "js"]
     for filepath in collect_unique_files(scan_dirs, [".js"]):
         with open(filepath, "r", encoding="utf-8") as f:
@@ -30,6 +42,15 @@ def check_yenvui_rules():
         content = "".join(lines)
 
         # 1. Structural multi-line scans
+        for bad_prop in banned_presentational_prop_pattern.finditer(content):
+            line_no = content[:bad_prop.start()].count('\n') + 1
+            report_violation(
+                "YENVUI_SEMANTIC_PROPERTY_MANDATE",
+                filepath,
+                line_no,
+                f"Banned presentational property '{bad_prop.group(1)}' in static properties. Expose semantic tokens ('intent', 'size', 'columns', 'compact', 'flush') instead."
+            )
+
         if dialog_tag_pattern.search(content) and not teardown_pattern.search(content):
             report_violation(
                 "DIALOG_TEARDOWN_COMPLIANCE",
@@ -69,6 +90,14 @@ def check_yenvui_rules():
             if line.strip().startswith("//") or line.strip().startswith("/*"):
                 continue
 
+            if legacy_scale_token_pattern.search(line):
+                report_violation(
+                    "UNIFIED_SCALE_TOKEN_MANDATE",
+                    filepath,
+                    idx,
+                    "Legacy T-shirt scale token (xs/sm/md/lg/xl or ?small) detected in Sutram/yenVUI. Use 'none | compact | normal | wide | full' or '?compact=${true}'."
+                )
+
             if hex_color_pattern.search(line) and 'var(' not in line and 'theme-tokens.css' not in filepath.name:
                 lower = line.lower()
                 # Whitelist standard monochrome tokens, CodeMirror internals, and e-ink brutalist accents
@@ -80,6 +109,16 @@ def check_yenvui_rules():
                 e_name = evt_match.group(1)
                 if not (e_name.startswith('yenvui-') or e_name.startswith('yv-')):
                     report_violation("CUSTOM_EVENT_NAMESPACE", filepath, idx, f"CustomEvent '{e_name}' in yenVUI must use 'yenvui-' or 'yv-' prefix (never 'sutram-').")
+            custom_attr = custom_attribute_prop_pattern.match(line)
+            if custom_attr and custom_attr.group(2) != custom_attr.group(1).lower():
+                report_violation(
+                    "PUBLIC_PROPERTY_ATTRIBUTE_NAME_MANDATE",
+                    filepath,
+                    idx,
+                    f"Public property '{custom_attr.group(1)}' declares attribute '{custom_attr.group(2)}'. Consumers bind "
+                    f"?{custom_attr.group(1)}=${{...}}, which Lit sets as '{custom_attr.group(1).lower()}', so the binding would be "
+                    f"ignored. Drop the custom attribute name (style with [{custom_attr.group(1).lower()}]), or make the property private (_name)."
+                )
             if container_media_pattern.search(line):
                 report_violation("CONTAINER_QUERY_MANDATE", filepath, idx, "Viewport @media max-width detected. Use CSS @container queries instead.")
             if inner_html_pattern.search(line):
@@ -97,6 +136,28 @@ def check_yenvui_rules():
                     filepath,
                     idx,
                     "Direct 'document.body.style.overflow' assignment detected. Use acquireBodyScrollLock() and releaseBodyScrollLock() for reentrant lock safety."
+                )
+
+    for sutram_fp in collect_unique_files([SUTRAM_DIR / "js"], [".js"]):
+        sutram_lines = sutram_fp.read_text(encoding="utf-8").splitlines()
+        sutram_content = "\n".join(sutram_lines)
+        for bad_prop in banned_presentational_prop_pattern.finditer(sutram_content):
+            line_no = sutram_content[:bad_prop.start()].count('\n') + 1
+            report_violation(
+                "YENVUI_SEMANTIC_PROPERTY_MANDATE",
+                sutram_fp,
+                line_no,
+                f"Banned presentational property '{bad_prop.group(1)}' in static properties."
+            )
+        for idx, line in enumerate(sutram_lines, start=1):
+            if line.strip().startswith("//") or line.strip().startswith("/*"):
+                continue
+            if legacy_scale_token_pattern.search(line):
+                report_violation(
+                    "UNIFIED_SCALE_TOKEN_MANDATE",
+                    sutram_fp,
+                    idx,
+                    "Legacy T-shirt scale token (xs/sm/md/lg/xl or ?small) detected in Sutram. Use 'none | compact | normal | wide | full' or '?compact=${true}'."
                 )
 
     theme_tokens_path = YENVUI_DIR / "css" / "theme-tokens.css"

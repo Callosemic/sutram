@@ -41,6 +41,8 @@ sutram/
 │   │   ├── 0026_pluggable_chassis_contract_ui_adapter_and_kernel_entrypoint.md # ADR-0026: Pluggable Chassis Provider Contract, SutramUIAdapter, Input Event Bridging, and Public Kernel Entrypoint
 │   │   ├── 0027_yenvui_autonomous_chassis_provider_and_input_primitives.md # ADR-0027: yenVUI Autonomous Chassis Provider Implementation, Input Primitives Extraction, and Upward Kernel Decoupling
 │   │   ├── 0028_compound_target_binding_and_sw_dev_cache_bypass.md # ADR-0028: Compound Target Binding Controls, Dynamic Schema Option Sources, and Development Service Worker Cache Bypass
+│   │   ├── 0029_host_agnostic_language_descriptors_stream_modes_and_plaintext_fallback.md # ADR-0029: Host-Agnostic Editor Language Descriptors, StreamLanguage Wrapping, Per-Language Caching, and Plain-Text Fallback
+│   │   ├── 0030_zero_css_lego_layout_primitives_semantic_tokens_and_composer.md # ADR-0030: Zero-CSS Lego Layout Primitives, Semantic Token Parameterization, SutramComposer, and Floating HUD
 │   │   └── archived/               # Deeply embedded baseline architectural records preserved for historical reference
 │   │       ├── 0001_sutram_ioc_microkernel_architecture.md # ADR-0001: IoC microkernel and slot layout architecture
 │   │       ├── 0002_sutram_bootloader_and_resilience_patterns.md # ADR-0002: Stage 1 bootloader and error boundary standards
@@ -61,14 +63,15 @@ sutram/
 │       ├── drag-coordinator.js     # Spatial drag-and-drop overlay coordinator for interactive column reordering
 │       │   └── class SutramDragCoordinator # [comment required]
 │       ├── index.js                # Public Layer 2 barrel entrypoint exporting Sutram stores, offline engines, and UI primitives
-│       ├── inputs.js               # Standard form input elements (text, select, textarea, toggle, combobox, target binding)
-│       │   ├── function bridgeInputEvents(BaseClass) # [comment required]
-│       │   ├── class SutramInput   # [stale?] 1.
-│       │   ├── class SutramSelect  # [stale?] 2.
-│       │   ├── class SutramTextarea # [stale?] 3.
-│       │   ├── class SutramToggle  # [stale?] 4.
-│       │   ├── class SutramCombobox # [comment required]
-│       │   └── class SutramTargetBinding # [comment required]
+│       ├── inputs.js               # Standard form input elements (text, select, textarea, toggle, combobox, target binding, composer)
+│       │   ├── function bridgeInputEvents(BaseClass) # Event bridge wrapping chassis form inputs to emit sutram-input-changed
+│       │   ├── class SutramInput   # Single-line text input bridged to Sutram event bus
+│       │   ├── class SutramSelect  # Dropdown select control bridged to Sutram event bus
+│       │   ├── class SutramTextarea # Multiline auto-sizing textarea bridged to Sutram event bus
+│       │   ├── class SutramToggle  # Boolean toggle switch bridged to Sutram event bus
+│       │   ├── class SutramCombobox # Searchable and filterable text combobox with dropdown options
+│       │   ├── class SutramTargetBinding # Compound endpoint and model selector pairing select and combobox
+│       │   └── class SutramComposer # Slash-command message composer with token chip extraction
 │       ├── offline.js              # Offline IndexedDB persistence manager, outbox reconciler, and network hysteresis manager
 │       │   ├── class SutramDB      # [comment required]
 │       │   ├── class OfflineHttpProvider # [comment required]
@@ -82,8 +85,14 @@ sutram/
 │       │   ├── function validateChassisContract(chassisProvider) # [comment required]
 │       │   ├── class SutramUIAdapter # [comment required]
 │       │   ├── class SutramVirtualList # [stale?] 0.
+│       │   ├── class SutramIcon    # 0.5 Semantic Icon & Layout Bricks
+│       │   ├── class SutramView    # [comment required]
+│       │   ├── class SutramStack   # [comment required]
+│       │   ├── class SutramSurface # [comment required]
+│       │   ├── class SutramActionBar # [comment required]
+│       │   ├── class SutramSidebarLayout # [comment required]
 │       │   ├── class SutramBtn     # 1.
-│       │   ├── class SutramProjectionWindowControls # 1.25 Multi-Window Pop-Out / Dock-In Control Button
+│       │   ├── class SutramProjectionWindowControls # [stale?] 1.25 Multi-Window Pop-Out / Dock-In Control Button
 │       │   ├── class SutramAsyncBtn # 1.5 Async Action Button
 │       │   ├── class SutramStatusBar # 2.
 │       │   ├── class SutramToastContainer # 3.
@@ -116,11 +125,12 @@ sutram/
 │       │   ├── class SutramPill    # 13.
 │       │   ├── class SutramFilterGroup # [comment required]
 │       │   ├── class SutramEditor  # [comment required]
-│       │   ├── class SutramSelectorModal # 15.
-│       │   ├── class SutramReportProjection # 16.
+│       │   ├── class SutramSelectorModal # [stale?] 15.
+│       │   ├── class SutramReportProjection # [stale?] 16.
 │       │   ├── class SutramDiffViewer # 17.
-│       │   ├── class SutramSubtabMenu # 18.
-│       │   └── class SutramDagTree # 19.
+│       │   ├── class SutramSubtabMenu # [stale?] 18.
+│       │   ├── class SutramDagTree # 19. Universal Wavefront & Hierarchy DAG Tree Primitive
+│       │   └── class SutramFloatingHud # 20. Corner-Pinned Collapsible Status & Telemetry HUD
 │       ├── projection_engine.js    # Declarative layout projection compiler (SutramProjectionCompiler)
 │       │   ├── class SutramProjectionCompiler # [comment required]
 │       │   └── class SutramProjectionPool # [comment required]
@@ -187,7 +197,7 @@ sutram/
 │   └── unit/                       # Behavioral unit and integration tests for the Sutram runtime
 │       ├── __init__.py             # Unit test package initializer
 │       ├── test_consumer_linter.py # Tests that the consumer linter ignores '=>' inside Lit ${...} bindings when checking sutram-btn labels
-│       │   └── class TestConsumerLinterButtonLabels(unittest.TestCase) # SUTRAM_BUTTON_DECLARATIVE_LABEL_MANDATE must ignore '=>' and '>' inside Lit ${...} bindings.
+│       │   └── class TestConsumerLinterButtonLabels(unittest.TestCase) # [stale?] SUTRAM_BUTTON_DECLARATIVE_LABEL_MANDATE must ignore '=>' and '>' inside Lit ${...} bindings.
 │       └── test_sutram_registry.py # Node.js and Python behavioral tests for StoreRegistry, ExtensionRegistry, and utilities
 │           └── class TestSutramRegistry(unittest.TestCase) # [comment required]
 └── yenvui/                         # Edge-Native presentation chassis and Web Component UI library
@@ -224,13 +234,16 @@ sutram/
         ├── dropdown.js             # Context popover trigger menus and filter dropdown panels
         │   ├── class YenvuiDropdown # [comment required]
         │   └── class YenvuiFilterDropdown # [comment required]
-        ├── editor.js               # CodeMirror 6 code editor wrapper with dynamic ESM language loading
-        │   ├── function loadLanguageExtension(lang, customResolver = null) # [comment required]
+        ├── editor.js               # CodeMirror 6 code editor wrapper with descriptor-based language loading, StreamLanguage wrapping, and per-language caching
+        │   ├── function loadLanguageExtension(lang, customResolver = null) # Resolves a CodeMirror language extension from core built-ins or a host descriptor ({url, kind, export, options}), falling back to plain text.
         │   └── class YenvuiEditor  # [comment required]
         ├── empty-state.js          # Centered empty state feedback container with icon and text slot
         │   └── class YenvuiEmptyState # [comment required]
         ├── filter-group.js         # Interactive pill array for multi-attribute filtering
         │   └── class YenvuiFilterGroup # [comment required]
+        ├── icon.js                 # Create Layer 1 YenvuiIcon chassis primitive supporting semantic size and intent attributes alongside SVG mask caching.
+        │   ├── function getIconMaskUrl(name, strokeWidth = '2') # [comment required]
+        │   └── class YenvuiIcon    # [comment required]
         ├── index.js                # Public Layer 1 chassis provider entrypoint exporting all yenVUI primitive classes, styles, and physics
         ├── inputs.js               # Standard form input elements (text, select, textarea, toggle)
         │   ├── class YenvuiInput   # [comment required]
@@ -239,6 +252,12 @@ sutram/
         │   └── class YenvuiToggle  # [comment required]
         ├── label.js                # Standardized form label primitive with theme observation support
         │   └── class YenvuiLabel   # [comment required]
+        ├── layout.js               # Implement YenvuiView, YenvuiStack, YenvuiSurface, and YenvuiActionBar layout primitives for the Zero-CSS Lego Standard.
+        │   ├── class YenvuiView    # [comment required]
+        │   ├── class YenvuiStack   # [comment required]
+        │   ├── class YenvuiSurface # [comment required]
+        │   ├── class YenvuiActionBar # [comment required]
+        │   └── class YenvuiSidebarLayout # [comment required]
         ├── modal.js                # Native HTML5 top-layer dialog modal overlay with backdrop handling
         │   └── class YenvuiModal   # [comment required]
         ├── physics.js              # Universal gesture physics controller and Shadow DOM point resolution

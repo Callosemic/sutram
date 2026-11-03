@@ -25,6 +25,10 @@ export class YenvuiBase extends LitElement {
     }
 }
 export class YenvuiScrubTrack extends YenvuiBase {
+    static properties = {
+        grow: { type: Boolean, reflect: true },
+        monospace: { type: Boolean, reflect: true }
+    };
     static styles = css`
         :host { 
             display: block; 
@@ -32,6 +36,14 @@ export class YenvuiScrubTrack extends YenvuiBase {
             overflow: hidden; 
             touch-action: pan-y;
             overscroll-behavior-x: none;
+        }
+        :host([grow]) {
+            flex: 1 1 0%;
+            min-width: 0;
+        }
+        :host([monospace]) {
+            font-family: var(--font-mono, monospace);
+            font-size: 0.85rem;
         }
         .scrub-container {
             display: flex;
@@ -52,6 +64,8 @@ export class YenvuiScrubTrack extends YenvuiBase {
     `;
     constructor() {
         super();
+        this.grow = false;
+        this.monospace = false;
         this._isSwiping = false;
         this._rafId = null;
         this._cancelMomentum = null;

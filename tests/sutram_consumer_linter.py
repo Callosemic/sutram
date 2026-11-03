@@ -53,13 +53,25 @@ def run_consumer_lint(target_dir, allow_host_globals=False):
     sutram_form_control_pattern = re.compile(r'<(?:input|select|textarea)\b(?!.*type=["\'](?:checkbox|radio|file)["\'])')
     sutram_btn_class_pattern = re.compile(r'<button\b[^>]*class=["\'][^"\'\n]*\bbtn-sm\b')
     sutram_btn_label_pattern = re.compile(r'<sutram-btn\b(?!.*label=)[^>]*>[^<]+\S')
-    sutram_card_intent_color_pattern = re.compile(r'<sutram-card\b[^>]*\bintentColor=["\']var\(--intent-')
+    sutram_card_intent_color_pattern = re.compile(r'<(?:sutram-card|sutram-column)\b[^>]*\bintentColor=')
+    sutram_inline_style_pattern = re.compile(r'<sutram-[a-z0-9-]+\b[^>]*\bstyle\s*=')
+    sutram_raw_scale_prop_pattern = re.compile(
+        r'<sutram-(?:stack|view|modal|toolbar|surface|textarea|label|composer)\b[^>]*\b(?:minColWidth|maxWidth|max-width|bottomBorder|minRows|maxHeight|borderless|preWrap|strikethrough|radius|minHeight|min-height|position|width|alignSelf|align-self)\b'
+        r'|\.(?:minColWidth|maxWidth|bottomBorder|minRows|maxHeight)\s*='
+    )
+    bind_store_input_style_pattern = re.compile(r'bindStoreInput\s*\([^)]*?\bstyle\s*:')
+    legacy_scale_token_pattern = re.compile(
+        r'<sutram-(?:view|modal|btn|async-btn)\b[^>]*\bsize=["\'](?:xs|sm|md|lg|xl)["\']'
+        r'|<sutram-stack\b[^>]*\bcolumns=["\'](?:xs|sm|md|lg)["\']'
+        r'|<sutram-pill\b[^>]*\?small='
+    )
     legacy_batch_actions_pattern = re.compile(r'\bbatchActions\s*:')
 
     # Layout and Environmental Constraints
     media_layout_pattern = re.compile(r'@media\s*\([^)]*(?:width|height)[^)]*\)')
     banned_cdn_import_pattern = re.compile(r'from\s+[\'"]https?://(esm\.sh|cdn\.jsdelivr\.net|unpkg\.com)')
-    banned_yenvui_tag_pattern = re.compile(r'\byenvui-')
+    banned_yenvui_tag_pattern = re.compile(r'<\/?yenvui-')
+    banned_yv_icon_tag_pattern = re.compile(r'<\/?yv-icon\b')
     banned_has_actions_pattern = re.compile(r'\bhas-actions\b')
     subscribe_without_sutram_pattern = re.compile(r'this\.subscribe\s*\(')
     host_domain_leak_pattern = re.compile(r'\bwindow\.inSetu\b|[\'"]insetu-[a-z0-9-]+[\'"]')
@@ -144,8 +156,21 @@ def run_consumer_lint(target_dir, allow_host_globals=False):
                 if is_lit_component and sutram_btn_label_pattern.search(strip_lit_expressions(line)) and 'slot=' not in line:
                     report("SUTRAM_BUTTON_DECLARATIVE_LABEL_MANDATE", "Raw text child detected in <sutram-btn>. Use declarative label=\"...\" property attribute.")
 
-                if sutram_card_intent_color_pattern.search(line):
-                    report("SUTRAM_CARD_INTENT_TOKEN_MANDATE", "Deprecated intentColor='var(--intent-*)' detected on <sutram-card>. Use semantic intent=\"primary|warning|...\" token property.")
+                stripped_line = strip_lit_expressions(line)
+                if sutram_card_intent_color_pattern.search(stripped_line):
+                    report("SUTRAM_CARD_INTENT_TOKEN_MANDATE", "Deprecated intentColor detected on <sutram-card> or <sutram-column>. Use semantic intent=\"primary|warning|...\" token property.")
+
+                if sutram_inline_style_pattern.search(stripped_line):
+                    report("SUTRAM_INLINE_STYLE_BAN", "Inline style='...' attribute detected on a <sutram-*> element. Use semantic properties (?grow, ?fullWidth, ?compact, ?flush, size, columns, width, alignSelf) instead.")
+
+                if sutram_raw_scale_prop_pattern.search(stripped_line):
+                    report("SUTRAM_SEMANTIC_PROP_MANDATE", "Banned raw dimension/border property (minColWidth, maxWidth, max-width, bottomBorder) detected on <sutram-*>. Use semantic size='compact|normal|wide|full', columns='compact|normal|wide', or ?flush=${true}.")
+
+                if bind_store_input_style_pattern.search(line):
+                    report("SUTRAM_BIND_STORE_INPUT_STYLE_BAN", "Passing raw 'style:' in bindStoreInput options is banned. Pass 'grow: true', 'flush: true', or 'inline: true' instead.")
+
+                if legacy_scale_token_pattern.search(stripped_line):
+                    report("UNIFIED_SCALE_TOKEN_MANDATE", "Legacy T-shirt scale token (xs/sm/md/lg/xl or ?small) detected. Migrate to 'none | compact | normal | wide | full' or '?compact=${true}'.")
 
                 if legacy_batch_actions_pattern.search(line):
                     report("LEGACY_BATCH_ACTIONS_BAN", "Deprecated 'batchActions' schema array detected. Migrate bulk actions directly into 'entityActions' using 'bulkable: true' (ADR 0061).")
@@ -165,7 +190,10 @@ def run_consumer_lint(target_dir, allow_host_globals=False):
                     report("SUTRAM_ELEMENT_SUBSCRIPTION_MANDATE", "Components using 'this.subscribe()' must extend 'SutramElement' to guarantee automated teardown in disconnectedCallback().")
 
                 if banned_yenvui_tag_pattern.search(line):
-                    report("BANNED_YENVUI_TAG_MANDATE", "Direct usage of 'yenvui-' tag detected. Consume state-aware 'sutram-' primitives or project via HTML slots.")
+                    report("BANNED_YENVUI_TAG_MANDATE", "Direct usage of '<yenvui-*>' tag detected. Consume state-aware 'sutram-' primitives or project via HTML slots.")
+
+                if banned_yv_icon_tag_pattern.search(line):
+                    report("BANNED_YV_ICON_TAG_BAN", "Direct '<yv-icon>' chassis tag detected. Use '<sutram-icon>' or semantic icon='...' properties instead.")
 
                 if not allow_host_globals and host_domain_leak_pattern.search(line):
                     report("HOST_DOMAIN_DECOUPLING", "Host domain reference detected (window.inSetu or 'insetu-*'). All host interactions must route through ExtensionRegistry UI hooks.")

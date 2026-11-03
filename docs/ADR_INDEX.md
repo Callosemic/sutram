@@ -16,6 +16,7 @@
 * [ADR-0024: Generational Projection Pooling, Debounced Store Persistence, and Lazy LRU Cache Buffering](./adrs/0024_generational_projection_pooling_debounced_persistence_and_lazy_lru_caching.md)
 * [ADR-0026: Pluggable Chassis Provider Contract, SutramUIAdapter, Input Event Bridging, and Public Kernel Entrypoint](./adrs/0026_pluggable_chassis_contract_ui_adapter_and_kernel_entrypoint.md)
 * [ADR-0028: Compound Target Binding Controls, Dynamic Schema Option Sources, and Development Service Worker Cache Bypass](./adrs/0028_compound_target_binding_and_sw_dev_cache_bypass.md)
+* [ADR-0030: Zero-CSS Lego Layout Primitives, Semantic Token Parameterization, SutramComposer, and Floating HUD](./adrs/0030_zero_css_lego_layout_primitives_semantic_tokens_and_composer.md)
 ### yenVUI Presentation Chassis
 * [ADR-0005: Native Popover API Toast Container Elevation](./adrs/0005_yenvui_popover_toasts_gesture_selection.md)
 * [ADR-0006: Gesture Swipe Axis Locking](./adrs/0006_yenvui_gesture_swipe_axis_locking.md)
@@ -28,6 +29,7 @@
 * [ADR-0023: CodeMirror Viewport Preservation, Prose Typography Engine, WebKit Text-Size Normalization, and Virtualizer Intrinsic Sizing](./adrs/0023_codemirror_viewport_preservation_prose_engine_and_virtualizer_sizing.md)
 * [ADR-0025: Root Viewport Physics Guard, Kinetic Momentum Throw Engine, Reentrant Scroll Locking, and Chassis Overscroll Containment](./adrs/0025_root_viewport_physics_guard_kinetic_throw_and_reentrant_scroll_lock.md)
 * [ADR-0027: yenVUI Autonomous Chassis Provider Implementation, Input Primitives Extraction, and Upward Kernel Decoupling](./adrs/0027_yenvui_autonomous_chassis_provider_and_input_primitives.md)
+* [ADR-0029: Host-Agnostic Editor Language Descriptors, StreamLanguage Wrapping, Per-Language Caching, and Plain-Text Fallback](./adrs/0029_host_agnostic_language_descriptors_stream_modes_and_plaintext_fallback.md)
 
 ## Archived ADRs
 * [ADR-0001: Sutram IoC Micro-Kernel Architecture](./adrs/archived/0001_sutram_ioc_microkernel_architecture.md)
@@ -37,3 +39,4 @@
 
 ## Superseded ADRs
 * [ADR-0010: Floating Window Projection Layer and Z-Index Management (Superseded by ADR-0011)](./adrs/0010_sutram_floating_window_projection.md)
+* [ADR-0012: Native `<yv-icon>` Component and Direct Lit Element Node Retention (Superseded by ADR-0030)](./adrs/0012_yv_icon_component_and_direct_node_retention.md)

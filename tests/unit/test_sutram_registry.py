@@ -545,6 +545,23 @@ for (const [sutramTag, exportKey] of Object.entries(SutramUIAdapter.PASSTHROUGH_
     );
 }}
 
+// 2b. Verify Zero-CSS Lego layout & icon primitives initialize default properties cleanly
+const iconInst = new (customElements.get('sutram-icon'))();
+assert.equal(iconInst.size, 'md');
+assert.equal(iconInst.intent, 'current');
+
+const stackInst = new (customElements.get('sutram-stack'))();
+assert.equal(stackInst.direction, 'col');
+assert.equal(stackInst.gap, 'md');
+
+const surfaceInst = new (customElements.get('sutram-surface'))();
+assert.equal(surfaceInst.variant, 'panel');
+assert.equal(surfaceInst.padding, 'md');
+
+const actionBarInst = new (customElements.get('sutram-action-bar'))();
+assert.equal(actionBarInst.align, 'start');
+assert.equal(actionBarInst.gap, 'sm');
+
 // 3. Verify validateChassisContract rejects incomplete chassis providers
 const BadChassis = {{ ...YenvuiChassis, CHASSIS_PROVIDER_META: {{ name: 'broken-chassis' }} }};
 delete BadChassis.Modal;
@@ -837,7 +854,7 @@ class CustomEventMock extends Event {
 }
 globalThis.CustomEvent = globalThis.CustomEvent || CustomEventMock;
 
-const { SutramCombobox, SutramTargetBinding } = await import('./inputs.mjs');
+const { SutramCombobox, SutramTargetBinding, SutramComposer } = await import('./inputs.mjs');
 
 // 1. SutramCombobox option normalization & filtering
 const combo = new SutramCombobox();
@@ -989,6 +1006,33 @@ const effFallback = (invalidVal !== undefined && invalidVal !== '' && extractedO
     : (extractedOptions[0]?.value ?? invalidVal ?? '');
 assert.equal(effFallback, 'ep-alpha', 'effectiveVal must clamp to first available option when active value is missing');
 
+// 5. SutramComposer slash-command absorption & Backspace token clearing
+const composer = new SutramComposer();
+composer.triggers = [
+    { token: 'code', id: 'code', label: 'Code Mode', badge: 'Mode' },
+    { token: 'plan', id: 'plan', label: 'Plan Mode', badge: 'Mode' }
+];
+let trigChangedEvt = null;
+let valChangedEvt = null;
+composer.dispatchEvent = (e) => {
+    if (e.type === 'sutram-trigger-changed') trigChangedEvt = e;
+    if (e.type === 'sutram-input-changed') valChangedEvt = e;
+};
+composer._handleTextInput({ detail: { value: '/code Refactor widget' } });
+assert.equal(composer.activeTrigger?.id, 'code', 'Leading /code command followed by space must be absorbed into activeTrigger');
+assert.equal(composer.value, 'Refactor widget');
+assert.equal(trigChangedEvt?.detail?.trigger?.id, 'code');
+assert.equal(valChangedEvt?.detail?.value, 'Refactor widget');
+
+// Backspace at cursor 0 clears activeTrigger chip
+composer.value = '';
+composer._handleKeyDown({
+    key: 'Backspace',
+    target: { selectionStart: 0, selectionEnd: 0 },
+    preventDefault() {}
+});
+assert.equal(composer.activeTrigger, null);
+
 console.log('INPUTS_AND_SETTINGS_TESTS_PASSED');
 """
             (tmp_path / "test_inputs.mjs").write_text(test_mjs, encoding="utf-8")
@@ -1001,6 +1045,134 @@ console.log('INPUTS_AND_SETTINGS_TESTS_PASSED');
             )
             self.assertEqual(res.returncode, 0, f"Inputs test failed:\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}")
             self.assertIn("INPUTS_AND_SETTINGS_TESTS_PASSED", res.stdout)
+
+    def test_yenvui_editor_language_loader_in_node(self):
+        """Tests loadLanguageExtension in yenvui/js/editor.js: built-ins (json, ts, tsx), lezer/stream descriptors, caching, and plain-text fallback."""
+        node_bin = shutil.which("node")
+        if not node_bin:
+            self.skipTest("Node.js binary not available in PATH.")
+
+        editor_path = YENVUI_JS_DIR / "editor.js"
+        self.assertTrue(editor_path.exists(), "yenvui/js/editor.js must exist")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            (tmp_path / "package.json").write_text(json.dumps({"type": "module"}), encoding="utf-8")
+            (tmp_path / "lit_stub.mjs").write_text(
+                "export class LitElement { static properties = {}; static styles = []; }\n"
+                "export const html = () => '';\n"
+                "export const css = () => '';\n",
+                encoding="utf-8",
+            )
+            (tmp_path / "cm_core_stub.mjs").write_text(
+                "export class LanguageSupport {\n"
+                "    constructor(language, extensions = []) { this.language = language; this.extensions = extensions; }\n"
+                "}\n"
+                "export const StreamLanguage = {\n"
+                "    define: (parser) => ({ kind: 'stream-defined', parser })\n"
+                "};\n"
+                "export const python = () => ({ lang: 'python' });\n"
+                "export const json = () => ({ lang: 'json' });\n"
+                "export const javascript = (opts = {}) => ({ lang: 'javascript', opts });\n"
+                "export const yaml = () => ({ lang: 'yaml' });\n"
+                "export const htmlLang = () => ({ lang: 'html' });\n"
+                "export const cssLang = () => ({ lang: 'css' });\n"
+                "export const markdown = () => ({\n"
+                "    language: { name: 'markdown' },\n"
+                "    extensions: ['safeExt', 'htmlCompletion', 'closeTags']\n"
+                "});\n",
+                encoding="utf-8",
+            )
+            (tmp_path / "lang_rust_stub.mjs").write_text(
+                "export let rustLoadCalls = 0;\n"
+                "export function rust(opts = {}) { rustLoadCalls++; return { kind: 'lezer-rust', opts }; }\n",
+                encoding="utf-8",
+            )
+            (tmp_path / "legacy_toml_stub.mjs").write_text(
+                "export const toml = { name: 'toml-stream-parser', token() {} };\n",
+                encoding="utf-8",
+            )
+            (tmp_path / "legacy_url_stub.mjs").write_text(
+                "export function go() { return { kind: 'legacy-url-go' }; }\n",
+                encoding="utf-8",
+            )
+
+            editor_src = editor_path.read_text(encoding="utf-8")
+            editor_src = editor_src.replace("from 'lit'", "from './lit_stub.mjs'")
+            editor_src = editor_src.replace("import('codemirror-core')", "import('./cm_core_stub.mjs')")
+            (tmp_path / "editor.mjs").write_text(editor_src, encoding="utf-8")
+
+            test_mjs = """
+import assert from 'node:assert/strict';
+
+globalThis.customElements = {
+    get: () => undefined,
+    define: () => {}
+};
+
+const { loadLanguageExtension, YenvuiEditor } = await import('./editor.mjs');
+const rustStub = await import('./lang_rust_stub.mjs');
+
+// 1. Built-in core languages (including corrected json, ts, tsx, and sanitized markdown)
+assert.deepEqual(await loadLanguageExtension('python'), { lang: 'python' });
+assert.deepEqual(await loadLanguageExtension('json'), { lang: 'json' });
+assert.deepEqual(await loadLanguageExtension('javascript'), { lang: 'javascript', opts: {} });
+assert.deepEqual(await loadLanguageExtension('ts'), { lang: 'javascript', opts: { typescript: true } });
+assert.deepEqual(await loadLanguageExtension('typescript'), { lang: 'javascript', opts: { typescript: true } });
+assert.deepEqual(await loadLanguageExtension('tsx'), { lang: 'javascript', opts: { jsx: true, typescript: true } });
+
+const mdExt = await loadLanguageExtension('markdown');
+assert.equal(mdExt.language.name, 'markdown');
+assert.deepEqual(mdExt.extensions, ['safeExt'], 'htmlCompletion and closeTags must be stripped from markdown');
+
+// 2. Host resolver descriptors: lezer, stream, builtin with options, and legacy URL string
+let resolverCalls = 0;
+YenvuiEditor.languageResolver = async (lang) => {
+    resolverCalls++;
+    if (lang === 'rust') {
+        return { url: './lang_rust_stub.mjs', kind: 'lezer', export: 'rust', options: { strict: true } };
+    }
+    if (lang === 'toml') {
+        return { url: './legacy_toml_stub.mjs', kind: 'stream', export: 'toml' };
+    }
+    if (lang === 'go') {
+        return './legacy_url_stub.mjs';
+    }
+    return null;
+};
+
+const rustExt1 = await loadLanguageExtension('rust');
+const rustExt2 = await loadLanguageExtension('rust');
+assert.deepEqual(rustExt1, { kind: 'lezer-rust', opts: { strict: true } });
+assert.strictEqual(rustExt1, rustExt2, 'Repeated loadLanguageExtension calls must share cached result');
+assert.equal(rustStub.rustLoadCalls, 1, 'Cached lezer language pack must only be invoked once');
+assert.equal(resolverCalls, 1, 'Resolver must only be called once for cached language');
+
+const tomlExt = await loadLanguageExtension('toml');
+assert.equal(tomlExt.kind, 'stream-defined');
+assert.equal(tomlExt.parser.name, 'toml-stream-parser');
+
+const goExt = await loadLanguageExtension('go');
+assert.deepEqual(goExt, { kind: 'legacy-url-go' });
+
+// 3. Unknown languages fall back to plain text ([]), never Markdown
+const unknownExt = await loadLanguageExtension('cobol');
+assert.deepEqual(unknownExt, [], 'Unknown language must fall back to plain text []');
+assert.deepEqual(await loadLanguageExtension(''), []);
+assert.deepEqual(await loadLanguageExtension('plaintext'), []);
+
+console.log('EDITOR_LOADER_TESTS_PASSED');
+"""
+            (tmp_path / "test_editor_loader.mjs").write_text(test_mjs, encoding="utf-8")
+            res = subprocess.run(
+                [node_bin, "test_editor_loader.mjs"],
+                cwd=tmp_path.as_posix(),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(res.returncode, 0, f"Editor loader test failed:\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}")
+            self.assertIn("EDITOR_LOADER_TESTS_PASSED", res.stdout)
 
 
 if __name__ == "__main__":

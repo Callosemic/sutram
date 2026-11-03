@@ -437,14 +437,14 @@ export class SutramDragCoordinator extends SutramElement {
                         <div class="top-third-slot">
                             ${isPopoutable ? html`
                                 <yenvui-drop-target zone="popout" class="drop-target-btn intent-highlight" .intent=${'highlight'} ?hovered=${currentZone === 'popout'} style="width: 100%; height: 42px;">
-                                    <yv-icon name="external-link" style="width: 16px; height: 16px;"></yv-icon> Pop Out
+                                    <sutram-icon name="external-link" size="md"></sutram-icon> Pop Out
                                 </yenvui-drop-target>
                             ` : ''}
                         </div>
                         <div class="top-third-slot"></div>
                         <div class="top-third-slot">
                             <yenvui-drop-target zone="close" class="drop-target-btn intent-danger" .intent=${'danger'} ?hovered=${currentZone === 'close'} style="width: 100%; height: 42px;">
-                                <yv-icon name="x" style="width: 16px; height: 16px;"></yv-icon> Close
+                                <sutram-icon name="x" size="md"></sutram-icon> Close
                             </yenvui-drop-target>
                         </div>
                     </div>
@@ -453,11 +453,11 @@ export class SutramDragCoordinator extends SutramElement {
                         <div class="mode-switcher-row">
                             ${!entity?.windowOnly ? html`
                                 <yenvui-drop-target zone="mode-tab" class=${tabBtnClass} .intent=${'primary'} ?hovered=${currentZone === 'mode-tab'}>
-                                    <yv-icon name="columns" style="width: 16px; height: 16px;"></yv-icon> Tab
+                                    <sutram-icon name="columns" size="md"></sutram-icon> Tab
                                 </yenvui-drop-target>
                             ` : ''}
                             <yenvui-drop-target zone="mode-window" class=${winBtnClass} .intent=${'warning'} ?hovered=${currentZone === 'mode-window'}>
-                                <yv-icon name="layout-grid" style="width: 16px; height: 16px;"></yv-icon> Window
+                                <sutram-icon name="layout-grid" size="md"></sutram-icon> Window
                             </yenvui-drop-target>
                         </div>
 
@@ -465,21 +465,21 @@ export class SutramDragCoordinator extends SutramElement {
                             <div class="section-box tab-pos" style="margin-bottom: 0;">
                                 <div class="section-header tab-pos">
                                     <span style="display: flex; align-items: center; gap: 6px;">
-                                        <yv-icon name="columns" style="width: 14px; height: 14px;"></yv-icon> TAB POSITION
+                                        <sutram-icon name="columns" size="sm"></sutram-icon> TAB POSITION
                                     </span>
                                     <span style="opacity: 0.7;">Drop target column</span>
                                 </div>
                                 <div style="display: flex; gap: 10px;">
                                     <yenvui-drop-target zone="left" class="screen-drop-btn intent-primary" .intent=${'primary'} ?hovered=${currentZone === 'left'}>
-                                        <yv-icon name="panel-left" style="width: 18px; height: 18px;"></yv-icon>
+                                        <sutram-icon name="panel-left" size="md"></sutram-icon>
                                         <span>Left</span>
                                     </yenvui-drop-target>
                                     <yenvui-drop-target zone="center" class="screen-drop-btn intent-primary" .intent=${'primary'} ?hovered=${currentZone === 'center'}>
-                                        <yv-icon name="columns" style="width: 18px; height: 18px;"></yv-icon>
+                                        <sutram-icon name="columns" size="md"></sutram-icon>
                                         <span>Center</span>
                                     </yenvui-drop-target>
                                     <yenvui-drop-target zone="right" class="screen-drop-btn intent-primary" .intent=${'primary'} ?hovered=${currentZone === 'right'} style=${rightTabStyle}>
-                                        <yv-icon name="panel-right" style="width: 18px; height: 18px;"></yv-icon>
+                                        <sutram-icon name="panel-right" size="md"></sutram-icon>
                                         <span>Right</span>
                                     </yenvui-drop-target>
                                 </div>
@@ -489,7 +489,7 @@ export class SutramDragCoordinator extends SutramElement {
                                 <div class="section-box arrange-tabs" style="margin-bottom: 0;">
                                     <div class="section-header arrange-tabs">
                                         <span style="display: flex; align-items: center; gap: 6px;">
-                                            <yv-icon name="arrow-left-right" style="width: 14px; height: 14px;"></yv-icon> ARRANGE TABS
+                                            <sutram-icon name="arrow-left-right" size="sm"></sutram-icon> ARRANGE TABS
                                         </span>
                                         <span style="opacity: 0.7;">Drop to reorder</span>
                                     </div>
@@ -516,7 +516,7 @@ export class SutramDragCoordinator extends SutramElement {
                                                 return html`
                                                     ${i > 0 ? html`<span style="color: var(--text-muted); font-size: 0.8rem;">•</span>` : ''}
                                                     <yenvui-drop-target zone=${zoneId} class="drop-target-btn intent-highlight" .intent=${'highlight'} ?hovered=${isHovered}>
-                                                        <yv-icon name=${vTab.icon || 'component'} style="width: 14px; height: 14px;"></yv-icon>
+                                                        <sutram-icon name=${vTab.icon || 'component'} size="sm"></sutram-icon>
                                                         <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${vTab.label || vTab.id}</span>
                                                     </yenvui-drop-target>
                                                 `;
@@ -529,23 +529,23 @@ export class SutramDragCoordinator extends SutramElement {
                             <div class="section-box window-pos" style="margin-bottom: 0;">
                                 <div class="section-header window-pos">
                                     <span style="display: flex; align-items: center; gap: 6px;">
-                                        <yv-icon name="layout-grid" style="width: 14px; height: 14px;"></yv-icon> WINDOW POSITION
+                                        <sutram-icon name="layout-grid" size="sm"></sutram-icon> WINDOW POSITION
                                     </span>
                                     <span style="opacity: 0.7;">Viewport capacity preset</span>
                                 </div>
                                 <div style="display: flex; flex-direction: column; gap: 10px;">
                                     <div style="display: flex; gap: 10px;">
                                         <yenvui-drop-target zone="span-1-left" class="screen-drop-btn intent-warning" .intent=${'warning'} ?hovered=${currentZone === 'span-1-left'}>
-                                            <yv-icon name="panel-left" style="width: 18px; height: 18px;"></yv-icon>
+                                            <sutram-icon name="panel-left" size="md"></sutram-icon>
                                             <span>Left</span>
                                         </yenvui-drop-target>
                                         <yenvui-drop-target zone="span-1-center" class="screen-drop-btn intent-warning" .intent=${'warning'} ?hovered=${currentZone === 'span-1-center'}>
-                                            <yv-icon name="square" style="width: 18px; height: 18px;"></yv-icon>
+                                            <sutram-icon name="square" size="md"></sutram-icon>
                                             <span>Center</span>
                                         </yenvui-drop-target>
                                         ${capacity >= 3 ? html`
                                             <yenvui-drop-target zone="span-1-right" class="screen-drop-btn intent-warning" .intent=${'warning'} ?hovered=${currentZone === 'span-1-right'}>
-                                                <yv-icon name="panel-right" style="width: 18px; height: 18px;"></yv-icon>
+                                                <sutram-icon name="panel-right" size="md"></sutram-icon>
                                                 <span>Right</span>
                                             </yenvui-drop-target>
                                         ` : ''}
@@ -554,12 +554,12 @@ export class SutramDragCoordinator extends SutramElement {
                                     ${capacity >= 2 ? html`
                                         <div style="display: flex; gap: 10px;">
                                             <yenvui-drop-target zone="span-2-left" class="screen-drop-btn intent-warning" .intent=${'warning'} ?hovered=${currentZone === 'span-2-left'}>
-                                                <yv-icon name="columns" style="width: 18px; height: 18px;"></yv-icon>
+                                                <sutram-icon name="columns" size="md"></sutram-icon>
                                                 <span>Left + Center</span>
                                             </yenvui-drop-target>
                                             ${capacity >= 3 ? html`
                                                 <yenvui-drop-target zone="span-2-center" class="screen-drop-btn intent-warning" .intent=${'warning'} ?hovered=${currentZone === 'span-2-center'}>
-                                                    <yv-icon name="columns" style="width: 18px; height: 18px;"></yv-icon>
+                                                    <sutram-icon name="columns" size="md"></sutram-icon>
                                                     <span>Center + Right</span>
                                                 </yenvui-drop-target>
                                             ` : ''}
@@ -568,7 +568,7 @@ export class SutramDragCoordinator extends SutramElement {
 
                                     ${capacity >= 3 ? html`
                                         <yenvui-drop-target zone="span-3-left" class="screen-drop-btn intent-warning" .intent=${'warning'} ?hovered=${currentZone === 'span-3-left'} style="height: 60px;">
-                                            <yv-icon name="maximize-2" style="width: 18px; height: 18px;"></yv-icon>
+                                            <sutram-icon name="maximize-2" size="md"></sutram-icon>
                                             <span>Span Across</span>
                                         </yenvui-drop-target>
                                     ` : ''}
@@ -579,7 +579,7 @@ export class SutramDragCoordinator extends SutramElement {
 
                     <div class="bottom-anchor-footer">
                         <div class="hud-header-subtitle" style="justify-content: center;">
-                            <yv-icon name="split" style="width: 14px; height: 14px;"></yv-icon> ${entity?.id || 'REPOSITION OR DOCK'}
+                            <sutram-icon name="split" size="sm"></sutram-icon> ${entity?.id || 'REPOSITION OR DOCK'}
                         </div>
                         <div class="hud-header-title">
                             ${entity?.label || entity?.id || 'Projection'}
@@ -587,7 +587,7 @@ export class SutramDragCoordinator extends SutramElement {
                     </div>
                 </div>
                 <div class="drag-floater" style=${floaterStyle}>
-                    <yv-icon name=${entity?.icon || 'component'} style="width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"></yv-icon> ${entity?.label || entity?.id || 'Dragging'}
+                    <sutram-icon name=${entity?.icon || 'component'} size="md"></sutram-icon> ${entity?.label || entity?.id || 'Dragging'}
                 </div>
             </yenvui-drop-overlay>
         `;

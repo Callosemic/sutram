@@ -8,7 +8,7 @@ from tests.sutram_consumer_linter import run_consumer_lint, strip_lit_expression
 
 
 ICON_BUTTON_WITH_ARROW_HANDLER = (
-    '<sutram-btn size="sm" icon="chevron-up" ?disabled=${idx === 0} '
+    '<sutram-btn ?compact=${true} icon="chevron-up" ?disabled=${idx === 0} '
     '@click=${e => { e.stopPropagation(); this._moveItem(idx, -1); }}></sutram-btn>'
 )
 RAW_TEXT_BUTTON = '<sutram-btn intent="primary" @click=${() => this.save()}>Save</sutram-btn>'
@@ -48,6 +48,36 @@ class TestConsumerLinterButtonLabels(unittest.TestCase):
 
     def test_declarative_label_is_accepted(self):
         self.assertNotIn("SUTRAM_BUTTON_DECLARATIVE_LABEL_MANDATE", self._lint(LABELLED_BUTTON))
+
+    def test_inline_style_and_raw_dimension_props_on_sutram_elements_are_flagged(self):
+        self.assertIn(
+            "SUTRAM_INLINE_STYLE_BAN",
+            self._lint('<sutram-btn label="Go" style="width: 100%;"></sutram-btn>'),
+        )
+        self.assertIn(
+            "SUTRAM_SEMANTIC_PROP_MANDATE",
+            self._lint('<sutram-stack direction="grid" minColWidth="180px"></sutram-stack>'),
+        )
+        self.assertIn(
+            "SUTRAM_CARD_INTENT_TOKEN_MANDATE",
+            self._lint('<sutram-column titleText="Done" intentColor="var(--intent-success)"></sutram-column>'),
+        )
+        self.assertNotIn(
+            "SUTRAM_INLINE_STYLE_BAN",
+            self._lint('<sutram-btn label="Go" ?fullWidth=${true} ?compact=${true}></sutram-btn>'),
+        )
+        self.assertIn(
+            "UNIFIED_SCALE_TOKEN_MANDATE",
+            self._lint('<sutram-btn size="sm" label="Legacy"></sutram-btn>'),
+        )
+        self.assertIn(
+            "UNIFIED_SCALE_TOKEN_MANDATE",
+            self._lint('<sutram-stack direction="grid" columns="sm"></sutram-stack>'),
+        )
+        self.assertIn(
+            "UNIFIED_SCALE_TOKEN_MANDATE",
+            self._lint('<sutram-pill ?small=${true} labelText="Tag"></sutram-pill>'),
+        )
 
 
 if __name__ == "__main__":

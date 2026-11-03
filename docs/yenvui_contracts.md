@@ -20,6 +20,7 @@ A compliant chassis must consume and respect the following CSS custom properties
 *   **Typography:** `--text`, `--text-muted`, `--font-mono`
 *   **Semantics:** `--intent-primary`, `--intent-success`, `--intent-danger`, `--intent-warning`, `--intent-highlight`, `--intent-neutral`
 *   **Spatial Grid & Rail Geometry:** `--yv-utility-height`, `--yv-header-height`, `--yv-gutter-x`, `--yv-rail-cell-width`, `--yv-icon-size`, `--yv-icon-gap`, `--textarea-min-height`
+*   **Structural Width & Column Capability Tokens:** `--yv-col-xs`, `--yv-col-sm`, `--yv-col-md`, `--yv-col-lg`, `--yv-view-sm`, `--yv-view-md`, `--yv-view-lg`, `--yv-view-xl`, `--yv-modal-sm`, `--yv-modal-md`, `--yv-modal-lg`, `--yv-modal-xl`, `--yv-bubble-max-width`, `--yv-surface-min-h-sm`, `--yv-surface-min-h-md`, `--yv-surface-min-h-lg`
 
 ### Layout Markers & Environmental Boundary Contracts
 To prevent upward coupling to host containers, the chassis standardizes on duck-typed layout markers:
@@ -50,9 +51,21 @@ Any replacement library must export the following Custom Elements.
     *   *Slots:* `header-actions`, default.
 *   **`<sutram-subtab-menu>`**: Spatial column sub-tab header action and bulk selection menu.
     *   *Properties:* `.slotConfig` (Object with `bulkActionGroup`, `bulkEntityTypes`, `menuActions`, `menuStores`).
+*   **`<sutram-floating-hud>`**: Corner-pinned collapsible status and telemetry HUD drawer.
+    *   *Properties:* `.position` (`'top-right'`|`'top-left'`|`'bottom-right'`|`'bottom-left'`), `.icon` (String), `.badgeText` (String), `.titleText` (String), `.intent` (`'primary'`|`'success'`|`'warning'`|`'danger'`|`'highlight'`|`'neutral'`), `.open` (Boolean).
+    *   *Events:* `@sutram-hud-toggled`.
+    *   *Slots:* `header`, default, `footer`.
 *   **`<yenvui-viewport>`**: Tier 0 root viewport wrapper installing the singleton viewport physics guard to defeat iOS Safari edge-swipe back-navigation while preserving vertical momentum scrolling and tap responsiveness.
+*   **`<yenvui-view>`**: Primary viewport container.
+    *   *Properties:* `.titleText`, `.descriptionText`, `?compact`, `?flush`, `?noScroll`, `?zen`, `.size` (`'compact'`|`'normal'`|`'wide'`|`'full'`).
+    *   *Events:* `@yenvui-view-exit-zen`.
+    *   *Slots:* `header`, `header-actions`, `toolbar`, `overlay`, default, `footer`.
+*   **`<yenvui-stack>`**: Flex and auto-fit CSS Grid layout stack.
+    *   *Properties:* `.direction` (`'col'`|`'row'`|`'grid'`), `?compact`, `.columns` (`'compact'`|`'normal'`|`'wide'`), `.gap` (`'none'`|`'compact'`|`'normal'`|`'wide'`), `.align`, `.alignSelf` (`'start'`|`'center'`|`'end'`|`'stretch'`), `.justify`, `.padding` (`'none'`|`'compact'`|`'normal'`|`'wide'`), `.width` (`'auto'`|`'bubble'`|`'full'`), `?grow`, `?wrap`, `?flex`, `?scrollable`, `?spanFull`.
+*   **`<yenvui-surface>`**: Semantic surface container.
+    *   *Properties:* `.variant` (`'panel'`|`'inset'`|`'tinted'`|`'floating'`|`'ghost'`), `.intent`, `?compact`, `?flush`, `.padding` (`'none'`|`'compact'`|`'normal'`|`'wide'`), `.border` (`'all'`|`'top'`|`'bottom'`|`'left'`|`'none'`), `.radius` (`'none'`|`'compact'`|`'normal'`|`'wide'`), `.gap` (`'none'`|`'compact'`|`'normal'`|`'wide'`), `.align`, `.justify`, `.alignSelf`, `.width` (`'auto'`|`'bubble'`|`'full'`), `.minHeight` (`'compact'`|`'normal'`|`'wide'`), `?flex`, `?interactive`.
 *   **`<yenvui-modal>`**: Native `#top-layer` dialog.
-    *   *Properties:* `?open`, `.titleText`, `?fullscreen`, `?flush`, `?transparent`, `.maxWidth`.
+    *   *Properties:* `?open`, `.titleText`, `?compact`, `.size` (`'compact'`|`'normal'`|`'wide'`|`'full'`), `?fullscreen`, `?flush`, `?transparent`.
     *   *Methods:* `bringToFront()`.
     *   *Events:* `@yenvui-modal-closed`, `@yenvui-modal-closing`.
     *   *Slots:* `body`, `footer`, default.
@@ -61,7 +74,7 @@ Any replacement library must export the following Custom Elements.
     *   *Events:* `@yenvui-window-close`, `@yenvui-window-dock`, `@yenvui-window-focus`, `@yenvui-window-drag-start`.
     *   *Slots:* default.
 *   **`<yenvui-card>`**: Polymorphic catalog container.
-    *   *Properties:* `.titleText`, `.descriptionText`, `.detailText`, `.detailPrefix`, `.detailSuffix`, `.statusText`, `.icon`, `.intent`, `.intentColor`, `?selected`, `?disableSelection`, `?compact`, `?flush`, `?stale`, `?has-actions`, `.actionsOpen` (Boolean getter/setter), `.hasActions` (Boolean getter/setter).
+    *   *Properties:* `.titleText`, `.descriptionText`, `.detailText`, `.detailPrefix`, `.detailSuffix`, `.statusText`, `.icon`, `.intent`, `?selected`, `?disableSelection`, `?compact`, `?flush`, `?stale`, `?has-actions`, `.actionsOpen` (Boolean getter/setter), `.hasActions` (Boolean getter/setter).
     *   *Host Markers:* `[data-yv-card]`.
     *   *Events:* `@yenvui-card-select-toggled`, `@yenvui-card-clicked`, `@yenvui-card-actions-opened`, `@yenvui-overlay-opened`.
     *   *Slots:* `header-actions`, `detail`, `inline-actions`, `actions`, default.
@@ -79,14 +92,14 @@ Any replacement library must export the following Custom Elements.
     *   *Properties:* `.tabs` (Array of `{id, label}`), `.activeTab`, `.variant` (`primary`|`sub`), `?cacheViews`.
     *   *Events:* `@yenvui-tab-selected`.
 *   **`<yenvui-board>` & `<yenvui-column>`**: Multi-column container-query grids.
-    *   *Column Properties:* `.titleText`, `.intentColor`.
+    *   *Column Properties:* `.titleText`, `.intent` (`'primary'`|`'success'`|`'warning'`|`'danger'`|`'highlight'`|`'neutral'`).
 ### Interactive Controls
-*   **`<yenvui-async-btn>`**: Action button with visual state feedback.
-    *   *Properties:* `.label`, `.loadingLabel`, `.successLabel`, `.errorLabel`, `.intent`, `.variant`, `.size`, `?emphasis`, `.status` (`idle`|`loading`|`success`|`error`), `?disabled`, `?active`, `.jobRoute`, `.jobPayload`, `.onJobComplete`, `.onJobProgress`, `.onJobError`.
+*   **`<yenvui-btn>` & `<yenvui-async-btn>`**: Action buttons (`<yenvui-async-btn>` includes visual state feedback).
+    *   *Properties:* `.label`, `.loadingLabel`, `.successLabel`, `.errorLabel`, `.intent`, `.variant`, `.size`, `?emphasis`, `?grow`, `?fullWidth`, `.status` (`idle`|`loading`|`success`|`error`), `?disabled`, `?active`, `.jobRoute`, `.jobPayload`, `.onJobComplete`, `.onJobProgress`, `.onJobError`.
     *   *Events:* `@yv-click`.
 *   **`<yenvui-editor>`**: CodeMirror 6 text editor.
-    *   *Properties:* `.value`, `?readOnly`, `.language`, `?writingMode`, `.customExtensions`, `.languageResolver` (Async Function: `lang => string | { url }`).
-    *   *Static Properties:* `YenvuiEditor.languageResolver` (Global fallback resolver callback).
+    *   *Properties:* `.value`, `?readOnly`, `.language`, `?writingMode`, `.customExtensions`, `.languageResolver` (Async Function: `lang => null | string | { url, kind: "lezer" | "stream" | "builtin", export, options? }`).
+    *   *Static Properties:* `YenvuiEditor.languageResolver` (Global fallback resolver callback returning a module URL string or a language descriptor object; unknown languages fall back to plain text `[]`).
     *   *Methods:* `insertAtCursor(text)`, `getCursor()`, `setCursor(pos)`, `getScrollInfo()`, `setScrollInfo(top)`, `transformContent(transformFn)`.
     *   *Events:* `@yenvui-editor-changed`, `@yenvui-editor-selection`, `@yenvui-editor-scroll`.
 
@@ -112,10 +125,10 @@ Any replacement library must export the following Custom Elements.
     *   *Functions:* `startKineticThrow(scrollEl, samples, options)`, `acquireBodyScrollLock()`, `releaseBodyScrollLock()`, `getDeepElementFromPoint(x, y, selector)`, `anchorTopLayerPopover(triggerEl, popoverEl, options)`, `syncTopLayerPopover(triggerEl, popoverEl, isOpen, options)`.
 ### Inputs & Filtering
 *   **`<yenvui-input>`**: Single-line text input presentation primitive.
-    *   *Properties:* `.label`, `.value`, `.placeholder`, `.type`, `?disabled`, `?inline`, `?flush`.
+    *   *Properties:* `.label`, `.value`, `.placeholder`, `.type`, `?disabled`, `?inline`, `?flush`, `?grow`.
     *   *Events:* `@yenvui-input-changed`.
 *   **`<yenvui-select>`**: Dropdown select presentation primitive.
-    *   *Properties:* `.label`, `.value`, `.options` (Array of `{value, label}`), `?disabled`, `?inline`, `?flush`.
+    *   *Properties:* `.label`, `.value`, `.options` (Array of `{value, label}`), `?disabled`, `?inline`, `?flush`, `?grow`.
     *   *Events:* `@yenvui-input-changed`.
 *   **`<yenvui-textarea>`**: Multiline auto-sizing textarea presentation primitive.
     *   *Properties:* `.label`, `.value`, `.placeholder`, `.rows`, `?monospace`, `?disabled`, `?readOnly`, `?inline`, `?autoSize`, `.maxHeight`, `.minRows`, `?borderless`, `?flush`.
@@ -133,6 +146,10 @@ Any replacement library must export the following Custom Elements.
 *   **`<sutram-target-binding>`**: Compound endpoint and model selector pairing `<sutram-select>` with `<sutram-combobox>`.
     *   *Properties:* `.label`, `.value` (String `endpoint::model` or Object `{endpoint, model}`), `.endpoints` (Array), `.models` (Array or Function `endpointId => Array`), `.endpointKey`, `.modelKey`, `.endpointPlaceholder`, `.modelPlaceholder`, `?allowEmptyEndpoint`, `?disabled`, `?flush`.
     *   *Events:* `@sutram-input-changed`.
+*   **`<sutram-composer>`**: Unified prompt and slash-command message composer.
+    *   *Properties:* `.value` (String), `.placeholder` (String), `.triggerPrefix` (String, default `'/'`), `.triggers` (Array of command objects `{ id, token, label, icon, badge, description }`), `.activeTrigger` (Object), `.intent` (`'primary'`|`'success'`|`'warning'`|`'danger'`|`'highlight'`), `?disabled` (Boolean).
+    *   *Events:* `@sutram-input-changed`, `@sutram-trigger-changed`, `@sutram-composer-submit`.
+    *   *Slots:* `header`, `prefix`, default, `footer`.
 *   **`<yenvui-dropdown>`**: Floating action menu utilizing native `#top-layer` Popover API.
     *   *Properties:* `.items` (Array of `{id, label, icon, onClick, asyncAction, divider}`), `?open`, `.align` (`'auto'`|`'left'`|`'right'`), `.direction` (`'auto'`|`'up'`|`'down'`).
     *   *Events:* `@yenvui-action-error` (dispatched on unhandled action exception).
@@ -151,5 +168,9 @@ Any replacement library must export the following Custom Elements.
     *   *Events:* `@yenvui-pill-toggled`.
 *   **`<yenvui-tag>`**: Static colored label.
     *   *Properties:* `.text`, `.intent`.
-*   **`<yenvui-label>`**: Input label primitive.
-    *   *Properties:* `.text`.
+*   **`<yenvui-label>`**: Typography and input label primitive.
+    *   *Properties:* `.text`, `.intent` (`'primary'`|`'success'`|`'warning'`|`'danger'`|`'highlight'`|`'neutral'`), `?monospace`, `?truncate`, `?preWrap`, `?strikethrough`.
+*   **`<yenvui-toolbar>`**: Sticky header toolbar integrating search and filters.
+    *   *Properties:* `.searchQuery`, `.searchPlaceholder`, `?enableFilterDropdown`, `.filterText`, `.activeFilters`, `?hasFiltersOverride`, `?flush`.
+*   **`<yenvui-scrub-track>`**: Horizontal touch-scrubbing track.
+    *   *Properties:* `?grow`, `?monospace`.

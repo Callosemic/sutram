@@ -45,6 +45,24 @@
     --yv-rail-cell-width: 44px;
     --yv-icon-size: 14px;
     --yv-icon-gap: 8px;
+
+    /* --- STRUCTURAL WIDTH & COLUMN CAPABILITY TOKENS --- */
+    --yv-col-compact: 160px;
+    --yv-col-normal: 240px;
+    --yv-col-wide: 320px;
+
+    --yv-view-compact: 540px;
+    --yv-view-normal: 960px;
+    --yv-view-wide: 1200px;
+
+    --yv-modal-compact: 440px;
+    --yv-modal-normal: 600px;
+    --yv-modal-wide: 840px;
+
+    --yv-bubble-max-width: 88%;
+    --yv-surface-min-h-compact: 120px;
+    --yv-surface-min-h-normal: 220px;
+    --yv-surface-min-h-wide: 300px;
 }
 
 /* ==========================================================================

@@ -3,7 +3,7 @@ import { YenvuiBase } from './yenvui-base.js';
 
 export class YenvuiScrollView extends YenvuiBase {
     static properties = {
-        padding: { type: String }
+        padding: { type: String, reflect: true }
     };
     static styles = css`
         :host {
@@ -20,9 +20,14 @@ export class YenvuiScrollView extends YenvuiBase {
             --mobile-edge-padding: 0px;
             --content-padding-x: 12px;
         }
-        :host([padding="none"]) {
-            padding: 0 !important;
-        }
+        :host([padding="none"]) { padding: 0 !important; }
+        :host([padding="xs"]) { --scroll-padding: 4px 8px; }
+        :host([padding="compact"]),
+        :host([padding="sm"]) { --scroll-padding: 8px 12px; }
+        :host([padding="normal"]),
+        :host([padding="md"]) { --scroll-padding: 12px 16px; }
+        :host([padding="wide"]),
+        :host([padding="lg"]) { --scroll-padding: 16px 20px; }
         @container (max-width: 480px) {
             :host {
                 --content-padding-x: 0px;
@@ -35,14 +40,7 @@ export class YenvuiScrollView extends YenvuiBase {
     `;
     constructor() {
         super();
-        this.padding = '0 12px';
-    }
-
-    updated(changedProperties) {
-        super.updated(changedProperties);
-        if (changedProperties.has('padding') && this.padding && this.padding !== 'none') {
-            this.style.setProperty('--scroll-padding', this.padding);
-        }
+        this.padding = 'compact';
     }
 
     render() {

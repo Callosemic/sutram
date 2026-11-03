@@ -172,7 +172,7 @@ export class YenvuiCollapsible extends YenvuiBase {
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <slot name="actions" @click=${e => e.stopPropagation()}></slot>
                     <span class="chevron">
-                        <yv-icon name="chevron-down" style="width: 16px; height: 16px;"></yv-icon>
+                        <yenvui-icon name="chevron-down" size="md"></yenvui-icon>
                     </span>
                 </div>
             </div>

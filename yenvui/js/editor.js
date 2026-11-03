@@ -1,55 +1,112 @@
 import { LitElement, html, css } from 'lit';
-async function loadLanguageExtension(lang, customResolver = null) {
+
+const _languageCache = new Map();
+
+function _buildSafeMarkdown(cm) {
+    const mdSupport = cm.markdown();
+    // Prevent nested HTML language completion from throwing when typing raw <tags> in Markdown
+    const safeMdExtensions = Array.isArray(mdSupport.extensions)
+        ? mdSupport.extensions.filter(ext => {
+            const str = String(ext?.value || ext || '');
+            return !str.includes('htmlCompletion') && !str.includes('closeTags');
+        })
+        : [];
+    return cm.LanguageSupport ? new cm.LanguageSupport(mdSupport.language, safeMdExtensions) : mdSupport.language;
+}
+
+function _loadBuiltinLanguage(cm, id, options = undefined) {
+    if (id === 'python') return cm.python();
+    if (id === 'json') return cm.json();
+    if (id === 'javascript' || id === 'js') return options ? cm.javascript(options) : cm.javascript();
+    if (id === 'jsx') return cm.javascript({ jsx: true, ...(options || {}) });
+    if (id === 'typescript' || id === 'ts') return cm.javascript({ typescript: true, ...(options || {}) });
+    if (id === 'tsx') return cm.javascript({ jsx: true, typescript: true, ...(options || {}) });
+    if (id === 'yaml' || id === 'yml') return cm.yaml();
+    if (id === 'html' || id === 'htm' || id === 'htmlLang') return cm.htmlLang();
+    if (id === 'css' || id === 'cssLang') return cm.cssLang();
+    if (id === 'markdown' || id === 'md') return _buildSafeMarkdown(cm);
+    return null;
+}
+
+async function _resolveLanguageExtension(lang, resolver = null) {
     try {
         const cm = await import('codemirror-core');
-        if (lang === 'python') return cm.python();
-        if (lang === 'json') return cm.json();
-        if (lang === 'javascript' || lang === 'ts') return cm.javascript();
-        if (lang === 'yaml' || lang === 'yml') return cm.yaml();
-        if (lang === 'html' || lang === 'htm') return cm.htmlLang();
-        if (lang === 'css') return cm.cssLang();
-        if (lang === 'markdown' || lang === 'md') {
-            const mdSupport = cm.markdown();
-            // Prevent nested HTML language completion from throwing when typing raw <tags> in Markdown
-            const safeMdExtensions = Array.isArray(mdSupport.extensions)
-                ? mdSupport.extensions.filter(ext => {
-                    const str = String(ext?.value || ext || '');
-                    return !str.includes('htmlCompletion') && !str.includes('closeTags');
-                })
-                : [];
-            return cm.LanguageSupport ? new cm.LanguageSupport(mdSupport.language, safeMdExtensions) : mdSupport.language;
-        }
+        const builtin = _loadBuiltinLanguage(cm, lang);
+        if (builtin !== null) return builtin;
 
-        // Stage A (ADR 0032): Attempt importmap resolution first
-        try {
-            const langMod = await import(/* webpackIgnore: true */ `@codemirror/lang-${lang}`);
-            const fn = langMod[lang] || langMod.default;
-            if (typeof fn === 'function') return fn();
-        } catch (importErr) {
-            // Stage A Fallback: Trigger injected JIT language resolver callback
-            const resolver = customResolver || YenvuiEditor.languageResolver;
-            if (typeof resolver === 'function') {
-                try {
-                    const vendorRes = await resolver(lang);
-                    const vendorPath = typeof vendorRes === 'string' ? vendorRes : vendorRes?.url;
-                    if (vendorPath) {
-                        const staticMod = await import(/* webpackIgnore: true */ vendorPath);
-                        const fn = staticMod[lang] || staticMod.default;
-                        if (typeof fn === 'function') return fn();
-                    }
-                } catch (vendorErr) {
-                    console.warn(`[yenVUI] JIT vendorization failed for '${lang}':`, vendorErr);
+        if (typeof resolver === 'function') {
+            try {
+                const resolved = await resolver(lang);
+                if (!resolved) return [];
+
+                if (typeof resolved === 'string') {
+                    const mod = await import(/* webpackIgnore: true */ resolved);
+                    const fn = mod[lang] || mod.default;
+                    return typeof fn === 'function' ? fn() : [];
                 }
+
+                if (typeof resolved === 'object') {
+                    const kind = resolved.kind || 'lezer';
+                    const exportName = resolved.export || lang;
+                    const options = resolved.options;
+
+                    if (kind === 'builtin') {
+                        const viaBuiltin = _loadBuiltinLanguage(cm, exportName, options);
+                        if (viaBuiltin !== null) return viaBuiltin;
+                        const coreFn = cm[exportName];
+                        return typeof coreFn === 'function' ? (options ? coreFn(options) : coreFn()) : [];
+                    }
+
+                    const url = resolved.url || resolved.path;
+                    if (!url) return [];
+                    const mod = await import(/* webpackIgnore: true */ url);
+                    const target = mod[exportName] ?? mod[lang] ?? mod.default;
+
+                    if (kind === 'stream') {
+                        if (target && cm.StreamLanguage && typeof cm.StreamLanguage.define === 'function') {
+                            return cm.StreamLanguage.define(target);
+                        }
+                        return [];
+                    }
+
+                    if (typeof target === 'function') {
+                        return options ? target(options) : target();
+                    }
+                }
+            } catch (vendorErr) {
+                console.warn(`[yenVUI] Language resolution failed for '${lang}':`, vendorErr);
             }
         }
 
-        // Default fallback
-        return cm.markdown();
+        // Unknown or unavailable languages fall back to plain text, never Markdown
+        return [];
     } catch (e) {
         console.warn(`[yenVUI] Failed to dynamically load language: ${lang}`, e);
         return [];
     }
 }
+
+export function loadLanguageExtension(lang, customResolver = null) {
+    const norm = String(lang || '').trim().toLowerCase();
+    if (!norm || norm === 'plain' || norm === 'plaintext' || norm === 'text' || norm === 'txt') {
+        return Promise.resolve([]);
+    }
+    if (customResolver) {
+        return _resolveLanguageExtension(norm, customResolver);
+    }
+    if (_languageCache.has(norm)) {
+        return _languageCache.get(norm);
+    }
+    const pending = _resolveLanguageExtension(norm, YenvuiEditor.languageResolver).then(ext => {
+        if (Array.isArray(ext) && ext.length === 0) {
+            _languageCache.delete(norm);
+        }
+        return ext;
+    });
+    _languageCache.set(norm, pending);
+    return pending;
+}
+
 export class YenvuiEditor extends LitElement {
     static languageResolver = null;
 
@@ -65,16 +122,39 @@ export class YenvuiEditor extends LitElement {
         :host { 
             display: flex; 
             flex-direction: column; 
-            flex: 1; 
+            flex: 1 1 0%; 
             min-height: 0; 
+            min-width: 0;
             height: 100%; 
+            width: 100%;
+            overflow: hidden;
+        }
+        #cm-container {
+            flex: 1 1 0%;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            min-width: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
         }
         .cm-editor { 
+            flex: 1 1 0%;
+            min-height: 0;
+            min-width: 0;
             height: 100%; 
+            width: 100%;
+            overflow: hidden;
             background: transparent;
         }
         .cm-scroller { 
-            overflow: auto; 
+            flex: 1 1 0%;
+            min-height: 0;
+            height: 100%;
+            overflow: auto !important; 
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
             font-family: var(--font-mono, monospace); 
             font-variant-ligatures: none;
             font-feature-settings: "liga" 0, "calt" 0;
@@ -456,7 +536,7 @@ export class YenvuiEditor extends LitElement {
         if (this._view) this.requestUpdate();
     }
     render() {
-        return html`<div id="cm-container" style="flex: 1; display: flex; flex-direction: column; min-height: 0; height: 100%;"></div>`;
+        return html`<div id="cm-container"></div>`;
     }
 
     async _initEditor() {

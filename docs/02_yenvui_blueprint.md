@@ -62,7 +62,7 @@ To replace the imperative layout structures of the legacy Axoneme Console, yenVU
     *   Supports dynamic layout registration via slots, allowing infinite pluggable navigation items without breaking mobile viewports.
 2.  **`<yenvui-card>` (The Polymorphic Grid Node)**
     *   The universal container for catalog items (Knowledge docs, Ingestion Jobs, etc.).
-    *   *Properties:* `icon`, `titleText`, `detailText`, `intentColor`.
+    *   *Properties:* `icon`, `titleText`, `detailText`, `intent`.
     *   *Slots:* `slot="actions"` for injecting context-specific buttons (like "Approve" or "Tombstone") into a clean, edge-triggered hover/touch overlay drawer.
 3.  **`<yenvui-modal>` (The Workspace Overlay)**
     *   Replaces inline editors and chunky screen sections.

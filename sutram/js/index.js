@@ -1,117 +1,20 @@
 // sutram/js/index.js
 // Layer 2: Sutram Headless State, Offline & Layout Kernel Public Entrypoint
-import {
-    SutramElement,
-    SutramContextMixin,
-    createSutramStore,
-    StoreRegistry,
-    ExtensionRegistry,
-    bindStoreInput,
-    StatusStore,
-    ToastStore,
-    SelectionStore,
-    EnvironmentStore,
-    LayoutStore,
-    canUseMultiWindowPopout
-} from './sutram_sdk.js';
-
-import {
-    SutramDB,
-    OfflineHttpProvider,
-    NetworkHysteresisManager,
-    OutboxReconciler,
-    bootSutramServiceWorker,
-    purgeSutramCaches
-} from './offline.js';
-
-import { createJobPoller } from './poller.js';
-import { initShortcutRouter } from './shortcuts.js';
-import { SutramProjectionCompiler, SutramProjectionPool } from './projection_engine.js';
-import { SutramDragCoordinator } from './drag-coordinator.js';
-import { SutramAppShell } from './app_shell.js';
-import { sharedStyles } from './shared_styles.js';
-import {
-    REQUIRED_CHASSIS_PRIMITIVES,
-    validateChassisContract,
-    SutramUIAdapter,
-    SutramVirtualList,
-    SutramBtn,
-    SutramProjectionWindowControls,
-    SutramAsyncBtn,
-    SutramStatusBar,
-    SutramToastContainer,
-    SutramSelectionTray,
-    SutramCategorizedList,
-    SutramFolderBrowser,
-    SutramModal,
-    SutramWindow,
-    SutramFieldCard,
-    SutramSettingsForm,
-    SutramGenericSettingsModal,
-    SutramEntityActions,
-    SutramCard,
-    SutramCardGroup,
-    SutramSearchBar,
-    SutramSpinner,
-    SutramEmptyState,
-    SutramBoard,
-    SutramColumn,
-    SutramTag,
-    SutramLabel,
-    SutramScrubTrack,
-    SutramScrollView,
-    SutramToolbar,
-    SutramDropdown,
-    SutramTabs,
-    SutramFilterDropdown,
-    SutramCollapsible,
-    SutramCategorySection,
-    SutramPill,
-    SutramFilterGroup,
-    SutramEditor,
-    SutramSelectorModal,
-    SutramReportProjection,
-    SutramDiffViewer,
-    SutramSubtabMenu,
-    SutramDagTree
-} from './primitives.js';
-import {
-    SutramInput,
-    SutramSelect,
-    SutramTextarea,
-    SutramToggle,
-    SutramCombobox,
-    SutramTargetBinding
-} from './inputs.js';
-import {
-    fuzzyFilterObjects,
-    normalizeAccentText,
-    slugify,
-    debounce,
-    coalescedAsync,
-    formatDate,
-    timeAgo,
-    nativeShareFiles,
-    shallowEqual,
-    copyRichHtml,
-    copyToClipboard,
-    copyRawText,
-    threeWayMergeText,
-    HostPath,
-    truncateFilename,
-    clone,
-    compileDagWavefronts,
-    extractTemplateVariables,
-    interpolateTemplateVariables,
-    buildFileTree,
-    resolveDirectoryState,
-    downloadFile,
-    downloadBlob,
-    bindGhostDrag,
-    SutramWorker
-} from './utils.js';
 import * as Chassis from 'sutram-chassis';
-const {
+
+export * from './sutram_sdk.js';
+export * from './offline.js';
+export * from './poller.js';
+export * from './shortcuts.js';
+export * from './projection_engine.js';
+export * from './drag-coordinator.js';
+export * from './app_shell.js';
+export * from './shared_styles.js';
+export * from './primitives.js';
+export * from './inputs.js';
+export * from './utils.js';
+
+export const {
     getEventPath,
     getEventTarget,
     getDeepElementFromPoint,
@@ -120,112 +23,3 @@ const {
     acquireBodyScrollLock,
     releaseBodyScrollLock
 } = Chassis.physics || {};
-
-export {
-    SutramElement,
-    SutramContextMixin,
-    createSutramStore,
-    StoreRegistry,
-    ExtensionRegistry,
-    bindStoreInput,
-    StatusStore,
-    ToastStore,
-    SelectionStore,
-    EnvironmentStore,
-    LayoutStore,
-    canUseMultiWindowPopout,
-    SutramDB,
-    OfflineHttpProvider,
-    NetworkHysteresisManager,
-    OutboxReconciler,
-    bootSutramServiceWorker,
-    purgeSutramCaches,
-    createJobPoller,
-    initShortcutRouter,
-    SutramProjectionCompiler,
-    SutramProjectionPool,
-    SutramDragCoordinator,
-    SutramAppShell,
-    sharedStyles,
-    REQUIRED_CHASSIS_PRIMITIVES,
-    validateChassisContract,
-    SutramUIAdapter,
-    SutramVirtualList,
-    SutramBtn,
-    SutramProjectionWindowControls,
-    SutramAsyncBtn,
-    SutramStatusBar,
-    SutramToastContainer,
-    SutramSelectionTray,
-    SutramCategorizedList,
-    SutramFolderBrowser,
-    SutramModal,
-    SutramWindow,
-    SutramFieldCard,
-    SutramTargetBinding,
-    SutramSettingsForm,
-    SutramGenericSettingsModal,
-    SutramEntityActions,
-    SutramCard,
-    SutramCardGroup,
-    SutramSearchBar,
-    SutramSpinner,
-    SutramEmptyState,
-    SutramBoard,
-    SutramColumn,
-    SutramTag,
-    SutramLabel,
-    SutramScrubTrack,
-    SutramScrollView,
-    SutramToolbar,
-    SutramDropdown,
-    SutramTabs,
-    SutramFilterDropdown,
-    SutramCollapsible,
-    SutramCategorySection,
-    SutramPill,
-    SutramFilterGroup,
-    SutramEditor,
-    SutramSelectorModal,
-    SutramReportProjection,
-    SutramDiffViewer,
-    SutramSubtabMenu,
-    SutramDagTree,
-    SutramInput,
-    SutramSelect,
-    SutramTextarea,
-    SutramToggle,
-    SutramCombobox,
-    fuzzyFilterObjects,
-    normalizeAccentText,
-    slugify,
-    debounce,
-    coalescedAsync,
-    formatDate,
-    timeAgo,
-    nativeShareFiles,
-    shallowEqual,
-    copyRichHtml,
-    copyToClipboard,
-    copyRawText,
-    threeWayMergeText,
-    HostPath,
-    truncateFilename,
-    clone,
-    compileDagWavefronts,
-    extractTemplateVariables,
-    interpolateTemplateVariables,
-    buildFileTree,
-    resolveDirectoryState,
-    downloadFile,
-    downloadBlob,
-    bindGhostDrag,
-    SutramWorker,
-    getEventPath,
-    getEventTarget,
-    getDeepElementFromPoint,
-    anchorTopLayerPopover,
-    syncTopLayerPopover,
-    acquireBodyScrollLock,
-    releaseBodyScrollLock
-};

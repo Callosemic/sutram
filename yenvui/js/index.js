@@ -1,6 +1,8 @@
 import { sharedStyles } from './shared_styles.js';
 import * as physics from './physics.js';
 import { YenvuiBase, YenvuiScrubTrack } from './yenvui-base.js';
+import { YenvuiIcon, getIconMaskUrl } from './icon.js';
+import { YenvuiView, YenvuiStack, YenvuiSurface, YenvuiActionBar, YenvuiSidebarLayout } from './layout.js';
 import { YenvuiBtn, YenvuiAsyncBtn } from './async-btn.js';
 import { YenvuiStatusBar } from './status-bar.js';
 import { YenvuiToastContainer } from './toast.js';
@@ -36,6 +38,12 @@ export {
     sharedStyles,
     physics,
     YenvuiBase as BaseElement,
+    YenvuiIcon as Icon,
+    YenvuiView as View,
+    YenvuiStack as Stack,
+    YenvuiSurface as Surface,
+    YenvuiActionBar as ActionBar,
+    YenvuiSidebarLayout as SidebarLayout,
     YenvuiBtn as Btn,
     YenvuiAsyncBtn as AsyncBtn,
     YenvuiStatusBar as StatusBar,
@@ -71,7 +79,14 @@ export {
     YenvuiTextarea as Textarea,
     YenvuiToggle as Toggle,
     // Preserve explicit Yenvui* named exports for backward compatibility
+    getIconMaskUrl,
     YenvuiBase,
+    YenvuiIcon,
+    YenvuiView,
+    YenvuiStack,
+    YenvuiSurface,
+    YenvuiActionBar,
+    YenvuiSidebarLayout,
     YenvuiBtn,
     YenvuiAsyncBtn,
     YenvuiStatusBar,

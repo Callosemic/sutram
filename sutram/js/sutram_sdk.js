@@ -141,6 +141,7 @@ export function createSutramStore(name, initialState, persistenceSchema = {}, ge
     const schema = isLegacyArray ? { localSync: persistenceSchema } : (persistenceSchema || {});
     const localKeys = (schema.localSync || []).filter(k => Object.prototype.hasOwnProperty.call(initialState, k));
     const sessionKeys = (schema.sessionSync || []).filter(k => Object.prototype.hasOwnProperty.call(initialState, k));
+    const preserveKeys = (schema.preserveOnSwitch || []).filter(k => Object.prototype.hasOwnProperty.call(initialState, k));
     const storeScope = schema.scope || 'tenant';
     const customResetFn = typeof initialState.resetState === 'function' ? initialState.resetState : null;
 
@@ -282,10 +283,20 @@ export function createSutramStore(name, initialState, persistenceSchema = {}, ge
             if (currentSt && typeof currentSt.clearPayload === 'function') {
                 try { currentSt.clearPayload(); } catch (_) {}
             }
+            const preservedPatch = {};
+            preserveKeys.forEach(k => {
+                if (currentSt && currentSt[k] !== undefined) {
+                    preservedPatch[k] = currentSt[k];
+                }
+            });
+            if (Object.prototype.hasOwnProperty.call(initialState, 'activeWorkspace')) {
+                preservedPatch.activeWorkspace = targetScope;
+            }
             store._boundScope = targetScope;
             const nextState = {
                 ..._buildCleanBaseline(processedState),
-                ...readHydratedPatch(targetScope)
+                ...readHydratedPatch(targetScope),
+                ...preservedPatch
             };
             store.setState(nextState);
             store._hydrated = true;
@@ -382,7 +393,7 @@ export function createSutramStore(name, initialState, persistenceSchema = {}, ge
     return store;
 }
 export function bindStoreInput(store, statePath, currentValue, options = {}) {
-    const { type = 'text', label = '', placeholder = '', style = '', id = '', selectOptions = [], min, max, onUpdate, inline = false, flush = false } = options;
+    const { type = 'text', label = '', placeholder = '', id = '', selectOptions = [], min, max, onUpdate, inline = false, flush = false, grow = false } = options;
     const handleInput = (e) => {
         let val = e.detail !== undefined ? e.detail.value : (type === 'checkbox' ? e.target.checked : e.target.value);
         if (type === 'number') val = parseFloat(val);
@@ -396,14 +407,14 @@ export function bindStoreInput(store, statePath, currentValue, options = {}) {
         if (onUpdate) onUpdate(val, e);
     };
     if (type === 'textarea') {
-        return html`<sutram-textarea id=${id} style=${style} .label=${label} placeholder=${placeholder} .value=${currentValue || ''} ?inline=${inline} ?flush=${flush} @sutram-input-changed=${handleInput}></sutram-textarea>`;
+        return html`<sutram-textarea id=${id} .label=${label} placeholder=${placeholder} .value=${currentValue || ''} ?inline=${inline} ?flush=${flush} @sutram-input-changed=${handleInput}></sutram-textarea>`;
     } else if (type === 'select') {
         const mappedOptions = selectOptions.map(o => typeof o === 'object' ? { value: o.value !== undefined ? o.value : o.label, label: o.label || o.value } : { value: o, label: o });
-        return html`<sutram-select id=${id} style=${style} .label=${label} .value=${currentValue || ''} .options=${mappedOptions} ?inline=${inline} ?flush=${flush} @sutram-input-changed=${handleInput}></sutram-select>`;
+        return html`<sutram-select id=${id} .label=${label} .value=${currentValue || ''} .options=${mappedOptions} ?inline=${inline} ?flush=${flush} ?grow=${grow} @sutram-input-changed=${handleInput}></sutram-select>`;
     } else if (type === 'checkbox') {
-        return html`<sutram-toggle id=${id} style=${style} .label=${label} .checked=${!!currentValue} ?flush=${flush} @sutram-input-changed=${handleInput}></sutram-toggle>`;
+        return html`<sutram-toggle id=${id} .label=${label} .checked=${!!currentValue} ?flush=${flush} @sutram-input-changed=${handleInput}></sutram-toggle>`;
     }
-    return html`<sutram-input id=${id} type=${type} style=${style} .label=${label} placeholder=${placeholder} min=${min||''} max=${max||''} .value=${currentValue || ''} ?inline=${inline} ?flush=${flush} @sutram-input-changed=${handleInput}></sutram-input>`;
+    return html`<sutram-input id=${id} type=${type} .label=${label} placeholder=${placeholder} min=${min||''} max=${max||''} .value=${currentValue || ''} ?inline=${inline} ?flush=${flush} ?grow=${grow} @sutram-input-changed=${handleInput}></sutram-input>`;
 }
 export const SutramContextMixin = (SuperClass) => class extends SuperClass {
     constructor() {
@@ -604,7 +615,7 @@ export class SutramElement extends SutramContextMixin(LitElement) {
                     return origRender.apply(this, args);
                 } catch (e) {
                     console.error(`[Component Render Boundary] <${this.tagName ? this.tagName.toLowerCase() : 'element'}> failed in render:`, e);
-                    return html`<div style="padding: 10px; color: var(--intent-danger); background: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; font-family: var(--font-mono); font-size: 0.8rem; display: flex; align-items: center; gap: 6px;"><yv-icon name="alert-triangle" style="width: 14px; height: 14px; flex-shrink: 0;"></yv-icon><span>Element &lt;${this.tagName ? this.tagName.toLowerCase() : 'element'}&gt; render error: ${e.message}</span></div>`;
+                    return html`<div style="padding: 10px; color: var(--intent-danger); background: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; font-family: var(--font-mono); font-size: 0.8rem; display: flex; align-items: center; gap: 6px;"><sutram-icon name="alert-triangle" size="sm" intent="danger"></sutram-icon><span>Element &lt;${this.tagName ? this.tagName.toLowerCase() : 'element'}&gt; render error: ${e.message}</span></div>`;
                 }
             };
             proto._isSafeRender = true;
@@ -613,6 +624,17 @@ export class SutramElement extends SutramContextMixin(LitElement) {
     updated(changedProperties) {
         super.updated(changedProperties);
     }
+    mountDynamicSlot(componentTag) {
+        if (!componentTag || typeof document === 'undefined') return '';
+        if (!this._dynamicSlotCache) {
+            this._dynamicSlotCache = new Map();
+        }
+        if (!this._dynamicSlotCache.has(componentTag)) {
+            this._dynamicSlotCache.set(componentTag, document.createElement(componentTag));
+        }
+        return this._dynamicSlotCache.get(componentTag);
+    }
+
     registerOutsideClick(callback) {
         const listener = (e) => {
             if (!getEventPath(e).includes(this)) {
@@ -1299,15 +1321,16 @@ export const LayoutStore = createSutramStore('Layout', {
     setLayoutRatios: (ratios) => LayoutStore.setState({ layoutRatios: ratios }),
     openWindow: (entity, anchorCol = 'center', span = 1) => LayoutStore.setState((state) => {
         const { capacity, focusedColumn, mobileViewportIndex } = state;
-        let visibleCols = ['left', 'center', 'right'];
+        const allCols = ['left', 'center', 'right'];
+        let visibleCols = allCols;
         if (capacity === 1) {
-            const colMap = ['left', 'center', 'right'];
-            visibleCols = [colMap[mobileViewportIndex] || focusedColumn || 'center'];
+            visibleCols = [allCols[mobileViewportIndex] || focusedColumn || 'center'];
         } else if (capacity === 2) {
-            visibleCols = ['left', 'center'];
+            const startIdx = Math.max(0, Math.min(mobileViewportIndex ?? 0, 1));
+            visibleCols = allCols.slice(startIdx, startIdx + 2);
         }
 
-        let safeAnchor = anchorCol;
+        let safeAnchor = anchorCol || focusedColumn || 'center';
         let safeSpan = Math.min(span, capacity);
         if (!visibleCols.includes(safeAnchor)) {
             safeAnchor = visibleCols[0];
@@ -1345,12 +1368,13 @@ export const LayoutStore = createSutramStore('Layout', {
     })),
     enforceWindowBounds: () => LayoutStore.setState((state) => {
         const { capacity, focusedColumn, mobileViewportIndex } = state;
-        let visibleCols = ['left', 'center', 'right'];
+        const allCols = ['left', 'center', 'right'];
+        let visibleCols = allCols;
         if (capacity === 1) {
-            const colMap = ['left', 'center', 'right'];
-            visibleCols = [colMap[mobileViewportIndex] || focusedColumn || 'center'];
+            visibleCols = [allCols[mobileViewportIndex] || focusedColumn || 'center'];
         } else if (capacity === 2) {
-            visibleCols = ['left', 'center'];
+            const startIdx = Math.max(0, Math.min(mobileViewportIndex ?? 0, 1));
+            visibleCols = allCols.slice(startIdx, startIdx + 2);
         }
 
         const newWindows = state.windows.map(w => {

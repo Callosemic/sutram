@@ -76,7 +76,7 @@ export function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) {
     if (!triggerEl || !popoverEl) return;
     const mode = options.mode || 'menu';
     const align = options.align || 'auto';
-    const offset = options.offset ?? 4;
+    const offset = options.offset ?? 0;
 
     const triggerRect = triggerEl.getBoundingClientRect();
 
@@ -86,7 +86,7 @@ export function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) {
 
     while (curr) {
         if (curr.classList) {
-            if (!headerEl && (curr.classList.contains('toolbar-row') || curr.classList.contains('sticky-header') || curr.classList.contains('col-header') || curr.classList.contains('editor-header'))) {
+            if (!headerEl && (curr.classList.contains('toolbar-row') || curr.classList.contains('sticky-header') || curr.classList.contains('col-header') || curr.classList.contains('editor-header') || curr.classList.contains('top-utility-row'))) {
                 headerEl = curr;
             }
             if (curr.classList.contains('spatial-col')) {
@@ -110,6 +110,7 @@ export function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) {
         const left = Math.max(0, colRect.left);
         const right = Math.min(window.innerWidth, colRect.right);
         const width = Math.max(200, right - left);
+        const availableBelow = Math.max(200, window.innerHeight - rowBottom - 36);
 
         popoverEl.style.position = 'fixed';
         popoverEl.style.margin = '0';
@@ -118,6 +119,7 @@ export function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) {
         popoverEl.style.left = `${Math.round(left)}px`;
         popoverEl.style.right = 'auto';
         popoverEl.style.width = `${Math.round(width)}px`;
+        popoverEl.style.maxHeight = `${Math.round(availableBelow)}px`;
         return;
     }
     // Floating Menu Mode ('menu')
@@ -129,7 +131,8 @@ export function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) {
     const isInRightHalf = containerWidth > 0 && (triggerRect.left - minLeft) > (containerWidth * 0.5);
     const estimatedWidth = options.estimatedWidth || 220;
     const menuHeight = popoverEl.offsetHeight || 220;
-    const spaceBelow = window.innerHeight - triggerRect.bottom;
+    const anchorBottom = headerEl ? Math.max(triggerRect.bottom, headerEl.getBoundingClientRect().bottom) : triggerRect.bottom;
+    const spaceBelow = window.innerHeight - anchorBottom;
 
     const shouldAlignRight = align === 'right' || (align === 'auto' && (spaceOnRight < estimatedWidth + 12 || isInRightHalf));
     const shouldDropUp = direction === 'up' || (direction === 'auto' && spaceBelow < menuHeight + 16 && triggerRect.top > spaceBelow);
@@ -139,11 +142,16 @@ export function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) {
     popoverEl.style.inset = 'auto';
     if (shouldDropUp) {
         const bottomPx = Math.max(4, window.innerHeight - triggerRect.top + offset);
+        const availableAbove = Math.max(180, triggerRect.top - 12);
         popoverEl.style.bottom = `${Math.round(bottomPx)}px`;
         popoverEl.style.top = 'auto';
+        popoverEl.style.maxHeight = `${Math.round(availableAbove)}px`;
     } else {
-        popoverEl.style.top = `${Math.round(triggerRect.bottom + offset)}px`;
+        const topPx = Math.round(anchorBottom + offset);
+        const availableBelow = Math.max(200, window.innerHeight - topPx - 34);
+        popoverEl.style.top = `${topPx}px`;
         popoverEl.style.bottom = 'auto';
+        popoverEl.style.maxHeight = `${Math.round(availableBelow)}px`;
     }
 
     if (shouldAlignRight) {

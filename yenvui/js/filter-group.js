@@ -10,7 +10,8 @@ export class YenvuiFilterGroup extends LitElement {
     };
 
     static styles = css`
-        .wrap { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+        :host { display: block; width: 100%; box-sizing: border-box; }
+        .wrap { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; width: 100%; }
         .label { font-size: 0.85rem; font-weight: bold; color: var(--text, #e0e0e0); opacity: 0.8; margin-right: 5px; white-space: nowrap; user-select: none; }
     `;
 

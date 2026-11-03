@@ -8,7 +8,8 @@ import './drag-coordinator.js';
 import { physics } from 'sutram-chassis';
 const { YenvuiGestureController, YenvuiViewportGuard, getDeepElementFromPoint } = physics;
 const getSpatialMetrics = (capacity, activeViewport, layoutRatios) => {
-    const layout = (Array.isArray(layoutRatios) && layoutRatios.length > 0) ? layoutRatios : [1, 1, 1];
+    const rawLayout = (Array.isArray(layoutRatios) && layoutRatios.length > 0) ? layoutRatios : [1, 1, 1];
+    const layout = capacity === 1 ? rawLayout.map(() => 1) : rawLayout;
     const safeViewport = Math.max(0, Math.min(activeViewport, layout.length - capacity));
     const activeSum = layout.slice(safeViewport, safeViewport + capacity).reduce((a, b) => a + b, 0) || 1;
 
@@ -265,6 +266,17 @@ export class SutramAppShell extends SutramElement {
             transition: background 0.2s;
         }
         .sub-tab-icon-wrapper .default-icon-container { display: flex !important; transition: opacity 0.2s; }
+        .projection-mount-slot > * {
+            flex: 1;
+            min-height: 0;
+            min-width: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+        }
     `];
     constructor() {
         super();
@@ -547,47 +559,51 @@ export class SutramAppShell extends SutramElement {
                 }
                 this.requestUpdate();
             });
-            this._handleResize = debounce(() => {
+            const syncViewportCapacity = () => {
                 const width = window.innerWidth;
                 const maxCapacity = Math.min(3, Math.max(1, Math.floor(width / 360)));
                 const storeState = LayoutStore.getState();
                 if (storeState) {
                     const currentCap = storeState.capacity || 3;
+                    const colMap = { 'left': 0, 'center': 1, 'right': 2 };
                     if (currentCap !== maxCapacity && typeof storeState.setCapacity === 'function') {
                         storeState.setCapacity(maxCapacity);
-                        if (maxCapacity === 1 && storeState.focusedColumn) {
-                            const colMap = { 'left': 0, 'center': 1, 'right': 2 };
-                            storeState.setMobileViewport(colMap[storeState.focusedColumn] || 1);
-                        } else if (maxCapacity === 2 && storeState.focusedColumn) {
-                            const colMap = { 'left': 0, 'center': 1, 'right': 2 };
-                            const targetIdx = colMap[storeState.focusedColumn] || 1;
-                            const newViewport = targetIdx === 0 ? 0 : (targetIdx === 2 ? 2 : (storeState.mobileViewportIndex === 2 ? 2 : 0));
-                            storeState.setMobileViewport(newViewport);
+                    }
+                    if ((maxCapacity === 1 || storeState.capacity === 1) && storeState.focusedColumn) {
+                        const expectedIdx = colMap[storeState.focusedColumn] ?? 1;
+                        if (storeState.mobileViewportIndex !== expectedIdx) {
+                            storeState.setMobileViewport(expectedIdx);
+                        }
+                    } else if (maxCapacity === 2 && storeState.focusedColumn && currentCap !== maxCapacity) {
+                        const targetIdx = colMap[storeState.focusedColumn] ?? 1;
+                        const newViewport = targetIdx === 0 ? 0 : (targetIdx === 2 ? 2 : (storeState.mobileViewportIndex === 2 ? 2 : 0));
+                        storeState.setMobileViewport(newViewport);
+                    }
+
+                    // Enforce window visibility bounds on resize
+                    const effectiveCap = Math.min(storeState.capacity || maxCapacity, maxCapacity);
+                    const windows = storeState.windows || [];
+                    windows.forEach(win => {
+                        let newSpan = Math.min(win.span || 1, effectiveCap);
+                        let newAnchor = win.anchorCol || 'center';
+                        if (effectiveCap === 1) {
+                            newSpan = 1;
+                            newAnchor = storeState.focusedColumn || 'center';
+                        } else if (effectiveCap === 2) {
+                            if (newAnchor === 'right') {
+                                newAnchor = newSpan === 2 ? 'left' : 'center';
+                            }
                         }
 
-                        // Enforce window visibility bounds on resize
-                        const windows = storeState.windows || [];
-                        windows.forEach(win => {
-                            let newSpan = Math.min(win.span || 1, maxCapacity);
-                            let newAnchor = win.anchorCol || 'center';
-                            if (maxCapacity === 1) {
-                                newSpan = 1;
-                                newAnchor = storeState.focusedColumn || 'center';
-                            } else if (maxCapacity === 2) {
-                                if (newAnchor === 'right') {
-                                    newAnchor = newSpan === 2 ? 'left' : 'center';
-                                }
-                            }
-
-                            if (newSpan !== win.span || newAnchor !== win.anchorCol) {
-                                storeState.updateWindowConstraints(win.id, newAnchor, newSpan);
-                            }
-                        });
-                    }
+                        if (newSpan !== win.span || newAnchor !== win.anchorCol) {
+                            storeState.updateWindowConstraints(win.id, newAnchor, newSpan);
+                        }
+                    });
                 }
-            }, 100);
+            };
+            this._handleResize = debounce(syncViewportCapacity, 100);
             window.addEventListener('resize', this._handleResize);
-            this._handleResize();
+            syncViewportCapacity();
         }
         // Break synchronous infinite loops by debouncing the layout compilation listener
         this._debouncedCompile = debounce(() => this._compileLayout(), 50);
@@ -605,18 +621,25 @@ export class SutramAppShell extends SutramElement {
         const id = (typeof tab === 'string' ? tab : tab?.id)?.toLowerCase() || '';
         const registry = window.ExtensionRegistry || ExtensionRegistry;
         const hooked = registry?.executeUIHook ? registry.executeUIHook('sutram:resolve-primary-tab-meta', { id, tab }) : null;
-        const defaultMap = {
-            'context': { color: 'var(--intent-primary)', icon: 'folder-code' },
-            'edit': { color: 'var(--intent-highlight)', icon: 'edit-3' },
-            'diagnostics': { color: 'var(--intent-warning)', icon: 'activity' },
-            'tasks': { color: 'var(--intent-warning)', icon: 'check-square' },
-            'ctrl': { color: 'var(--intent-danger)', icon: 'terminal' },
-            'dev': { color: 'var(--intent-success)', icon: 'code' },
-            'offline': { color: 'var(--text-muted)', icon: 'wifi-off' },
-            'library': { color: 'var(--intent-highlight)', icon: 'book-open' }
+        const intentToColor = (intentName) => {
+            if (!intentName) return null;
+            if (intentName === 'neutral' || intentName === 'muted') return 'var(--text-muted)';
+            return `var(--intent-${intentName})`;
         };
+        const defaultMap = {
+            'context': { intent: 'primary', icon: 'folder-code' },
+            'edit': { intent: 'highlight', icon: 'edit-3' },
+            'diagnostics': { intent: 'warning', icon: 'activity' },
+            'tasks': { intent: 'warning', icon: 'check-square' },
+            'ctrl': { intent: 'danger', icon: 'terminal' },
+            'dev': { intent: 'success', icon: 'code' },
+            'offline': { intent: 'neutral', icon: 'wifi-off' },
+            'library': { intent: 'highlight', icon: 'book-open' }
+        };
+        const resolvedIntent = (tab && tab.intent) || hooked?.intent || defaultMap[id]?.intent || 'primary';
         return {
-            color: (tab && tab.intent) ? `var(--intent-${tab.intent})` : (hooked?.color || defaultMap[id]?.color || 'var(--intent-primary)'),
+            intent: resolvedIntent,
+            color: intentToColor(resolvedIntent) || hooked?.color || 'var(--intent-primary)',
             icon: (tab && tab.icon) ? tab.icon : (hooked?.icon || defaultMap[id]?.icon || 'folder')
         };
     }
@@ -627,7 +650,7 @@ export class SutramAppShell extends SutramElement {
 
     _getPrimaryTabIcon(tab) {
         const { color, icon } = this._resolvePrimaryTabMeta(tab);
-        return html`<yv-icon name="${icon}" stroke-width="2.5" style="width: 14px; height: 14px; margin-right: 8px; display: inline-block; vertical-align: text-bottom; color: ${color};"></yv-icon>`;
+        return html`<sutram-icon name="${icon}" size="sm" stroke-width="2.5" style="margin-right: 8px; vertical-align: text-bottom; color: ${color};"></sutram-icon>`;
     }
     _compileLayout() {
         try {
@@ -791,7 +814,7 @@ export class SutramAppShell extends SutramElement {
                     this.requestUpdate();
                 }}>
                 <div style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0;">
-                    ${child.icon ? html`<yv-icon name="${child.icon}" style="width: 14px; height: 14px; color: ${existingCol ? this._getPrimaryTabColor({id: child.targetParent, intent: child.intent}) : 'var(--text-muted)'};"></yv-icon>` : html`<yv-icon name="puzzle" style="width: 14px; height: 14px; color: ${existingCol ? this._getPrimaryTabColor({id: child.targetParent, intent: child.intent}) : 'var(--text-muted)'};"></yv-icon>`}
+                    <sutram-icon name="${child.icon || 'puzzle'}" size="sm" style="color: ${existingCol ? this._getPrimaryTabColor({id: child.targetParent, intent: child.intent}) : 'var(--text-muted)'};"></sutram-icon>
                 </div>
                 <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;">${child.label}</span>
             </button>
@@ -991,7 +1014,7 @@ export class SutramAppShell extends SutramElement {
                 } else {
                     singleNode = html`
                         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 40px; text-align: center; color: var(--text-muted); box-sizing: border-box; font-family: var(--font-mono, monospace);">
-                            <yv-icon name="alert-triangle" style="width: 36px; height: 36px; color: var(--intent-warning); margin-bottom: 16px;"></yv-icon>
+                            <sutram-icon name="alert-triangle" size="xl" intent="warning" style="margin-bottom: 16px;"></sutram-icon>
                             <h3 style="margin: 0 0 8px 0; color: var(--text); font-size: 1.1rem;">Unsupported Pop-Out View</h3>
                             <p style="margin: 0; max-width: 440px; font-size: 0.85rem; line-height: 1.5;">The projection <strong>${activeSlot.label || activeSlot.id}</strong> is not permitted to run in an ephemeral pop-out window.</p>
                         </div>
@@ -1010,7 +1033,7 @@ export class SutramAppShell extends SutramElement {
 
             const popoutHtml = html`
                 <div class="shell-container" style="flex: 1; display: flex; flex-direction: column; height: 100%; width: 100%; min-height: 0; overflow: hidden; background: var(--bg);">
-                    <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; height: 100%; width: 100%; overflow: hidden;">
+                    <div class="projection-mount-slot" style="flex: 1; display: flex; flex-direction: column; min-height: 0; height: 100%; width: 100%; overflow: hidden;">
                         ${singleNode || html`<div style="padding: 20px; color: var(--text-muted); font-style: italic;">Loading pop-out view...</div>`}
                     </div>
                 </div>
@@ -1041,9 +1064,9 @@ export class SutramAppShell extends SutramElement {
                                     }
                                     this.requestUpdate();
                                 }}>
-                                    <yv-icon name="wrench" stroke-width="2.5" style="width: 14px; height: 14px; margin-right: 6px; color: var(--intent-primary);"></yv-icon>
+                                    <sutram-icon name="wrench" size="sm" intent="primary" stroke-width="2.5" style="margin-right: 6px;"></sutram-icon>
                                     <span>Tools</span>
-                                    <yv-icon name="chevron-down" stroke-width="2.5" style="width: 12px; height: 12px; margin-left: 4px; color: var(--text-muted);"></yv-icon>
+                                    <sutram-icon name="chevron-down" size="xs" intent="muted" stroke-width="2.5" style="margin-left: 4px;"></sutram-icon>
                                 </button>
                             </div>
                         ` : html`
@@ -1062,7 +1085,7 @@ export class SutramAppShell extends SutramElement {
                                                     items: children, 
                                                     x: alignRight ? 'auto' : rect.left + 'px',
                                                     right: alignRight ? (window.innerWidth - rect.right) + 'px' : 'auto',
-                                                    y: rect.bottom + 5 + 'px' 
+                                                    y: rect.bottom + 'px' 
                                                 };
                                             }
                                             this.requestUpdate();
@@ -1166,7 +1189,7 @@ export class SutramAppShell extends SutramElement {
                                                         this.requestUpdate();
                                                     }}>
                                                     <div style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0;">
-                                                        ${child.icon ? html`<yv-icon name="${child.icon}" style="width: 14px; height: 14px; color: ${existingCol ? this._getPrimaryTabColor({id: tab.id, intent: tab.intent}) : 'var(--text-muted)'};"></yv-icon>` : html`<yv-icon name="puzzle" style="width: 14px; height: 14px; color: ${existingCol ? this._getPrimaryTabColor({id: tab.id, intent: tab.intent}) : 'var(--text-muted)'};"></yv-icon>`}
+                                                        <sutram-icon name="${child.icon || 'puzzle'}" size="sm" style="color: ${existingCol ? this._getPrimaryTabColor({id: tab.id, intent: tab.intent}) : 'var(--text-muted)'};"></sutram-icon>
                                                     </div>
                                                     <span style="white-space: nowrap;">${child.label}</span>
                                                 </button>
@@ -1177,7 +1200,7 @@ export class SutramAppShell extends SutramElement {
                             })}
                         </div>
                     ` : html`
-                        <div class="global-launcher-menu" style="position: fixed; top: ${this._launcherDropdown.y}; left: ${this._launcherDropdown.x}; right:${this._launcherDropdown.right}; background: var(--pane-bg); background: color-mix(in srgb, var(--pane-bg) 95%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--border); border-radius: 8px; padding: 8px; box-shadow: var(--overlay-shadow); z-index: 9999; display: flex; flex-direction: column; gap: 6px; min-width: 220px; max-height: 80vh; overflow-y: auto;">
+                        <div class="global-launcher-menu" style="position: fixed; top: ${this._launcherDropdown.y}; left: ${this._launcherDropdown.x}; right:${this._launcherDropdown.right}; background: var(--pane-bg); background: color-mix(in srgb, var(--pane-bg) 95%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; padding: 8px; box-shadow: var(--overlay-shadow); z-index: 9999; display: flex; flex-direction: column; gap: 6px; min-width: 220px; max-height: 80vh; overflow-y: auto;">
                             ${this._launcherDropdown.items.map(child => this._renderDropdownItem(child))}
                         </div>
                     `}
@@ -1285,7 +1308,7 @@ export class SutramAppShell extends SutramElement {
                                                 }}>
                                             <div class="sub-tab-icon-wrapper">
                                                 <div class="default-icon-container" style="color: ${intentColor}; opacity:${isActive ? '1' : '0.5'};">
-                                                    <yv-icon name="${displayIcon}" stroke-width="2.5" style="width: 14px; height: 14px;"></yv-icon>
+                                                    <sutram-icon name="${displayIcon}" size="sm" stroke-width="2.5"></sutram-icon>
                                                 </div>
                                             </div>
                                             ${sub.label}${registry?.executeUIHook && registry.executeUIHook('sutram:is-projection-dirty', sub.id) ? '*' : ''}
@@ -1313,7 +1336,7 @@ export class SutramAppShell extends SutramElement {
                                     const node = getDynamicNode(sub.component, sub.id);
 
                                     return html`
-                                        <div style="display: ${isActive ? 'flex' : 'none'}; flex-direction: column; flex: 1; height: 100%; min-height: 0;" data-ext="${sub.extName}" data-offline-mode="${(typeof registry.getExtension === 'function' ? registry.getExtension(sub.extName)?.offline_mode : null) || 'none'}">
+                                        <div class="projection-mount-slot" style="display: ${isActive ? 'flex' : 'none'}; flex-direction: column; flex: 1; height: 100%; min-height: 0; overflow: hidden;" data-ext="${sub.extName}" data-offline-mode="${(typeof registry.getExtension === 'function' ? registry.getExtension(sub.extName)?.offline_mode : null) || 'none'}">
                                             ${node}
                                         </div>
                                     `;
@@ -1387,7 +1410,7 @@ export class SutramAppShell extends SutramElement {
         return finalHtml;
         } catch(err) {
             console.error("[Telemetry] AppShell render error:", err);
-            return html`<div style="color:#ef4444; background:#1e293b; padding: 40px; z-index:99999; position:relative; width: 100vw; height: 100vh; overflow-y: auto; box-sizing: border-box;"><h2 style="display: flex; align-items: center; gap: 8px;"><yv-icon name="alert-triangle" style="width: 22px; height: 22px;"></yv-icon><span>AppShell Render Error</span></h2><pre style="white-space: pre-wrap; margin-bottom: 20px;">${err.message}</pre><pre style="white-space: pre-wrap; font-size: 0.85rem; color: #94a3b8;">${err.stack}</pre></div>`;
+            return html`<div style="color:#ef4444; background:#1e293b; padding: 40px; z-index:99999; position:relative; width: 100vw; height: 100vh; overflow-y: auto; box-sizing: border-box;"><h2 style="display: flex; align-items: center; gap: 8px;"><sutram-icon name="alert-triangle" size="lg"></sutram-icon><span>AppShell Render Error</span></h2><pre style="white-space: pre-wrap; margin-bottom: 20px;">${err.message}</pre><pre style="white-space: pre-wrap; font-size: 0.85rem; color: #94a3b8;">${err.stack}</pre></div>`;
         }
     }
 }

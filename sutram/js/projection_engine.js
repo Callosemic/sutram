@@ -83,10 +83,9 @@ export class SutramProjectionPool {
             } catch (e) {
                 node = document.createElement('div');
                 node.style.cssText = "padding: 15px; color: var(--intent-danger); font-family: monospace; display: flex; align-items: center; gap: 6px;";
-                const iconEl = document.createElement('yv-icon');
+                const iconEl = document.createElement('sutram-icon');
                 iconEl.setAttribute('name', 'alert-triangle');
-                iconEl.style.width = '14px';
-                iconEl.style.height = '14px';
+                iconEl.setAttribute('size', 'sm');
                 const textEl = document.createElement('span');
                 textEl.textContent = `Failed to initialize <${componentTag}>`;
                 node.replaceChildren(iconEl, textEl);

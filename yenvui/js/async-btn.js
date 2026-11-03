@@ -6,8 +6,10 @@ export class YenvuiBtn extends YenvuiBase {
         icon: {},
         intent: { type: String },
         variant: { type: String },
-        size: { type: String },
+        compact: { type: Boolean, reflect: true },
         emphasis: { type: Boolean },
+        grow: { type: Boolean, reflect: true },
+        fullWidth: { type: Boolean, reflect: true },
         btntype: { type: String },
         disabled: { type: Boolean },
         active: { type: Boolean }
@@ -20,20 +22,26 @@ export class YenvuiBtn extends YenvuiBase {
         this.icon = '';
         this.intent = 'primary';
         this.variant = 'tinted';
+        this.compact = false;
         this.emphasis = false;
+        this.grow = false;
+        this.fullWidth = false;
         this.btntype = 'button';
         this.disabled = false;
         this.active = false;
     }
     render() {
         const hasLabel = Boolean(this.label !== '' && this.label !== null && this.label !== undefined);
-        const mr = hasLabel ? '6px' : '0';
+        const hasIcon = Boolean(this.icon !== '' && this.icon !== null && this.icon !== undefined);
+        const effectiveSize = this.compact ? 'sm' : 'md';
+        const mr = hasLabel ? 'var(--yv-btn-label-gap, 6px)' : '0';
+        const labelDisplay = hasIcon ? 'var(--yv-btn-label-display, inline)' : 'inline';
         const renderIcon = (iconStr) => {
             if (!iconStr) return '';
             if (typeof iconStr === 'object') return iconStr;
             if (iconStr.includes('<')) return html`<span style="display: inline-flex; align-items: center; margin-right: ${mr};">${iconStr}</span>`;
             if (/^[a-zA-Z0-9-]+$/.test(iconStr)) {
-                return html`<yv-icon name="${iconStr}" style="width: 14px; height: 14px; margin-right: ${mr}; display: inline-block; vertical-align: middle;"></yv-icon>`;
+                return html`<yenvui-icon name="${iconStr}" size="sm" style="margin-right: ${mr}; display: inline-block; vertical-align: middle;"></yenvui-icon>`;
             }
             return html`<span style="margin-right: ${mr};">${iconStr}</span>`;
         };
@@ -41,14 +49,15 @@ export class YenvuiBtn extends YenvuiBase {
         return html`
             <button 
                 type="${this.btntype}"
-                class="yv-btn yv-btn--${this.intent || 'primary'} yv-btn--${this.variant || 'tinted'} yv-btn--${this.size || 'md'} ${this.emphasis ? 'yv-btn--emphasis' : ''} ${this.active ? 'yv-btn--active' : ''}" 
+                title=${typeof this.label === 'string' && this.label ? this.label : ''}
+                class="yv-btn yv-btn--${this.intent || 'primary'} yv-btn--${this.variant || 'tinted'} yv-btn--${effectiveSize} ${this.emphasis ? 'yv-btn--emphasis' : ''} ${this.active ? 'yv-btn--active' : ''}" 
                 ?disabled=${this.disabled}
                 @click=${(e) => {
                     if (!this.disabled) {
                         this.dispatchEvent(new CustomEvent('yv-click', { bubbles: true, composed: true, detail: { originalEvent: e } }));
                     }
                 }}>
-                ${renderIcon(this.icon)}${this.label}
+                ${renderIcon(this.icon)}${hasLabel ? html`<span class="yv-btn__label" style="display: ${labelDisplay};">${this.label}</span>` : ''}
             </button>
         `;
     }
@@ -63,8 +72,10 @@ export class YenvuiAsyncBtn extends YenvuiBase {
         errorLabel: { type: String },
         intent: { type: String },
         variant: { type: String },
-        size: { type: String },
+        compact: { type: Boolean, reflect: true },
         emphasis: { type: Boolean },
+        grow: { type: Boolean, reflect: true },
+        fullWidth: { type: Boolean, reflect: true },
         status: { type: String },
         btntype: { type: String },
         onClick: { type: Object },
@@ -87,7 +98,10 @@ export class YenvuiAsyncBtn extends YenvuiBase {
         this.errorLabel = '';
         this.intent = 'primary';
         this.variant = 'tinted';
+        this.compact = false;
         this.emphasis = false;
+        this.grow = false;
+        this.fullWidth = false;
         this.status = 'idle';
         this.btntype = 'button';
         this.disabled = false;
@@ -145,13 +159,16 @@ export class YenvuiAsyncBtn extends YenvuiBase {
         if (this.status === 'success') activeIntent = 'success';
         if (this.status === 'error') activeIntent = 'danger';
         const hasText = Boolean(text !== '' && text !== null && text !== undefined);
-        const mr = hasText ? '6px' : '0';
+        const hasIcon = Boolean(stateIcon !== '' && stateIcon !== null && stateIcon !== undefined);
+        const effectiveSize = this.compact ? 'sm' : 'md';
+        const mr = hasText ? 'var(--yv-btn-label-gap, 6px)' : '0';
+        const labelDisplay = hasIcon ? 'var(--yv-btn-label-display, inline)' : 'inline';
         const renderIcon = (iconStr) => {
             if (!iconStr) return '';
             if (typeof iconStr === 'object') return iconStr;
             if (iconStr.includes('<')) return html`<span style="display: inline-flex; align-items: center; margin-right: ${mr};">${iconStr}</span>`;
             if (/^[a-zA-Z0-9-]+$/.test(iconStr)) {
-                return html`<yv-icon name="${iconStr}" style="width: 14px; height: 14px; margin-right: ${mr}; display: inline-block; vertical-align: middle;"></yv-icon>`;
+                return html`<yenvui-icon name="${iconStr}" size="sm" style="margin-right: ${mr}; display: inline-block; vertical-align: middle;"></yenvui-icon>`;
             }
             return html`<span style="margin-right: ${mr};">${iconStr}</span>`;
         };
@@ -159,10 +176,11 @@ export class YenvuiAsyncBtn extends YenvuiBase {
         return html`
             <button 
                 type="${this.btntype}"
-                class="yv-btn yv-btn--${activeIntent || 'primary'} yv-btn--${this.variant || 'tinted'} yv-btn--${this.size || 'md'} ${this.emphasis ? 'yv-btn--emphasis' : ''} ${this.active ? 'yv-btn--active' : ''}" 
+                title=${typeof text === 'string' && text ? text : ''}
+                class="yv-btn yv-btn--${activeIntent || 'primary'} yv-btn--${this.variant || 'tinted'} yv-btn--${effectiveSize} ${this.emphasis ? 'yv-btn--emphasis' : ''} ${this.active ? 'yv-btn--active' : ''}" 
                 ?disabled=${this.disabled || this.status === 'loading'}
                 @click=${this._handleClick}>
-                ${renderIcon(stateIcon)}${text}
+                ${renderIcon(stateIcon)}${hasText ? html`<span class="yv-btn__label" style="display: ${labelDisplay};">${text}</span>` : ''}
             </button>
         `;
     }

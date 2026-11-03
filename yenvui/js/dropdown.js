@@ -1,12 +1,18 @@
 import { html, css } from 'lit';
 import { YenvuiBase } from './yenvui-base.js';
 import { syncTopLayerPopover, anchorTopLayerPopover } from './physics.js';
+import './search-bar.js';
 export class YenvuiDropdown extends YenvuiBase {
     static properties = {
         items: { type: Array },
         open: { type: Boolean, reflect: true },
         align: { type: String },
         direction: { type: String },
+        searchable: { type: Boolean },
+        searchPlaceholder: { type: String },
+        filterFn: { attribute: false },
+        _searchQuery: { type: String, state: true },
+        _hasSlottedContent: { type: Boolean, state: true },
         _loadingItemId: { type: String, state: true }
     };
     static styles = css`
@@ -18,9 +24,11 @@ export class YenvuiDropdown extends YenvuiBase {
             background: var(--pane-bg, #1e1e1e);
             color: var(--text, #e0e0e0);
             border: 1px solid var(--border, #444);
-            border-radius: 6px;
-            padding: 5px;
+            border-radius: 0 0 6px 6px;
+            padding: 6px;
             min-width: 220px;
+            max-height: var(--yv-dropdown-max-height, min(82dvh, 640px));
+            overflow-y: auto;
             box-shadow: var(--overlay-shadow);
             z-index: 99999;
             display: none;
@@ -28,21 +36,59 @@ export class YenvuiDropdown extends YenvuiBase {
             gap: 2px;
             box-sizing: border-box;
         }
+        :host([direction="up"]) .dropdown-menu {
+            border-radius: 6px 6px 0 0;
+        }
+        .dropdown-menu > * {
+            flex-shrink: 0;
+        }
+        .dropdown-menu > ::slotted(*) {
+            flex-shrink: 0;
+        }
         :host([open]) .dropdown-menu,
         .dropdown-menu:popover-open {
             display: flex;
         }
-
+        .dropdown-search-header {
+            position: sticky;
+            top: -5px;
+            background: var(--pane-bg, #1e1e1e);
+            padding: 4px 6px;
+            border-bottom: 1px solid var(--border, #444);
+            margin-bottom: 4px;
+            z-index: 2;
+        }
         .divider { height: 1px; background: var(--border, #444); margin: 4px 0; }
         .menu-item {
             background: transparent; color: var(--text, #e0e0e0); text-align: left; 
             padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; 
             font-size: 0.9rem; font-weight: bold; margin: 0; display: flex; 
-            align-items: center; gap: 8px; width: 100%; box-sizing: border-box;
+            align-items: center; justify-content: space-between; gap: 8px; width: 100%; box-sizing: border-box;
         }
         .menu-item:hover:not(:disabled) { background: var(--input-bg, #2d2d2d); }
         .menu-item:disabled { opacity: 0.7; cursor: not-allowed; }
-        .icon { font-size: 1.1rem; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+        .menu-item-main {
+            display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;
+        }
+        .menu-item-text {
+            display: flex; flex-direction: column; min-width: 0; flex: 1;
+        }
+        .menu-item-desc {
+            font-size: 0.72rem; font-weight: normal; color: var(--text-muted, #888);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .menu-item-badge {
+            font-family: var(--font-mono, monospace);
+            font-size: 0.7rem;
+            font-weight: normal;
+            color: var(--text-muted, #888);
+            background: var(--bg);
+            border: 1px solid var(--border, #444);
+            padding: 1px 6px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+        .icon { font-size: 1.1rem; line-height: 1; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
         .menu-spinner {
             width: 14px; height: 14px;
@@ -59,6 +105,11 @@ export class YenvuiDropdown extends YenvuiBase {
         this.open = false;
         this.align = 'auto';
         this.direction = 'auto';
+        this.searchable = false;
+        this.searchPlaceholder = 'Filter actions...';
+        this.filterFn = null;
+        this._searchQuery = '';
+        this._hasSlottedContent = false;
         this._loadingItemId = null;
     }
 
@@ -72,7 +123,7 @@ export class YenvuiDropdown extends YenvuiBase {
         this._boundReposition = () => {
             if (this.open) {
                 const menu = this.shadowRoot?.querySelector('.dropdown-menu');
-                if (menu) anchorTopLayerPopover(this, menu, { mode: 'menu', align: this.align || 'auto', direction: this.direction || 'auto', offset: 5 });
+                if (menu) anchorTopLayerPopover(this, menu, { mode: 'menu', align: this.align || 'auto', direction: this.direction || 'auto', offset: 0 });
             }
         };
         window.addEventListener('resize', this._boundReposition);
@@ -90,17 +141,35 @@ export class YenvuiDropdown extends YenvuiBase {
     }
     updated(changedProperties) {
         super.updated(changedProperties);
-        if (changedProperties.has('open') || changedProperties.has('items') || changedProperties.has('align') || changedProperties.has('direction')) {
+        if (changedProperties.has('open') && !this.open && this._searchQuery) {
+            this._searchQuery = '';
+        }
+        if (changedProperties.has('open') || changedProperties.has('items') || changedProperties.has('align') || changedProperties.has('direction') || changedProperties.has('_hasSlottedContent')) {
             const menu = this.shadowRoot?.querySelector('.dropdown-menu');
             if (menu) {
-                const hasItems = Boolean(this.open && this.items && this.items.length > 0);
-                syncTopLayerPopover(this, menu, hasItems, { mode: 'menu', align: this.align || 'auto', direction: this.direction || 'auto', offset: 5 });
+                const hasItems = Boolean(this.open && ((this.items && this.items.length > 0) || this._hasSlottedContent || this.searchable));
+                syncTopLayerPopover(this, menu, hasItems, { mode: 'menu', align: this.align || 'auto', direction: this.direction || 'auto', offset: 0 });
             }
         }
     }
 
     _toggle(e) {
         if (!this._loadingItemId) this.open = !this.open;
+    }
+
+    _getFilteredItems() {
+        const rawItems = this.items || [];
+        const q = (this._searchQuery || '').trim();
+        if (!q) return rawItems;
+        if (typeof this.filterFn === 'function') {
+            return this.filterFn(rawItems.filter(i => !i.divider), q);
+        }
+        const lowerQ = q.toLowerCase();
+        return rawItems.filter(item => {
+            if (!item || item.divider) return false;
+            const hay = `${item.label || ''} ${item.id || ''} ${item.token || ''} ${item.badge || ''} ${item.description || ''}`.toLowerCase();
+            return hay.includes(lowerQ);
+        });
     }
     _notifyError(err) {
         console.error(err);
@@ -138,22 +207,42 @@ export class YenvuiDropdown extends YenvuiBase {
         }
     }
     render() {
+        const visibleItems = this._getFilteredItems();
         return html`
             <div style="position: relative; display: flex; align-items: stretch; width: 100%; height: 100%;">
                 <div @click=${this._toggle} style="display: flex; align-items: stretch; width: 100%; height: 100%;">
                     <slot name="trigger"></slot>
                 </div>
-                <div class="dropdown-menu" popover="manual">
-                    ${(this.items || []).map(item => {
+                <div class="dropdown-menu" popover="manual" @click=${(e) => e.stopPropagation()}>
+                    <slot name="header"></slot>
+                    ${this.searchable ? html`
+                        <div class="dropdown-search-header">
+                            <yenvui-search-bar
+                                .placeholder=${this.searchPlaceholder || 'Filter...'}
+                                .value=${this._searchQuery}
+                                @yenvui-search-changed=${(e) => { this._searchQuery = e.detail.value; }}>
+                            </yenvui-search-bar>
+                        </div>
+                    ` : ''}
+                    ${visibleItems.map(item => {
                         if (item.divider) return html`<div class="divider"></div>`;
                         const isLoading = this._loadingItemId === (item.id || item.label);
                         return html`
                             <button class="menu-item" ?disabled=${!!this._loadingItemId} @click=${(e) => this._executeItem(item, e)}>
-                                <span class="icon">${isLoading ? html`<div class="menu-spinner"></div>` : (item.icon ? (/^[a-zA-Z0-9-]+$/.test(item.icon) ? html`<yv-icon name="${item.icon}" style="width: 14px; height: 14px;"></yv-icon>` : item.icon) : '')}</span>
-                                <span>${isLoading ? 'Processing...' : (item.label || item.id || 'Unknown Action')}</span>
+                                <span class="menu-item-main">
+                                    <span class="icon">${isLoading ? html`<div class="menu-spinner"></div>` : (item.icon ? (/^[a-zA-Z0-9-]+$/.test(item.icon) ? html`<yenvui-icon name="${item.icon}" size="sm"></yenvui-icon>` : item.icon) : '')}</span>
+                                    <span class="menu-item-text">
+                                        <span>${isLoading ? 'Processing...' : (item.label || item.id || 'Unknown Action')}</span>
+                                        ${item.description ? html`<span class="menu-item-desc">${item.description}</span>` : ''}
+                                    </span>
+                                </span>
+                                ${item.badge ? html`<span class="menu-item-badge">${item.badge}</span>` : ''}
                             </button>
                         `;
                     })}
+                    <slot name="content" @slotchange=${(e) => {
+                        this._hasSlottedContent = e.target.assignedNodes({ flatten: true }).length > 0;
+                    }}></slot>
                 </div>
             </div>
         `;
@@ -175,15 +264,20 @@ export class YenvuiFilterDropdown extends YenvuiBase {
             margin: 0;
             inset: auto;
             z-index: 99999;
-            padding: 15px 20px;
+            min-width: 240px;
+            padding: 12px 16px;
             background: var(--pane-bg, #1e1e1e);
             color: var(--text, #e0e0e0);
             border: 1px solid var(--border, #444);
             border-top: none;
+            border-radius: 0 0 6px 6px;
             box-shadow: var(--overlay-shadow);
-            max-height: 50vh;
+            max-height: min(80dvh, 640px);
             overflow-y: auto;
             box-sizing: border-box;
+        }
+        .panel > ::slotted(*) {
+            flex-shrink: 0;
         }
         :host([open]) .panel,
         .panel:popover-open {
@@ -252,7 +346,7 @@ export class YenvuiFilterDropdown extends YenvuiBase {
         return html`
             <div class="container">
                 <button class="system-action-btn" title=${this.filterText} @click=${this._toggleOpen} style="opacity: ${this.hasFilters ? '1' : '0.5'};">
-                    <yv-icon name="filter" style="width: var(--yv-icon-size, 14px); height: var(--yv-icon-size, 14px);"></yv-icon>
+                    <yenvui-icon name="filter" size="sm"></yenvui-icon>
                 </button>
                 <div class="panel" popover="manual">
                     <slot></slot>

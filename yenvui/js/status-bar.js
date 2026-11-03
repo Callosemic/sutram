@@ -35,12 +35,12 @@ export class YenvuiStatusBar extends LitElement {
 
     render() {
         let icon = html``;
-        if (this.syncState === 'pending') icon = html`<yv-icon name="circle-dot" style="width: 12px; height: 12px; color: var(--intent-warning); margin-right: 4px; display: inline-block; vertical-align: middle;"></yv-icon> Pending Sync`;
-        if (this.syncState === 'syncing') icon = html`<yv-icon name="refresh-cw" style="width: 12px; height: 12px; margin-right: 4px; display: inline-block; vertical-align: middle;"></yv-icon> Syncing...`;
-        if (this.syncState === 'synced') icon = html`<yv-icon name="check-circle-2" style="width: 12px; height: 12px; color: var(--intent-success); margin-right: 4px; display: inline-block; vertical-align: middle;"></yv-icon> Synced`;
-        if (this.syncState === 'offline') icon = html`<yv-icon name="wifi-off" style="width: 12px; height: 12px; color: var(--text-muted); margin-right: 4px; display: inline-block; vertical-align: middle;"></yv-icon> Offline`;
-        if (this.syncState === 'reconciling') icon = html`<yv-icon name="cloud-sync" style="width: 12px; height: 12px; color: var(--intent-highlight); margin-right: 4px; display: inline-block; vertical-align: middle;"></yv-icon> Reconciling...`;
-        if (this.syncState === 'error') icon = html`<yv-icon name="alert-triangle" style="width: 12px; height: 12px; color: var(--intent-danger); margin-right: 4px; display: inline-block; vertical-align: middle;"></yv-icon> Sync Error`;
+        if (this.syncState === 'pending') icon = html`<yenvui-icon name="circle-dot" size="xs" intent="warning" style="margin-right: 4px;"></yenvui-icon> Pending Sync`;
+        if (this.syncState === 'syncing') icon = html`<yenvui-icon name="refresh-cw" size="xs" style="margin-right: 4px;"></yenvui-icon> Syncing...`;
+        if (this.syncState === 'synced') icon = html`<yenvui-icon name="check-circle-2" size="xs" intent="success" style="margin-right: 4px;"></yenvui-icon> Synced`;
+        if (this.syncState === 'offline') icon = html`<yenvui-icon name="wifi-off" size="xs" intent="muted" style="margin-right: 4px;"></yenvui-icon> Offline`;
+        if (this.syncState === 'reconciling') icon = html`<yenvui-icon name="cloud-sync" size="xs" intent="highlight" style="margin-right: 4px;"></yenvui-icon> Reconciling...`;
+        if (this.syncState === 'error') icon = html`<yenvui-icon name="alert-triangle" size="xs" intent="danger" style="margin-right: 4px;"></yenvui-icon> Sync Error`;
 
         return html`
             <div class="bottom-bar ${this.isError ? 'error' : ''}" title="${this.text}">

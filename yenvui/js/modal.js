@@ -3,10 +3,10 @@ export class YenvuiModal extends LitElement {
     static properties = {
         titleText: { type: String },
         open: { type: Boolean, reflect: true },
-        maxWidth: { type: String },
+        size: { type: String, reflect: true },
+        compact: { type: Boolean, reflect: true },
         fullscreen: { type: Boolean, reflect: true },
         flush: { type: Boolean, reflect: true },
-        transparent: { type: Boolean, reflect: true },
         _hasFooter: { type: Boolean, state: true }
     };
     static styles = css`
@@ -18,7 +18,7 @@ export class YenvuiModal extends LitElement {
             border-radius: 8px;
             padding: 0;
             width: 100%;
-            max-width: var(--modal-max-width, 600px);
+            max-width: var(--modal-max-width, var(--yv-modal-normal, 600px));
             max-height: 85dvh;
             box-shadow: 0 10px 30px rgba(0,0,0,0.6);
             display: none; /* Hide when not open */
@@ -26,6 +26,12 @@ export class YenvuiModal extends LitElement {
             margin: auto; /* Centers natively in the #top-layer */
             box-sizing: border-box;
         }
+
+        :host([compact]),
+        :host([size="compact"]) { --modal-max-width: var(--yv-modal-compact, 440px); }
+        :host([size="normal"]) { --modal-max-width: var(--yv-modal-normal, 600px); }
+        :host([size="wide"]) { --modal-max-width: var(--yv-modal-wide, 840px); }
+        :host([size="full"]) { --modal-max-width: 100%; }
 
         dialog[open] {
             display: grid; /* Bypass Safari flex collapse bug */
@@ -45,7 +51,6 @@ export class YenvuiModal extends LitElement {
             background: var(--modal-backdrop, rgba(0, 0, 0, 0.75));
             backdrop-filter: var(--modal-backdrop-filter, blur(3px));
         }
-        :host([transparent]) dialog::backdrop,
         :host([fullscreen]) dialog::backdrop {
             background: transparent !important;
             backdrop-filter: none !important;
@@ -166,7 +171,8 @@ export class YenvuiModal extends LitElement {
         super();
         this.open = false;
         this.titleText = '';
-        this.maxWidth = '';
+        this.size = 'normal';
+        this.compact = false;
         this.fullscreen = false;
         this._hasFooter = false;
     }
@@ -195,9 +201,6 @@ export class YenvuiModal extends LitElement {
                 dialog.close();
                 dialog.showModal();
             }
-        }
-        if (changedProperties.has('maxWidth') && this.maxWidth) {
-            this.style.setProperty('--modal-max-width', this.maxWidth);
         }
     }
 
@@ -267,7 +270,7 @@ export class YenvuiModal extends LitElement {
                 <div class="header">
                     <h3>${this.titleText}</h3>
                     <button class="close-btn" title="Close Modal (Esc)" aria-label="Close Modal" @click=${this._dispatchClose}>
-                        <yv-icon name="x" style="width: 16px; height: 16px;"></yv-icon>
+                        <yenvui-icon name="x" size="md"></yenvui-icon>
                     </button>
                 </div>
                 <div class="body">

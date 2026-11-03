@@ -16,7 +16,8 @@ export class YenvuiInput extends LitElement {
         type: { type: String },
         disabled: { type: Boolean },
         inline: { type: Boolean, reflect: true },
-        flush: { type: Boolean, reflect: true }
+        flush: { type: Boolean, reflect: true },
+        grow: { type: Boolean, reflect: true }
     };
 
     createRenderRoot() { return this; }
@@ -29,6 +30,7 @@ export class YenvuiInput extends LitElement {
         this.disabled = false;
         this.inline = false;
         this.flush = false;
+        this.grow = false;
     }
     _onInput(e) {
         this.value = e.target.value;
@@ -63,7 +65,8 @@ export class YenvuiSelect extends LitElement {
         options: { type: Array },
         disabled: { type: Boolean },
         inline: { type: Boolean, reflect: true },
-        flush: { type: Boolean, reflect: true }
+        flush: { type: Boolean, reflect: true },
+        grow: { type: Boolean, reflect: true }
     };
 
     createRenderRoot() { return this; }
@@ -75,6 +78,7 @@ export class YenvuiSelect extends LitElement {
         this.disabled = false;
         this.inline = false;
         this.flush = false;
+        this.grow = false;
     }
     _onChange(e) {
         this.value = e.target.value;
@@ -97,20 +101,26 @@ export class YenvuiSelect extends LitElement {
 }
 if (!customElements.get('yenvui-select')) customElements.define('yenvui-select', YenvuiSelect);
 
+const _TEXTAREA_SIZE_PRESETS = Object.freeze({
+    compact: { minPx: 38, maxPx: 150 },
+    normal: { minPx: 60, maxPx: 380 },
+    wide: { minPx: 110, maxPx: 540 },
+    full: { minPx: 320, maxPx: 720 }
+});
+
 export class YenvuiTextarea extends LitElement {
     static properties = {
         label: { type: String },
         value: { type: String },
         placeholder: { type: String },
-        rows: { type: Number },
+        variant: { type: String, reflect: true },
+        size: { type: String, reflect: true },
+        compact: { type: Boolean, reflect: true },
         monospace: { type: Boolean },
         disabled: { type: Boolean },
         readOnly: { type: Boolean },
         inline: { type: Boolean, reflect: true },
         autoSize: { type: Boolean },
-        maxHeight: { type: Number },
-        minRows: { type: Number },
-        borderless: { type: Boolean, reflect: true },
         flush: { type: Boolean, reflect: true }
     };
 
@@ -120,15 +130,14 @@ export class YenvuiTextarea extends LitElement {
         super();
         this.value = '';
         this.placeholder = '';
-        this.rows = 1;
+        this.variant = 'default';
+        this.size = 'normal';
+        this.compact = false;
         this.monospace = false;
         this.disabled = false;
         this.readOnly = false;
         this.inline = false;
         this.autoSize = true;
-        this.maxHeight = 500;
-        this.minRows = 1;
-        this.borderless = false;
         this.flush = false;
     }
 
@@ -158,7 +167,7 @@ export class YenvuiTextarea extends LitElement {
 
     updated(changedProperties) {
         super.updated(changedProperties);
-        if (changedProperties.has('value') || changedProperties.has('autoSize') || changedProperties.has('borderless')) {
+        if (changedProperties.has('value') || changedProperties.has('autoSize') || changedProperties.has('variant') || changedProperties.has('size') || changedProperties.has('compact')) {
             this._adjustHeight();
         }
     }
@@ -171,8 +180,10 @@ export class YenvuiTextarea extends LitElement {
             if (textarea.scrollHeight === 0) return;
             const currentHeight = textarea.style.height;
             textarea.style.height = 'auto';
-            const minPx = (this.minRows && this.minRows > 1) ? (this.minRows * 22 + 16) : 38;
-            const targetPx = !this.value ? minPx : Math.max(minPx, Math.min(textarea.scrollHeight + 2, this.maxHeight || 500));
+            const sizeKey = this.compact ? 'compact' : (this.size || 'normal');
+            const preset = _TEXTAREA_SIZE_PRESETS[sizeKey] || _TEXTAREA_SIZE_PRESETS.normal;
+            const minPx = this.variant === 'ghost' ? 28 : preset.minPx;
+            const targetPx = !this.value ? minPx : Math.max(minPx, Math.min(textarea.scrollHeight + 2, preset.maxPx));
             const newHeight = `${targetPx}px`;
             if (currentHeight !== newHeight) {
                 textarea.style.height = newHeight;
@@ -192,13 +203,13 @@ export class YenvuiTextarea extends LitElement {
     render() {
         const wrapClass = `yv-form-wrapper ${this.flush ? 'yv-form-wrapper--flush' : ''} ${this.inline ? 'yv-form-wrapper--inline' : ''}`;
         const monoClass = this.monospace ? 'yv-textarea--monospace' : '';
-        const borderlessClass = this.borderless ? 'yv-textarea--borderless' : '';
+        const ghostClass = this.variant === 'ghost' ? 'yv-textarea--borderless' : '';
         return html`
             <div class="${wrapClass}">
                 ${this.label ? html`<yenvui-label .text=${this.label}></yenvui-label>` : ''}
                 <textarea
-                    class="yv-textarea ${monoClass} ${borderlessClass}"
-                    rows=${this.rows}
+                    class="yv-textarea ${monoClass} ${ghostClass}"
+                    rows="1"
                     .value=${this.value || ''}
                     placeholder=${this.placeholder}
                     ?disabled=${this.disabled}

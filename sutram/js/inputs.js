@@ -17,17 +17,23 @@ const bridgeInputEvents = (BaseClass) => class extends BaseClass {
     }
 };
 
+const _safeDefine = (tag, ctor) => {
+    if (typeof customElements !== 'undefined' && (!customElements.get || !customElements.get(tag))) {
+        customElements.define(tag, ctor);
+    }
+};
+
 export class SutramInput extends bridgeInputEvents(Input) {}
-if (!customElements.get('sutram-input')) customElements.define('sutram-input', SutramInput);
+_safeDefine('sutram-input', SutramInput);
 
 export class SutramSelect extends bridgeInputEvents(Select) {}
-if (!customElements.get('sutram-select')) customElements.define('sutram-select', SutramSelect);
+_safeDefine('sutram-select', SutramSelect);
 
 export class SutramTextarea extends bridgeInputEvents(Textarea) {}
-if (!customElements.get('sutram-textarea')) customElements.define('sutram-textarea', SutramTextarea);
+_safeDefine('sutram-textarea', SutramTextarea);
 
 export class SutramToggle extends bridgeInputEvents(Toggle) {}
-if (!customElements.get('sutram-toggle')) customElements.define('sutram-toggle', SutramToggle);
+_safeDefine('sutram-toggle', SutramToggle);
 
 import { html, css } from 'lit';
 import { SutramElement } from './sutram_sdk.js';
@@ -280,7 +286,7 @@ export class SutramCombobox extends SutramElement {
                         this._open = !this._open;
                         this._filterText = '';
                     }}>
-                    <yv-icon name="chevron-down" style="width: 14px; height: 14px;"></yv-icon>
+                    <sutram-icon name="chevron-down" size="sm"></sutram-icon>
                 </button>
             </div>
             ${this._open && filtered.length > 0 ? html`
@@ -303,7 +309,7 @@ export class SutramCombobox extends SutramElement {
         `;
     }
 }
-if (!customElements.get('sutram-combobox')) customElements.define('sutram-combobox', SutramCombobox);
+if (typeof customElements !== 'undefined' && !customElements.get('sutram-combobox')) customElements.define('sutram-combobox', SutramCombobox);
 
 export class SutramTargetBinding extends SutramElement {
     static properties = {
@@ -448,4 +454,226 @@ export class SutramTargetBinding extends SutramElement {
         `;
     }
 }
-if (!customElements.get('sutram-target-binding')) customElements.define('sutram-target-binding', SutramTargetBinding);
+if (typeof customElements !== 'undefined' && !customElements.get('sutram-target-binding')) customElements.define('sutram-target-binding', SutramTargetBinding);
+
+export class SutramComposer extends SutramElement {
+    static properties = {
+        value: { type: String },
+        placeholder: { type: String },
+        triggerPrefix: { type: String },
+        triggers: { type: Array },
+        activeTrigger: { type: Object },
+        intent: { type: String, reflect: true },
+        disabled: { type: Boolean, reflect: true },
+        _menuOpen: { type: Boolean, state: true },
+        _focused: { type: Boolean, state: true, reflect: true }
+    };
+
+    static styles = [sharedStyles, css`
+        :host {
+            display: block;
+            width: 100%;
+            box-sizing: border-box;
+            --composer-accent: var(--intent-primary);
+        }
+        :host([intent="primary"]) { --composer-accent: var(--intent-primary); }
+        :host([intent="success"]) { --composer-accent: var(--intent-success); }
+        :host([intent="warning"]) { --composer-accent: var(--intent-warning); }
+        :host([intent="danger"]) { --composer-accent: var(--intent-danger); }
+        :host([intent="highlight"]) { --composer-accent: var(--intent-highlight); }
+
+        .composer-shell {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 10px 12px;
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            box-sizing: border-box;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        :host([_focused]) .composer-shell {
+            border-color: var(--composer-accent);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--composer-accent) 20%, transparent);
+        }
+        .composer-input-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            width: 100%;
+            min-width: 0;
+        }
+        .composer-input-row > sutram-textarea {
+            flex: 1 1 0%;
+            min-width: 0;
+            margin: 0;
+        }
+        .trigger-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            background: color-mix(in srgb, var(--composer-accent) 16%, var(--bg));
+            border: 1px solid color-mix(in srgb, var(--composer-accent) 45%, var(--border));
+            color: var(--text);
+            font-family: var(--font-mono, monospace);
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+            margin-top: 2px;
+        }
+        .trigger-pill:hover {
+            border-color: var(--composer-accent);
+        }
+    `];
+
+    constructor() {
+        super();
+        this.value = '';
+        this.placeholder = 'Type a message or /command...';
+        this.triggerPrefix = '/';
+        this.triggers = [];
+        this.activeTrigger = null;
+        this.intent = 'primary';
+        this.disabled = false;
+        this._menuOpen = false;
+        this._focused = false;
+    }
+
+    _selectTrigger(trig, remainingText = null) {
+        this.activeTrigger = trig || null;
+        this._menuOpen = false;
+        if (remainingText !== null) {
+            this.value = remainingText;
+        }
+        this.dispatchEvent(new CustomEvent('sutram-trigger-changed', {
+            detail: { trigger: this.activeTrigger, remainingText: this.value },
+            bubbles: true,
+            composed: true
+        }));
+    }
+
+    _handleTextInput(e) {
+        let nextVal = e.detail?.value ?? '';
+        const prefix = this.triggerPrefix ?? '/';
+        const dd = this.shadowRoot?.querySelector('sutram-dropdown');
+        if (prefix && Array.isArray(this.triggers) && this.triggers.length > 0 && nextVal.startsWith(prefix)) {
+            const spaceIdx = nextVal.indexOf(' ');
+            if (spaceIdx > prefix.length) {
+                const candidateToken = nextVal.slice(prefix.length, spaceIdx).trim().toLowerCase();
+                const matched = this.triggers.find(t => {
+                    const tok = String(t.token || t.id || '').replace(/^\//, '').toLowerCase();
+                    const alt = String(t.altToken || '').replace(/^\//, '').toLowerCase();
+                    return tok === candidateToken || (alt && alt === candidateToken);
+                });
+                if (matched) {
+                    nextVal = nextVal.slice(spaceIdx + 1);
+                    this._selectTrigger(matched, nextVal);
+                    if (dd) {
+                        dd.open = false;
+                        dd._searchQuery = '';
+                    }
+                }
+            } else if (spaceIdx === -1) {
+                const partialToken = nextVal.slice(prefix.length).trim();
+                this._menuOpen = true;
+                if (dd) {
+                    dd.open = true;
+                    dd._searchQuery = partialToken;
+                }
+            }
+        } else if (this._menuOpen && dd && !nextVal.startsWith(prefix)) {
+            this._menuOpen = false;
+            dd.open = false;
+            dd._searchQuery = '';
+        }
+        this.value = nextVal;
+        this.dispatchEvent(new CustomEvent('sutram-input-changed', {
+            detail: { value: this.value, activeTrigger: this.activeTrigger },
+            bubbles: true,
+            composed: true
+        }));
+    }
+
+    _handleKeyDown(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            if (!this.disabled) {
+                this.dispatchEvent(new CustomEvent('sutram-composer-submit', {
+                    detail: { value: this.value, activeTrigger: this.activeTrigger },
+                    bubbles: true,
+                    composed: true
+                }));
+            }
+            return;
+        }
+        if (e.key === 'Backspace' && this.activeTrigger) {
+            const innerTa = this.shadowRoot?.querySelector('sutram-textarea')?.querySelector('textarea') || e.target;
+            const atStart = innerTa && innerTa.selectionStart !== undefined
+                ? (innerTa.selectionStart === 0 && innerTa.selectionEnd === 0)
+                : !this.value;
+            if (atStart) {
+                e.preventDefault();
+                this._selectTrigger(null);
+            }
+        }
+    }
+
+    render() {
+        const prefix = this.triggerPrefix ?? '/';
+        const hasTriggers = Array.isArray(this.triggers) && this.triggers.length > 0;
+        const menuItems = (this.triggers || []).map(t => ({
+            id: t.id || t.token,
+            token: t.token || t.id,
+            label: t.label || `${prefix}${t.token || t.id}`,
+            icon: t.icon || 'terminal',
+            badge: t.badge || (t.token ? `${prefix}${t.token}` : ''),
+            description: t.description || '',
+            onClick: () => {
+                const cleaned = (this.value || '').replace(/^\/(?:user:[a-zA-Z0-9_:-]*|[a-zA-Z0-9_:-]*)\s*/, '');
+                this._selectTrigger(t, cleaned);
+            }
+        }));
+
+        return html`
+            <div class="composer-shell"
+                @focusin=${() => { this._focused = true; }}
+                @focusout=${() => { this._focused = false; }}>
+                <slot name="header"></slot>
+                <div class="composer-input-row">
+                    <slot name="prefix">
+                        ${hasTriggers ? html`
+                            <sutram-dropdown
+                                .items=${menuItems}
+                                .open=${this._menuOpen}
+                                ?searchable=${true}
+                                searchPlaceholder="Search commands..."
+                                direction="up"
+                                align="left">
+                                <button slot="trigger" type="button" class="trigger-pill" ?disabled=${this.disabled}>
+                                    <sutram-icon name=${this.activeTrigger?.icon || 'terminal'} size="sm"></sutram-icon>
+                                    <span>${this.activeTrigger ? (this.activeTrigger.pillLabel || this.activeTrigger.label || `${prefix}${this.activeTrigger.token || this.activeTrigger.id}`) : prefix}</span>
+                                </button>
+                            </sutram-dropdown>
+                        ` : ''}
+                    </slot>
+                    <sutram-textarea
+                        variant="ghost"
+                        ?compact=${true}
+                        ?flush=${true}
+                        ?disabled=${this.disabled}
+                        .value=${this.value || ''}
+                        .placeholder=${this.placeholder || ''}
+                        @keydown=${(e) => this._handleKeyDown(e)}
+                        @sutram-input-changed=${(e) => this._handleTextInput(e)}>
+                    </sutram-textarea>
+                </div>
+                <slot name="footer"></slot>
+            </div>
+        `;
+    }
+}
+if (typeof customElements !== 'undefined' && !customElements.get('sutram-composer')) customElements.define('sutram-composer', SutramComposer);

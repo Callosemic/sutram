@@ -1,41 +1,54 @@
-# 🧶 Sutram: Presentation Micro-Kernel & yenVUI Chassis
-
-**Sutram** (from Sanskrit सूत्रम्, meaning "thread" or "formula") is the zero-bundler, import-map-distributed Web Component micro-kernel and presentation chassis for the Axoneme ecosystem and `inSetu` Developer OS.
-
-It provides an Inversion of Control (IoC) frontend substrate—managing component slot brokers, Zustand Unidirectional Data Flow (UDF) state subscriptions, URL hash routing, and native CSS intent tokens across Dark, Light, and brutalist E-Ink themes.
-
+# 🧶 Sutram: Web Component chassis with no build step
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
+**Sutram is a UI component library and front-end runtime that browsers load directly through import maps, with no bundler and no transpiler. It ships two layers: `yenVUI`, stateless presentation components and theme tokens, and `sutram`, an inversion-of-control runtime that wires them to state stores, an extension registry, slots, routing and keyboard shortcuts.**
+
+Sutram is the presentation layer of [inSetu](https://github.com/Callosemic/insetu) and of the Axoneme apps. The name comes from Sanskrit सूत्रम्, "thread" or "formula".
+
+| | |
+| :--- | :--- |
+| **Status** | `2.x`, developed alongside inSetu; its API follows what its hosts need. |
+| **Built with** | [Lit](https://lit.dev) Web Components, [Zustand](https://github.com/pmndrs/zustand) vanilla stores, CodeMirror 6 for the editor; plain ES modules and CSS custom properties |
+| **Themes** | Dark, Light and a high-contrast E-Ink theme, switched at runtime |
+| **Used by** | [inSetu](https://github.com/Callosemic/insetu), which vendors it and locks it by content hash |
+
+## Engineering highlights
+
+* **No build step.** Components use bare specifiers (`lit`, `sutram-chassis`, `codemirror-core`) that the host resolves with a browser import map. Upgrading a dependency means changing one map entry.
+* **Rules enforced by tests.** A fitness suite enforces the three laws below, plus theme-token use, no `innerHTML`, namespaced custom events, cleanup of observers and dialogs, passive touch listeners, and isolation from host domains.
+* **Built for phones and tablets.** Components guard against iOS Safari edge-swipe navigation, register touch listeners as passive, and lay out with container queries rather than viewport breakpoints.
+* **A host-agnostic editor.** `<yenvui-editor>` wraps CodeMirror 6 and loads extra languages only through a resolver the host supplies, so the chassis never decides where code comes from. Unknown languages fall back to plain text.
+
 ---
-## 🏗️ Architecture & Ecosystem Topology
+## 🏗️ Architecture
 
-The repository houses both the Inversion of Control (IoC) micro-kernel (`sutram`) and the presentation chassis (`yenVUI`). Together, they provide the presentation layer for host applications like `inSetu` OS:
+The repository holds both the presentation chassis (`yenVUI`) and the IoC runtime (`sutram`):
 
-* **`yenVUI` (Edge-Native Presentation Chassis):** The "dumb" UI grid. A collection of zero-dependency Lit Web Components and CSS intent tokens (`theme-tokens.css`) providing atomic visual primitives across Dark, Light, and brutalist E-Ink themes.
-* **`sutram` (IoC Micro-Kernel & Extension Runtime):** The application substrate. Extends `yenVUI` primitives into state-aware IoC components, manages extension registries (`ExtensionRegistry`), handles custom element slot projection (`<sutram-app-shell>`), exposes state store factories (`createSutramStore`), and routes global keyboard shortcuts.
-* **Host Application (`inSetu` OS):** The consuming desktop/web OS. Imports `sutram` and `yenVUI` via browser-native HTML import maps, wiring backend Python services (VFS transactions, git, local RAG) to `sutram` state stores and extension slots.
+* **`yenVUI` (presentation chassis):** the "dumb" UI layer. Lit Web Components and CSS intent tokens (`theme-tokens.css`) that hold no application state, across Dark, Light and E-Ink themes.
+* **`sutram` (IoC runtime and extension registry):** extends `yenVUI` primitives into state-aware components, manages the extension registry (`ExtensionRegistry`), projects extension views into custom element slots (`<sutram-app-shell>`), provides store factories (`createSutramStore`) and routes global keyboard shortcuts.
+* **Host application (for example inSetu):** imports `sutram` and `yenVUI` through an HTML import map and wires its backend services (file system, git, LLM context) to `sutram` stores and extension slots.
 
 ---
 
-## 📜 The Three Architectural Laws
+## 📜 The three architectural laws
 
-`sutram` and `yenVUI` are governed by three non-negotiable architectural laws enforced via automated fitness tests:
+`sutram` and `yenVUI` follow three laws, enforced by automated fitness tests:
 
-### 1. The "Dumb Component" Rule
-`yenVUI` UI primitives (e.g., `<yenvui-card>`, `<yenvui-modal>`) have zero internal memory, never query application registries, and never manage business state. They rely entirely on top-down property binding and emit normalized, bubbleable custom events (`yenvui-*` or `yv-*`).
+### 1. The "dumb component" rule
+`yenVUI` primitives (for example `<yenvui-card>`, `<yenvui-modal>`) keep no internal memory, never query application registries and never manage business state. They rely on top-down property binding and emit normalized, bubbling custom events (`yenvui-*` or `yv-*`).
 
-### 2. Composition Over Inheritance
-Consuming applications must *never* extend `yenVUI` UI primitive classes directly. Instead, host applications extend `SutramElement`, `InSetuElement`, or `AxonemeElement` for state management, and project their templates into `sutram` containers using native HTML `<slot>` tags.
+### 2. Composition over inheritance
+Host applications never extend `yenVUI` primitive classes directly. They extend `SutramElement` (or a host base such as `InSetuElement` or `AxonemeElement`) for state, and project their templates into `sutram` containers through native `<slot>` elements.
 
-### 3. The Universal CSS Vacuum
-Host applications are forbidden from defining raw structural CSS or hex colors. All visual styling is vacuumed into `theme-tokens.css` using semantic CSS intent tokens (`var(--bg)`, `var(--pane-bg)`, `var(--intent-primary)`, `var(--border)`), guaranteeing instant re-skinning across Dark, Light, and E-Ink modes via `MutationObserver`.
+### 3. The universal CSS vacuum
+Host applications do not define raw structural CSS or hex colors. Visual styling lives in `theme-tokens.css` as semantic intent tokens (`var(--bg)`, `var(--pane-bg)`, `var(--intent-primary)`, `var(--border)`), so every view re-skins instantly across Dark, Light and E-Ink modes.
 
 ---
 
 ## 🛠️ Complete Primitive Reference
 
 ### 1. Pure Presentation Chassis Primitives (`yenVUI`)
-Atomic, zero-state presentation controls delivered via `yenVUI`:
+Atomic, stateless presentation controls delivered by `yenVUI`:
 | Primitive Tag | Description | Structural Guardrail |
 | :--- | :--- | :--- |
 | **`<yenvui-card>`** | Polymorphic catalog card with edge-triggered touch drawer | Emits `yenvui-card-select-toggled`; supports compact, flush, and stale modes. |
@@ -45,7 +58,7 @@ Atomic, zero-state presentation controls delivered via `yenVUI`:
 | **`<yenvui-tabs>`** | Carousel tab navigation header with sub-tab variants | View-caching router; emits `yenvui-tab-selected`. |
 | **`<yenvui-toolbar>`** | Sticky action toolbar with search and filter dropdown | Container-query responsive layout (`@container`). |
 | **`<yenvui-search-bar>`** | Instant text filter input with clear trigger | Emits debounced `yenvui-search-changed` events. |
-| **`<yenvui-editor>`** | CodeMirror 6 text editor wrapper | Encapsulates dynamic ESM language loading and compartment state reconfigurations. |
+| **`<yenvui-editor>`** | CodeMirror 6 text editor wrapper | Built-in languages come from `codemirror-core`; others load through the host's `languageResolver`, which returns a module URL or a descriptor (`{url, kind: "lezer" \| "stream" \| "builtin", export, options}`). Each language loads once and is cached; unknown languages fall back to plain text. |
 | **`<yenvui-collapsible>`** | Expandable accordion container with intent styling | Emits `yenvui-collapsible-toggled`. |
 | **`<yenvui-category-section>`** | Categorized list section wrapper with header action slot | Sticky header sectioning. |
 | **`<yenvui-dropdown>`** | Context popover trigger menu | Auto-dismisses on outside clicks. |
@@ -66,11 +79,12 @@ Atomic, zero-state presentation controls delivered via `yenVUI`:
 | **`<yenvui-diff-viewer>`** | Search/replace diff viewer | Side-by-side and interleaved views of a patch or `SEARCH`/`REPLACE` pair. |
 | **`<yenvui-drop-target>`** & **`<yenvui-drop-overlay>`** | Drag-and-drop zones | Full-viewport drop overlay and inline drop targets. |
 | **`<yenvui-viewport>`** | Root viewport physics guard | Prevents iOS Safari edge-swipe history navigation while preserving vertical scroll and taps. |
+| **`<yenvui-input>`**, **`<yenvui-select>`**, **`<yenvui-textarea>`**, **`<yenvui-toggle>`** | Stateless form controls | The presentation layer under the `sutram-*` inputs below. |
 
 ---
 
 ### 2. IoC Micro-Kernel & Extension Primitives (`sutram`)
-State-aware wrappers, IoC brokers, and form controls delivered via `sutram`:
+State-aware wrappers, IoC brokers and form controls delivered by `sutram`:
 
 | Primitive Tag | Description | Operational Purpose |
 | :--- | :--- | :--- |
@@ -107,7 +121,9 @@ State-aware wrappers, IoC brokers, and form controls delivered via `sutram`:
 | **`<sutram-settings-form>`** | Schema-driven settings form | Renders an extension's settings schema, including per-repository scopes. |
 | **`<sutram-window>`** & **`<sutram-projection-window-controls>`** | Multi-window projection | Pop-out and dock-in controls for projecting views into spatial windows. |
 | **`<sutram-diff-viewer>`** | Synchronized diff viewer | Wraps `<yenvui-diff-viewer>` with dual-box and interleaved modes. |
-| **`<sutram-drag-coordinator>`** | Drag-and-drop coordinator | Coordinates drag state and drop zones across the shell. |
+| **`<sutram-drag-coordinator>`** | Drag-and-drop coordinator | Coordinates drag state and drop zones across the shell, with `<sutram-drop-target>` and `<sutram-drop-overlay>`. |
+| **`<sutram-dag-tree>`** | Wavefront and hierarchy tree | Renders staged DAGs (such as routine runs) and nested hierarchies with a host-supplied node renderer. |
+| **`<sutram-tabs>`** | Tab header wrapper | Wraps `<yenvui-tabs>`. |
 | **`<sutram-scroll-view>`**, **`<sutram-scrub-track>`**, **`<sutram-tag>`**, **`<sutram-label>`** | Layout and text wrappers | Wrap their `yenVUI` counterparts. |
 | **`<yv-icon>`** | Icon micro-primitive | Defined by `sutram-boot.js`; renders icons from the `window.SutramIcons` dictionary as CSS masks. |
 
@@ -122,12 +138,14 @@ UDF-compliant form controls providing standard state bindings:
 | **`<sutram-select>`** | Custom select dropdown | Accepts `options` array (`[{value, label}]`); emits `sutram-input-changed`. |
 | **`<sutram-textarea>`** | Auto-resizing multi-line text area | Supports `autoSize`, `maxHeight`, `monospace`, and `borderless` modes; auto-calculates height on input. |
 | **`<sutram-toggle>`** | Boolean toggle switch | Custom track/thumb toggle; emits `sutram-input-changed`. |
+| **`<sutram-combobox>`** | Filterable select | Type-to-filter option list with keyboard highlighting; emits `sutram-input-changed`. |
+| **`<sutram-target-binding>`** | Endpoint and model picker | Paired endpoint and model selects (for example an LLM endpoint and a model on it), bound to one value object. |
 
 ---
 
-## 🚀 Quick Start (Zero Build Step)
+## 🚀 Quick start (no build step)
 
-`sutram` requires zero bundlers, zero transpilation steps, and zero build toolchains. It is delivered directly to the browser via native HTML import maps.
+`sutram` needs no bundler, transpiler or build toolchain. Browsers load it directly through a native HTML import map.
 
 ### 1. Vendor the Chassis
 
@@ -141,11 +159,11 @@ static/vendor/
     └── css/       # from yenvui/css/
 ```
 
-inSetu does this with [`scripts/vendor_sutram.sh`](https://github.com/Callosemic/insetu/blob/main/scripts/vendor_sutram.sh), which also minifies with `esbuild` when it is installed.
+inSetu does this with [`scripts/vendor_sutram.sh`](https://github.com/Callosemic/insetu/blob/main/scripts/vendor_sutram.sh), which also minifies with `esbuild` when it is installed and records the sutram commit and a content hash in `sutram.lock.json`.
 
 ### 2. Configure the Upstream Import Map
 
-Sutram and yenVUI operate entirely via **Inversion of Control for Dependency Resolution**. Components rely on bare specifiers and never hardcode CDN URLs. The host application MUST provide an HTML5 import map that resolves these specifiers:
+Sutram and yenVUI leave dependency resolution to the host. Components use bare specifiers and never hard-code CDN URLs, so the host must provide an import map that resolves these specifiers:
 
 ```html
 <script type="importmap">
@@ -153,6 +171,7 @@ Sutram and yenVUI operate entirely via **Inversion of Control for Dependency Res
   "imports": {
     "lit": "/static/vendor/lit/lit-core.min.js",
     "lit-virtualizer": "/static/vendor/lit/lit-virtualizer.min.js",
+    "sutram-chassis": "/static/vendor/yenvui/js/index.js",
     "codemirror-core": "/static/vendor/codemirror/codemirror-core.js",
     "zustand/vanilla": "/static/vendor/zustand/vanilla.js",
     "zustand/middleware": "/static/vendor/zustand/middleware.js"
@@ -161,7 +180,7 @@ Sutram and yenVUI operate entirely via **Inversion of Control for Dependency Res
 </script>
 ```
 
-The `lit-core.min.js` bundle must re-export Lit's decorators and directives, as inSetu's `vendor_lit.sh` does.
+`sutram-chassis` is how `sutram` modules import the `yenVUI` primitives they extend. The `lit-core.min.js` bundle must re-export Lit's decorators and directives, as inSetu's `vendor_lit.sh` does. `codemirror-core` is only needed if you use the editor.
 
 ### 3. Load the Bootloader & Render
 
@@ -204,7 +223,9 @@ python tests/run_unit_tests.py      # unit suite (store and registry tests run i
 python tests/fitness_functions.py   # presentation and IoC fitness rules
 ```
 
-The fitness suite enforces the three architectural laws above. CI runs it together with the akasa and inSetu suites, and re-vendors every sutram change into inSetu before testing it there.
+The fitness suite enforces the three architectural laws above, among other rules. CI runs it together with the akasa and inSetu suites, and re-vendors every sutram change into inSetu before testing it there.
+
+The [`docs/`](docs/) folder holds the engineering standards, the yenVUI blueprint and contracts, and the architecture decision records.
 
 ---
 

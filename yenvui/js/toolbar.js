@@ -11,7 +11,7 @@ export class YenvuiToolbar extends YenvuiBase {
         filterText: { type: String },
         activeFilters: { type: Array },
         hasFiltersOverride: { type: Boolean },
-        bottomBorder: { type: Boolean }
+        flush: { type: Boolean, reflect: true }
     };
     static styles = css`
         :host { display: contents; }
@@ -52,7 +52,7 @@ export class YenvuiToolbar extends YenvuiBase {
         this.filterText = '';
         this.activeFilters = [];
         this.hasFiltersOverride = false;
-        this.bottomBorder = false;
+        this.flush = false;
     }
     render() {
         let btnText = this.filterText;
@@ -69,7 +69,7 @@ export class YenvuiToolbar extends YenvuiBase {
 
         return html`
             <div class="sticky-header">
-                <div class="toolbar-row ${this.bottomBorder ? 'bottom-border' : ''}">
+                <div class="toolbar-row ${this.flush ? 'bottom-border' : ''}">
                     <yenvui-search-bar 
                         style="flex: 1;"
                         .placeholder=${this.searchPlaceholder} 
