@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v2.6.1 (2026-11-03)
+
+### Bug Fixes
+
+- Minor column width quirk
+  ([`214558e`](https://github.com/Callosemic/sutram/commit/214558e557df48399e1f645bc1eb8663eb5ab110))
+
+### Chores
+
+- Sweep remaining state
+  ([`1cc9525`](https://github.com/Callosemic/sutram/commit/1cc9525f5e5a2c12cffb646196a60326c3cbcfd6))
+
+
 ## v2.6.0 (2026-11-03)
 
 ### Chores
