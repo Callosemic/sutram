@@ -1,0 +1,5 @@
+- **State-Presentation Boundary & Pure IoC:** Operate strictly as a domain-agnostic Declarative Design System and IoC Micro-Kernel. Never hardcode host application features (`inSetu`, `yomama://`); rely on `ExtensionRegistry` and `SutramUIAdapter`.
+- **Composition Over Inheritance & Dumb Chassis Primitives:** Keep Layer 1 `yenVUI` primitives 100% stateless and kernel-agnostic, and import the active chassis in Layer 2 `sutram` strictly via the bare specifier `'sutram-chassis'`.
+- **Automated Lifecycle Teardowns & Strict UDF:** Use `registerGlobalListener`, `registerInterval`, `subscribe`, and `bindStore` within `SutramElement` and `createSutramStore` for scoped state isolation.
+- **Universal CSS Vacuum & Responsive Physics:** Centralize theme tokens and semantic scale properties (`none | compact | normal | wide | full`). Ban hardcoded HEX colors, inline styles, and viewport-bound `@media` layout queries in favor of `@container` queries and `ResizeObserver`.
+- **Zero-Bundler Ecosystem:** Maintain pure, native ES module imports without requiring a build step.
