@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v2.6.2 (2026-11-03)
+
+### Bug Fixes
+
+- **substrate**: Apply initial state in bindStore, declare card filename, and enforce whole-tag
+  property linting
+  ([`9c1518b`](https://github.com/Callosemic/sutram/commit/9c1518b80ed5fb02298d3bffda272d8abb98f8d9))
+
+### Chores
+
+- Sweep remaining state
+  ([`cb39b3f`](https://github.com/Callosemic/sutram/commit/cb39b3fc101024351fb85f107fdb8092888a5ff8))
+
+
 ## v2.6.1 (2026-11-03)
 
 ### Bug Fixes
