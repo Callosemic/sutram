@@ -506,10 +506,16 @@ export const SutramContextMixin = (SuperClass) => class extends SuperClass {
     bindStore(store, stateMapper, options = {}) {
         const { autoFetch = 'fetchData', equalityFn } = options;
 
-        this.subscribe(store, stateMapper, (mappedSlice) => {
+        const applySlice = (mappedSlice) => {
             Object.assign(this, mappedSlice);
             this.requestUpdate();
-        }, equalityFn);
+        };
+        this.subscribe(store, stateMapper, applySlice, equalityFn);
+        // A selector subscription reports later changes only; mapped state must also reflect what the store holds now.
+        const currentStore = this.getStore(store);
+        if (currentStore && typeof currentStore.getState === 'function') {
+            try { applySlice(stateMapper(currentStore.getState())); } catch (e) {}
+        }
 
         if (autoFetch) {
             const triggerFetch = (scopeId) => {

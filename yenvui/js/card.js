@@ -4,6 +4,7 @@ import { YenvuiGestureController, getEventPath } from './physics.js';
 
 export class YenvuiCard extends YenvuiBase {
     static properties = {
+        filename: { type: String },
         titleText: { type: String },
         detailText: { type: String },
         detailPrefix: { type: String },

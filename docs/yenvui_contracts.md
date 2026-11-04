@@ -74,7 +74,7 @@ Any replacement library must export the following Custom Elements.
     *   *Events:* `@yenvui-window-close`, `@yenvui-window-dock`, `@yenvui-window-focus`, `@yenvui-window-drag-start`.
     *   *Slots:* default.
 *   **`<yenvui-card>`**: Polymorphic catalog container.
-    *   *Properties:* `.titleText`, `.descriptionText`, `.detailText`, `.detailPrefix`, `.detailSuffix`, `.statusText`, `.icon`, `.intent`, `?selected`, `?disableSelection`, `?compact`, `?flush`, `?stale`, `?has-actions`, `.actionsOpen` (Boolean getter/setter), `.hasActions` (Boolean getter/setter).
+    *   *Properties:* `.filename`, `.titleText`, `.descriptionText`, `.detailText`, `.detailPrefix`, `.detailSuffix`, `.statusText`, `.icon`, `.intent`, `?selected`, `?disableSelection`, `?compact`, `?flush`, `?stale`, `?has-actions`, `.actionsOpen` (Boolean getter/setter), `.hasActions` (Boolean getter/setter).
     *   *Host Markers:* `[data-yv-card]`.
     *   *Events:* `@yenvui-card-select-toggled`, `@yenvui-card-clicked`, `@yenvui-card-actions-opened`, `@yenvui-overlay-opened`.
     *   *Slots:* `header-actions`, `detail`, `inline-actions`, `actions`, default.

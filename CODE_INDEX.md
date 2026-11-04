@@ -192,12 +192,16 @@ sutram/
 │   ├── run_unit_tests.py           # CLI test runner for platform behavioral unit tests
 │   ├── sutram_consumer_linter.py   # Reusable static analysis script for consumer UDF compliance
 │   │   ├── def strip_lit_expressions(line) # Replaces every Lit ${...} expression on a line with an empty '${}' (brace-balanced, so arrow functions and object literals inside bindings a...
-│   │   ├── def run_consumer_lint(target_dir, allow_host_globals) # [stale?] Sweeps a consumer frontend directory to ensure compliance with the Sutram IoC Micro-Kernel and yenVUI presentation standards.
+│   │   ├── def iter_sutram_tags(text) # Yields every <sutram-*> opening tag with its line, attribute text, and names-only text; multi-line and ${...}-safe.
+│   │   ├── def load_declared_properties(sutram_root) # Maps each sutram-* tag to its declared properties and reflected attributes, through inheritance, mixins, chassis aliases and passthrough tags.
+│   │   ├── def undeclared_bindings(tag, attrs, declared) # Bindings on a sutram tag that name no declared property or attribute, so they would do nothing.
+│   │   ├── def run_consumer_lint(target_dir, allow_host_globals) # Sweeps a consumer frontend directory for Sutram/yenVUI compliance; tag-level rules read whole tags.
 │   │   └── def check_host_domain_decoupling(target_dir) # Fitness Function: Enforces pure host-neutral Inversion of Control.
 │   └── unit/                       # Behavioral unit and integration tests for the Sutram runtime
 │       ├── __init__.py             # Unit test package initializer
-│       ├── test_consumer_linter.py # Tests that the consumer linter ignores '=>' inside Lit ${...} bindings when checking sutram-btn labels
-│       │   └── class TestConsumerLinterButtonLabels(unittest.TestCase) # [stale?] SUTRAM_BUTTON_DECLARATIVE_LABEL_MANDATE must ignore '=>' and '>' inside Lit ${...} bindings.
+│       ├── test_consumer_linter.py # Tests the consumer linter: Lit bindings in button labels, whole-tag rules across lines, and undeclared property bindings
+│       │   ├── class TestConsumerLinterButtonLabels(unittest.TestCase) # SUTRAM_BUTTON_DECLARATIVE_LABEL_MANDATE must ignore '=>' and '>' inside Lit ${...} bindings.
+│       │   └── class TestConsumerLinterWholeTags(unittest.TestCase) # Tag-level rules read whole tags; undeclared and attribute-mismatched bindings are flagged.
 │       └── test_sutram_registry.py # Node.js and Python behavioral tests for StoreRegistry, ExtensionRegistry, and utilities
 │           └── class TestSutramRegistry(unittest.TestCase) # [comment required]
 └── yenvui/                         # Edge-Native presentation chassis and Web Component UI library

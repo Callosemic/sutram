@@ -99,7 +99,7 @@ Components requiring dynamic theme adaptation MUST NOT instantiate individual `M
 ### Automated Lifecycle Teardowns
 To prevent ghost memory leaks and dangling subscriptions, components extending `SutramElement` MUST register listeners and subscriptions via lifecycle helpers:
 
-* **Zustand Subscriptions:** Use `this.subscribe(store, selector, listener)`.
+* **Zustand Subscriptions:** Use `this.subscribe(store, selector, listener)` for changes (it does not report the current value, so event- and tick-style slices never fire on mount) and `this.bindStore(store, stateMapper)` to mirror state onto properties (it applies the current slice first).
 * **Timers & Metronomes:** Use `this.registerInterval(callback, delayMs)` or `ExtensionRegistry.registerTick()` instead of raw `setInterval`.
 * **Global DOM Listeners:** Use `this.registerGlobalListener(eventType, targetNode, callback)` and `this.registerOutsideClick(callback)`.
 * **Automatic Disconnection:** All registered subscriptions, intervals, and listeners are automatically torn down within `SutramElement.disconnectedCallback()`.

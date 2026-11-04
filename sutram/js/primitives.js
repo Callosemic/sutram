@@ -997,6 +997,7 @@ export class SutramSettingsForm extends SutramElement {
     static properties = {
         extName: { type: String },
         schema: { type: Array },
+        optionResolver: { attribute: false },
         formData: { type: Object },
         repos: { type: Array },
         selectedRepo: { type: String },

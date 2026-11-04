@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.sutram_consumer_linter import run_consumer_lint, strip_lit_expressions
+from tests.sutram_consumer_linter import load_declared_properties, run_consumer_lint, strip_lit_expressions, undeclared_bindings
 
 
 ICON_BUTTON_WITH_ARROW_HANDLER = (
@@ -78,6 +78,52 @@ class TestConsumerLinterButtonLabels(unittest.TestCase):
             "UNIFIED_SCALE_TOKEN_MANDATE",
             self._lint('<sutram-pill ?small=${true} labelText="Tag"></sutram-pill>'),
         )
+
+
+
+class TestConsumerLinterWholeTags(unittest.TestCase):
+    """Tag-level rules read whole tags, including attributes on later lines and bindings Lit resolves."""
+
+    def _lint(self, template):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "demo.js").write_text(
+                "import { html } from 'lit';\n"
+                "export class Demo {\n"
+                f"    render() {{ return html`{template}`; }}\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                run_consumer_lint(tmp)
+            return buf.getvalue()
+
+    def test_scale_token_on_a_later_line_of_the_tag_is_flagged(self):
+        self.assertIn("UNIFIED_SCALE_TOKEN_MANDATE", self._lint('<sutram-btn\n    size="sm"\n    label="Copy"></sutram-btn>'))
+
+    def test_undeclared_property_binding_is_flagged(self):
+        output = self._lint('<sutram-stack\n    direction="col"\n    .notAProperty=${1}></sutram-stack>')
+        self.assertIn("SUTRAM_UNDECLARED_PROPERTY", output)
+        self.assertIn(".notAProperty", output)
+
+    def test_declared_bindings_and_quoted_markup_pass(self):
+        output = self._lint(
+            '<sutram-card .filename=${f} titleText="A <b>bold</b> > title" ?disableSelection=${true}\n'
+            '    @card-clicked=${() => go(x > 1)} slot="item" data-id="1"></sutram-card>'
+        )
+        self.assertNotIn("SUTRAM_UNDECLARED_PROPERTY", output)
+
+    def test_boolean_binding_must_match_the_reflected_attribute(self):
+        declared = {"sutram-demo": {"wide": "wide", "drawerOpen": "drawer-open"}}
+        self.assertEqual(undeclared_bindings("sutram-demo", "?wide=${} ?drawerOpen=${}", declared),
+                        ["?drawerOpen (the property's attribute is 'drawer-open')"])
+
+    def test_declared_properties_follow_mixins_aliases_and_passthrough_tags(self):
+        declared = load_declared_properties()
+        self.assertIn("label", declared["sutram-input"])
+        self.assertIn("drawerOpen", declared["sutram-sidebar-layout"])
+        self.assertIn("filename", declared["sutram-card"])
+        self.assertIn("name", declared["sutram-icon"])
 
 
 if __name__ == "__main__":
