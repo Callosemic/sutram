@@ -10,7 +10,7 @@ export class YenvuiTag extends YenvuiBase {
 
     render() {
         const intentClass = this.intent ? `yv-tag--${this.intent}` : '';
-        return html`<span class="yv-tag ${intentClass}">${this.text}<slot></slot></span>`;
+        return html`<span class="yv-tag ${intentClass}" title=${this.title || this.text || ''}>${this.text}<slot></slot></span>`;
     }
 }
 customElements.define('yenvui-tag', YenvuiTag);
