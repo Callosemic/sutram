@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v2.6.3 (2026-11-05)
+
+### Bug Fixes
+
+- Tag overflow fix via truncation
+  ([`c20605d`](https://github.com/Callosemic/sutram/commit/c20605d4b90789959cce000651b69aecdc8df357))
+
+### Chores
+
+- Directive updates
+  ([`eea51a1`](https://github.com/Callosemic/sutram/commit/eea51a192ffc39d421de56b8c4eaa03f72e0fa7c))
+
+- Global workspace sweep
+  ([`b8f37c2`](https://github.com/Callosemic/sutram/commit/b8f37c2adc8ae669e2619eb86c23a279dd84914e))
+
+- Sweep remaining state
+  ([`e175e47`](https://github.com/Callosemic/sutram/commit/e175e476e2296fe2a658a9765f5be9e69cc026c5))
+
+
 ## v2.6.2 (2026-11-03)
 
 ### Bug Fixes
