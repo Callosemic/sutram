@@ -58,7 +58,7 @@ Atomic, stateless presentation controls delivered by `yenVUI`:
 | **`<yenvui-tabs>`** | Carousel tab navigation header with sub-tab variants | View-caching router; emits `yenvui-tab-selected`. |
 | **`<yenvui-toolbar>`** | Sticky action toolbar with search and filter dropdown | Container-query responsive layout (`@container`). |
 | **`<yenvui-search-bar>`** | Instant text filter input with clear trigger | Emits debounced `yenvui-search-changed` events. |
-| **`<yenvui-editor>`** | CodeMirror 6 text editor wrapper | Built-in languages come from `codemirror-core`; others load through the host's `languageResolver`, which returns a module URL or a descriptor (`{url, kind: "lezer" \| "stream" \| "builtin", export, options}`). Each language loads once and is cached; unknown languages fall back to plain text. |
+| **`<yenvui-editor>`** | CodeMirror 6 text editor wrapper | Built-in languages come from `codemirror-core`; others load through the host's `languageResolver`, which returns a module URL or a descriptor (`{url, kind: "lezer" \| "stream" \| "builtin", export, options}`). Supports interactive Markdown link widgets (`enableMarkdownLinks`) emitting `yenvui-editor-link-clicked`. Each language loads once and is cached; unknown languages fall back to plain text. |
 | **`<yenvui-collapsible>`** | Expandable accordion container with intent styling | Emits `yenvui-collapsible-toggled`. |
 | **`<yenvui-category-section>`** | Categorized list section wrapper with header action slot | Sticky header sectioning. |
 | **`<yenvui-dropdown>`** | Context popover trigger menu | Auto-dismisses on outside clicks. |
@@ -103,7 +103,7 @@ State-aware wrappers, IoC brokers and form controls delivered by `sutram`:
 | **`<sutram-selection-tray>`** | Multi-item batch action tray | Reads `SelectionStore` and executes registered extension `batchActions`. |
 | **`<sutram-status-bar>`** | System status bar wrapper | Listens for global `sutram-status-update` and `sutram-sync-status` events. |
 | **`<sutram-toast-container>`** | Toast notification wrapper | Subscribes to `ToastStore` and renders active alerts. |
-| **`<sutram-editor>`** | Editor wrapper | Wraps `<yenvui-editor>` and exposes `insertAtCursor(text)`. |
+| **`<sutram-editor>`** | Editor wrapper | Wraps `<yenvui-editor>`, bridges `editor-link-clicked` events, and exposes `insertAtCursor(text)`. |
 | **`<sutram-toolbar>`** | Sticky toolbar wrapper | Wraps `<yenvui-toolbar>` for search event routing. |
 | **`<sutram-search-bar>`** | Search input wrapper | Wraps `<yenvui-search-bar>`. |
 | **`<sutram-dropdown>`** | Dropdown wrapper | Wraps `<yenvui-dropdown>`. |
@@ -125,7 +125,7 @@ State-aware wrappers, IoC brokers and form controls delivered by `sutram`:
 | **`<sutram-dag-tree>`** | Wavefront and hierarchy tree | Renders staged DAGs (such as routine runs) and nested hierarchies with a host-supplied node renderer. |
 | **`<sutram-tabs>`** | Tab header wrapper | Wraps `<yenvui-tabs>`. |
 | **`<sutram-scroll-view>`**, **`<sutram-scrub-track>`**, **`<sutram-tag>`**, **`<sutram-label>`** | Layout and text wrappers | Wrap their `yenVUI` counterparts. |
-| **`<yv-icon>`** | Icon micro-primitive | Defined by `sutram-boot.js`; renders icons from the `window.SutramIcons` dictionary as CSS masks. |
+| **`<sutram-icon>`** & **`<yenvui-icon>`** | Icon primitives | Render icons from the `window.SutramIcons` dictionary as cached CSS SVG masks with semantic `size` and `intent` tokens. |
 
 ---
 
@@ -149,7 +149,7 @@ UDF-compliant form controls providing standard state bindings:
 
 ### 1. Vendor the Chassis
 
-Copy (or minify) `sutram/js/`, `yenvui/js/`, and `yenvui/css/` into your static directory, keeping them side by side. `sutram` modules import `yenVUI` modules by relative path, so the layout below must be preserved:
+Copy (or minify) `sutram/js/`, `yenvui/js/`, and `yenvui/css/` into your static directory. `sutram` modules resolve `yenVUI` exclusively via the `'sutram-chassis'` import map specifier:
 
 ```text
 static/vendor/
@@ -184,7 +184,7 @@ Sutram and yenVUI leave dependency resolution to the host. Components use bare s
 
 ### 3. Load the Bootloader & Render
 
-`sutram-boot.js` is a classic script. It installs the duplicate-registration guard and `<yv-icon>`, then fires `sutram:boot-ready`, after which the host imports the component modules:
+`sutram-boot.js` is a classic script. It installs the duplicate-registration guard and fires `sutram:boot-ready`, after which the host imports the component modules:
 
 ```html
 <!DOCTYPE html>

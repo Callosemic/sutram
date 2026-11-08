@@ -154,13 +154,39 @@ globalThis.localStorage = new StorageMock();
 globalThis.sessionStorage = new StorageMock();
 
 let activeWs = 'ws_alpha';
-const { createSutramStore, StoreRegistry, ExtensionRegistry } = await import('./sutram_sdk.mjs');
+const { createSutramStore, StoreRegistry, ExtensionRegistry, LayoutStore } = await import('./sutram_sdk.mjs');
 const { SutramProjectionCompiler, SutramProjectionPool } = await import('./projection_engine.mjs');
 const { debounce, threeWayMergeText, HostPath, truncateFilename, clone, SutramWorker } = await import('./utils.mjs');
 const { SutramDB } = await import('./offline.mjs');
 const { anchorTopLayerPopover } = await import('./physics.mjs');
 
-// 1. Bound-Scope Persistence
+// 1. Bound-Scope Persistence + Functional (set, get, store) Store Initializer + TDZ-Safe urlParser(_hash, hydratedState)
+localStorage.setItem('sutram_local_ws_alpha_FuncStore_count', JSON.stringify(7));
+const FuncStore = createSutramStore('FuncStore', (set, get) => ({
+    count: 1,
+    increment: () => set({ count: (get()?.count || 0) + 1 })
+}), {
+    localSync: ['count'],
+    urlParser: (_hash, hydratedState) => {
+        return hydratedState.count === 7 ? { count: hydratedState.count + 10 } : null;
+    }
+}, () => activeWs, 'sutram');
+assert.equal(FuncStore.getState().count, 17, 'Functional store initializer and urlParser(_hash, hydratedState) must hydrate synchronously without TDZ');
+FuncStore.getState().increment();
+assert.equal(FuncStore.getState().count, 18, 'Functional store action using set/get must update state without outer variable self-reference');
+
+// 1b. LayoutStore.setUserCapacity clamping against viewport width
+window.innerWidth = 1200; // maxViewportCap = 3
+LayoutStore.getState().setUserCapacity(2);
+assert.equal(LayoutStore.getState().userCapacity, 2);
+assert.equal(LayoutStore.getState().capacity, 2, 'capacity must respect userCapacity when viewport is wider');
+window.innerWidth = 500; // maxViewportCap = 1
+LayoutStore.getState().setUserCapacity(2);
+assert.equal(LayoutStore.getState().userCapacity, 2);
+assert.equal(LayoutStore.getState().capacity, 1, 'capacity must clamp to maxViewportCap on compact viewports');
+window.innerWidth = 1200;
+LayoutStore.getState().setUserCapacity(3);
+
 const DomainStore = createSutramStore('DomainTest', {
     items: ['default_item'],
     ephemeral: 'initial'
@@ -411,6 +437,16 @@ await SutramDB._flushLRUQueue();
 assert.equal(SutramDB._lruBuffer.size, 0, '_flushLRUQueue must drain _lruBuffer');
 const lruIndex = mockStores.manifest_cache.get('vfs_lru_index');
 assert.ok(lruIndex && lruIndex['ws_alpha::/api/ws_alpha/fs/fetch?file=vfs://alpha/app.py'] >= 1000, '_flushLRUQueue must persist compact vfs_lru_index in manifest_cache');
+
+// 12b. SutramDB tenant-agnostic fallback & subscribeTelemetry
+let lastTelemetry = null;
+const unsubTelemetry = SutramDB.subscribeTelemetry((detail) => { lastTelemetry = detail; });
+mockStores.vfs_cache.set('default::/api/shared/schema.json', { blob: { size: 10, text: 'schema' }, ts: 2000 });
+SutramDB.configure({ isTenantAgnosticUrl: (u) => u.includes('/api/shared/') });
+const fallbackBlob = await SutramDB.getVFSBlob('ws_alpha', '/api/shared/schema.json');
+assert.deepEqual(fallbackBlob, { size: 10, text: 'schema' }, 'getVFSBlob must fall back to default:: for tenant-agnostic URLs');
+unsubTelemetry();
+assert.equal(typeof unsubTelemetry, 'function');
 
 // 13. anchorTopLayerPopover (Bidirectional Collision Flipping & Direction Handling)
 const popoverMock = {
@@ -1109,6 +1145,13 @@ globalThis.customElements = {
     get: () => undefined,
     define: () => {}
 };
+class CustomEventMock extends Event {
+    constructor(type, opt = {}) {
+        super(type, opt);
+        this.detail = opt.detail ?? null;
+    }
+}
+globalThis.CustomEvent = globalThis.CustomEvent || CustomEventMock;
 
 const { loadLanguageExtension, YenvuiEditor } = await import('./editor.mjs');
 const rustStub = await import('./lang_rust_stub.mjs');
@@ -1160,6 +1203,16 @@ const unknownExt = await loadLanguageExtension('cobol');
 assert.deepEqual(unknownExt, [], 'Unknown language must fall back to plain text []');
 assert.deepEqual(await loadLanguageExtension(''), []);
 assert.deepEqual(await loadLanguageExtension('plaintext'), []);
+
+// 4. YenvuiEditor Markdown link click event emission
+const editorInst = new YenvuiEditor();
+assert.equal(editorInst.enableMarkdownLinks, true, 'enableMarkdownLinks must default to true');
+let linkEvt = null;
+editorInst.dispatchEvent = (e) => { linkEvt = e; };
+editorInst._emitLinkClicked('https://example.com/docs', 'Docs');
+assert.equal(linkEvt.type, 'yenvui-editor-link-clicked');
+assert.equal(linkEvt.detail.href, 'https://example.com/docs');
+assert.equal(linkEvt.detail.text, 'Docs');
 
 console.log('EDITOR_LOADER_TESTS_PASSED');
 """

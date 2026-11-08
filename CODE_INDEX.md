@@ -43,6 +43,7 @@ sutram/
 │   │   ├── 0028_compound_target_binding_and_sw_dev_cache_bypass.md # ADR-0028: Compound Target Binding Controls, Dynamic Schema Option Sources, and Development Service Worker Cache Bypass
 │   │   ├── 0029_host_agnostic_language_descriptors_stream_modes_and_plaintext_fallback.md # ADR-0029: Host-Agnostic Editor Language Descriptors, StreamLanguage Wrapping, Per-Language Caching, and Plain-Text Fallback
 │   │   ├── 0030_zero_css_lego_layout_primitives_semantic_tokens_and_composer.md # ADR-0030: Zero-CSS Lego Layout Primitives, Semantic Token Parameterization, SutramComposer, and Floating HUD
+│   │   ├── 0031_offline_app_shell_vault_atomic_cache_overlays_and_markdown_link_widgets.md # ADR-0031: Offline App Shell Vault, Atomic Read-Your-Writes Cache Overlays, Functional Store Initializers, User Column Capacity, and Editor Markdown Link Widgets
 │   │   └── archived/               # Deeply embedded baseline architectural records preserved for historical reference
 │   │       ├── 0001_sutram_ioc_microkernel_architecture.md # ADR-0001: IoC microkernel and slot layout architecture
 │   │       ├── 0002_sutram_bootloader_and_resilience_patterns.md # ADR-0002: Stage 1 bootloader and error boundary standards
@@ -54,14 +55,14 @@ sutram/
 ├── sutram/                         # Core Sutram IoC Micro-Kernel runtime
 │   └── js/                         # Pure ES module frontend runtime kernel and utilities
 │       ├── app_shell.js            # Declarative web component app shell and tab layout router
-│       │   ├── function getSpatialMetrics(capacity, activeViewport, layout...) # [comment required]
-│       │   ├── function pinMatchesSlot(pin, slotOrId) # [comment required]
-│       │   └── class SutramAppShell # [comment required]
+│       │   ├── function getSpatialMetrics(capacity, activeViewport, layout...) # Computes proportional column widths, track offsets, and window bounds across 1-3 column capacities.
+│       │   ├── function pinMatchesSlot(pin, slotOrId) # Evaluates whether a pinned projection entry matches a layout slot definition or target identifier.
+│       │   └── class SutramAppShell # Top-level 3-column spatial viewport shell coordinating tab routing, user-clamped capacity, projection pooling, and windowed surfaces.
 │       ├── client.js               # Agnostic data provider client and HTTP transport provider interface
 │       │   ├── class SutramDataClient # sutram/js/client.js Phase 0: Sutram Micro-Kernel Data Provider Interface
-│       │   └── class HttpProvider  # [comment required]
+│       │   └── class HttpProvider  # Default fetch-backed HTTP transport provider for GET, POST, and DELETE requests.
 │       ├── drag-coordinator.js     # Spatial drag-and-drop overlay coordinator for interactive column reordering
-│       │   └── class SutramDragCoordinator # [comment required]
+│       │   └── class SutramDragCoordinator # Dual-mode spatial drag HUD coordinating tab docking, column reordering, window spanning, and popout ejection.
 │       ├── index.js                # Public Layer 2 barrel entrypoint exporting Sutram stores, offline engines, and UI primitives
 │       ├── inputs.js               # Standard form input elements (text, select, textarea, toggle, combobox, target binding, composer)
 │       │   ├── function bridgeInputEvents(BaseClass) # Event bridge wrapping chassis form inputs to emit sutram-input-changed
@@ -73,26 +74,29 @@ sutram/
 │       │   ├── class SutramTargetBinding # Compound endpoint and model selector pairing select and combobox
 │       │   └── class SutramComposer # Slash-command message composer with token chip extraction
 │       ├── offline.js              # Offline IndexedDB persistence manager, outbox reconciler, and network hysteresis manager
-│       │   ├── class SutramDB      # [comment required]
-│       │   ├── class OfflineHttpProvider # [comment required]
-│       │   ├── class NetworkHysteresisManager # [comment required]
-│       │   ├── class OutboxReconciler # [comment required]
-│       │   ├── function purgeSutramCaches() # [comment required]
-│       │   └── function bootSutramServiceWorker() # [comment required]
+│       │   ├── function emitOfflineTelemetry(message, type = 'info', category...) # Dispatches structured sutram:offline-telemetry events across the window bus.
+│       │   ├── class SutramDB      # IndexedDB storage engine for VFS blob caching, atomic cache overlays, prefix eviction, lazy LRU tracking, and DLQ management.
+│       │   ├── class OfflineHttpProvider # Network-first HTTP gateway with 502/503/504 gateway fallback, IoC cache predicates, and offline outbox queueing.
+│       │   ├── class NetworkHysteresisManager # Burst-verification connectivity probe preventing premature online transitions on flaky networks.
+│       │   ├── class OutboxReconciler # Two-stage sequential outbox drainer with Web Locks API coordination, telemetry emission, and 4xx poison-pill DLQ isolation.
+│       │   ├── function purgeSutramCaches() # Safely clears CacheStorage and Service Worker registrations while guarding offline sessions.
+│       │   ├── function ensureSutramAppShellCached() # Syncs the root App Shell HTML and discovered importmap/module URLs into CacheStorage.
+│       │   ├── class SutramCacheWarmer # Background low-priority cache warmer with deduplication and offline circuit-breaking.
+│       │   └── function bootSutramServiceWorker() # Registers the Service Worker, wires reconciliation state, and triggers App Shell vault warming.
 │       ├── poller.js               # Background job status polling factory with tier-0 API integration
 │       │   └── function createJobPoller(apiClient) # sutram/js/poller.js Standalone background job status polling routine
 │       ├── primitives.js           # Presentation primitives (buttons, modals, toast, selection, status)
-│       │   ├── function validateChassisContract(chassisProvider) # [comment required]
-│       │   ├── class SutramUIAdapter # [comment required]
-│       │   ├── class SutramVirtualList # [stale?] 0.
+│       │   ├── function validateChassisContract(chassisProvider) # Verifies that a mounted presentation chassis exports all 28 required UI primitive classes.
+│       │   ├── class SutramUIAdapter # Registers pass-through <sutram-*> custom element wrappers over the active chassis provider.
+│       │   ├── class SutramVirtualList # Virtualized scroll list wrapper around lit-virtualizer with double-virtualization de-escalation.
 │       │   ├── class SutramIcon    # 0.5 Semantic Icon & Layout Bricks
-│       │   ├── class SutramView    # [comment required]
-│       │   ├── class SutramStack   # [comment required]
-│       │   ├── class SutramSurface # [comment required]
-│       │   ├── class SutramActionBar # [comment required]
-│       │   ├── class SutramSidebarLayout # [comment required]
-│       │   ├── class SutramBtn     # 1.
-│       │   ├── class SutramProjectionWindowControls # [stale?] 1.25 Multi-Window Pop-Out / Dock-In Control Button
+│       │   ├── class SutramView    # Primary viewport container bridging zen-mode exit events to the Sutram event bus.
+│       │   ├── class SutramStack   # Flexbox and auto-fit CSS Grid layout stack primitive.
+│       │   ├── class SutramSurface # Semantic container surface supporting panel, inset, tinted, floating, and banner variants.
+│       │   ├── class SutramActionBar # Responsive horizontal action bar that auto-collapses button labels on overflow.
+│       │   ├── class SutramSidebarLayout # Responsive split-pane sidebar and stage layout with mobile drawer collapse.
+│       │   ├── class SutramBtn     # Synchronous action button primitive.
+│       │   ├── class SutramProjectionWindowControls # Multi-window pop-out and dock-in toolbar control with pre-action save hooks.
 │       │   ├── class SutramAsyncBtn # 1.5 Async Action Button
 │       │   ├── class SutramStatusBar # 2.
 │       │   ├── class SutramToastContainer # 3.
@@ -100,10 +104,10 @@ sutram/
 │       │   ├── class SutramCategorizedList # [stale?] 5.
 │       │   ├── class SutramFolderBrowser # [stale?] 6.
 │       │   ├── class SutramModal   # 7.
-│       │   ├── class SutramWindow  # [comment required]
-│       │   ├── class SutramFieldCard # [stale?] 8.
-│       │   ├── class SutramSettingsForm # [comment required]
-│       │   ├── class SutramGenericSettingsModal # [comment required]
+│       │   ├── class SutramWindow  # Grid-constrained floating window surface supporting column spanning, focus elevation, and tab docking.
+│       │   ├── class SutramFieldCard # Labeled form field card primitive with validation feedback and reset controls.
+│       │   ├── class SutramSettingsForm # Schema-driven settings form renderer supporting hierarchical scopes, repeaters, and action triggers.
+│       │   ├── class SutramGenericSettingsModal # Modal wrapper hosting SutramSettingsForm for extension and system configuration.
 │       │   ├── class SutramEntityActions # [stale?] 8.5.
 │       │   ├── class SutramCard    # [stale?] 9.
 │       │   ├── class SutramCardGroup # 10.
@@ -123,8 +127,8 @@ sutram/
 │       │   ├── class SutramCollapsible # [comment required]
 │       │   ├── class SutramCategorySection # [comment required]
 │       │   ├── class SutramPill    # 13.
-│       │   ├── class SutramFilterGroup # [comment required]
-│       │   ├── class SutramEditor  # [comment required]
+│       │   ├── class SutramFilterGroup # Pill filter group wrapper bridging yenvui-filter-changed to filter-changed.
+│       │   ├── class SutramEditor  # CodeMirror 6 editor wrapper bridging change, selection, scroll, and link-clicked events with word-count plugin support.
 │       │   ├── class SutramSelectorModal # [stale?] 15.
 │       │   ├── class SutramReportProjection # [stale?] 16.
 │       │   ├── class SutramDiffViewer # 17.
@@ -139,11 +143,11 @@ sutram/
 │       │   └── function initShortcutRouter(registry, getActiveContexts) # sutram/js/shortcuts.js Centralized hierarchical shortcut router
 │       ├── sutram-boot.js          # Stage 1 bootloader for importmap synthesis, SemVer parsing, and guardrails
 │       ├── sutram_sdk.js           # IoC Micro-Kernel, SutramElement base class, SutramContextMixin, and ExtensionRegistry
-│       │   ├── function createSutramStore() # [comment required]
-│       │   ├── function bindStoreInput() # [comment required]
-│       │   ├── function SutramContextMixin(SuperClass) # [comment required]
-│       │   ├── class SutramElement # [comment required]
-│       │   └── function canUseMultiWindowPopout() # [comment required]
+│       │   ├── function createSutramStore() # Multi-tenant Zustand store factory supporting functional initializers, debounced storage sync, and epoch-guarded fetches.
+│       │   ├── function bindStoreInput() # Declarative helper rendering a store-bound Sutram input control for a state path.
+│       │   ├── function SutramContextMixin(SuperClass) # Mixin equipping Web Components with automatic Zustand subscriptions, intervals, and global listener teardown.
+│       │   ├── class SutramElement # Base LitElement class with SutramContextMixin lifecycle management and render error boundaries.
+│       │   └── function canUseMultiWindowPopout() # Evaluates whether the current viewport and display mode support multi-window popouts.
 │       ├── sw-core.js              # Abstracted Service Worker core runtime for offline caching and navigation fallbacks
 │       ├── utils.js                # Pure algorithmic utility helpers (fuzzy filter, debounce, coalescedAsync, slugify, time formatting, nativeShareFiles)
 │       │   ├── function threeWayMergeText(baseText, localText, remoteText) # [comment required]
@@ -240,7 +244,7 @@ sutram/
         │   └── class YenvuiFilterDropdown # [comment required]
         ├── editor.js               # CodeMirror 6 code editor wrapper with descriptor-based language loading, StreamLanguage wrapping, and per-language caching
         │   ├── function loadLanguageExtension(lang, customResolver = null) # Resolves a CodeMirror language extension from core built-ins or a host descriptor ({url, kind, export, options}), falling back to plain text.
-        │   └── class YenvuiEditor  # [comment required]
+        │   └── class YenvuiEditor  # Encapsulated CodeMirror 6 editor with minimal diff updates, prose helpers, and interactive Markdown link widgets.
         ├── empty-state.js          # Centered empty state feedback container with icon and text slot
         │   └── class YenvuiEmptyState # [comment required]
         ├── filter-group.js         # Interactive pill array for multi-attribute filtering
