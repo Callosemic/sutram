@@ -17,6 +17,7 @@
 * [ADR-0026: Pluggable Chassis Provider Contract, SutramUIAdapter, Input Event Bridging, and Public Kernel Entrypoint](./adrs/0026_pluggable_chassis_contract_ui_adapter_and_kernel_entrypoint.md)
 * [ADR-0028: Compound Target Binding Controls, Dynamic Schema Option Sources, and Development Service Worker Cache Bypass](./adrs/0028_compound_target_binding_and_sw_dev_cache_bypass.md)
 * [ADR-0030: Zero-CSS Lego Layout Primitives, Semantic Token Parameterization, SutramComposer, and Floating HUD](./adrs/0030_zero_css_lego_layout_primitives_semantic_tokens_and_composer.md)
+* [ADR-0031: Offline App Shell Vault, Atomic Read-Your-Writes Cache Overlays, Functional Store Initializers, User Column Capacity, and Editor Markdown Link Widgets](./adrs/0031_offline_app_shell_vault_atomic_cache_overlays_and_markdown_link_widgets.md)
 ### yenVUI Presentation Chassis
 * [ADR-0005: Native Popover API Toast Container Elevation](./adrs/0005_yenvui_popover_toasts_gesture_selection.md)
 * [ADR-0006: Gesture Swipe Axis Locking](./adrs/0006_yenvui_gesture_swipe_axis_locking.md)

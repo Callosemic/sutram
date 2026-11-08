@@ -98,10 +98,10 @@ Any replacement library must export the following Custom Elements.
     *   *Properties:* `.label`, `.loadingLabel`, `.successLabel`, `.errorLabel`, `.intent`, `.variant`, `.size`, `?emphasis`, `?grow`, `?fullWidth`, `.status` (`idle`|`loading`|`success`|`error`), `?disabled`, `?active`, `.jobRoute`, `.jobPayload`, `.onJobComplete`, `.onJobProgress`, `.onJobError`.
     *   *Events:* `@yv-click`.
 *   **`<yenvui-editor>`**: CodeMirror 6 text editor.
-    *   *Properties:* `.value`, `?readOnly`, `.language`, `?writingMode`, `.customExtensions`, `.languageResolver` (Async Function: `lang => null | string | { url, kind: "lezer" | "stream" | "builtin", export, options? }`).
+    *   *Properties:* `.value`, `?readOnly`, `.language`, `?writingMode`, `?enableMarkdownLinks`, `.customExtensions`, `.languageResolver` (Async Function: `lang => null | string | { url, kind: "lezer" | "stream" | "builtin", export, options? }`).
     *   *Static Properties:* `YenvuiEditor.languageResolver` (Global fallback resolver callback returning a module URL string or a language descriptor object; unknown languages fall back to plain text `[]`).
     *   *Methods:* `insertAtCursor(text)`, `getCursor()`, `setCursor(pos)`, `getScrollInfo()`, `setScrollInfo(top)`, `transformContent(transformFn)`.
-    *   *Events:* `@yenvui-editor-changed`, `@yenvui-editor-selection`, `@yenvui-editor-scroll`.
+    *   *Events:* `@yenvui-editor-changed`, `@yenvui-editor-selection`, `@yenvui-editor-scroll`, `@yenvui-editor-link-clicked`.
 
 ### Utilities & Feedback
 *   **`<yenvui-toast-container>`**: Fixed notification stack.

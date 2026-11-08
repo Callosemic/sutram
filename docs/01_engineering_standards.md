@@ -83,15 +83,18 @@ Complex workspace switching and spatial column views MUST route through `SutramP
 * **Non-Destructive Projection Rekeying:** When identities change (e.g., file renames), projection nodes are re-mapped in place via `pool.rekey(oldId, newId)`, preserving active DOM state, scroll positions, and input buffers.
 * **Extension Eviction:** Explicit extension unloading must call `pool.evictExtension(extName)` to remove nodes and destroy associated DOM trees.
 
-### Debounced Store Persistence & Atomic Flush Barriers
-Stores declaring local or session synchronization via `createSutramStore` must throttle persistent I/O:
+### Debounced Store Persistence, Functional Initializers & Atomic Flush Barriers
+Stores declaring local or session synchronization via `createSutramStore` must throttle persistent I/O and avoid Temporal Dead Zone (TDZ) self-references:
+* **Functional Store Initializers & TDZ-Safe `urlParser`:** Stores referencing their own state or actions during initialization MUST pass a functional initializer `(set, get, store) => ({ ... })` to `createSutramStore`, and `schema.urlParser(hash, hydratedState)` MUST inspect its second `hydratedState` argument rather than referencing the outer store variable before assignment completes.
 * **Debounced Serialization:** State mutations triggering `localStorage` or `sessionStorage` updates MUST be debounced (250ms) to eliminate main-thread serialization stalls during high-frequency changes.
 * **Flush Barriers:** Scope transitions (`StoreRegistry.switchTenantScope`), extension unloading, and document unload (`pagehide`) MUST invoke `store.flushPersistence()` or `StoreRegistry.flushAll()` to guarantee all pending dirty keys commit synchronously before context teardown.
 
-### Non-Blocking Readonly IndexedDB Transactions & Lazy LRU Buffering
-Client-side offline storage (`SutramDB`) must eliminate readwrite transaction lock contention:
-* **Read-Only Inspection:** Entity reads (`getVFSBlob`) must execute within `readonly` transactions and must not trigger synchronous write locks to update access timestamps.
-* **Lazy LRU Buffering:** Access timestamps must be buffered in memory (`_lruBuffer`) and committed asynchronously to `manifest_cache` (`vfs_lru_index`) via `requestIdleCallback`. Cache pruning tasks must flush in-memory buffers prior to calculating eviction thresholds.
+### Non-Blocking Readonly IndexedDB Transactions, Atomic Cache Overlays & App Shell Vault
+Client-side offline storage (`SutramDB`), `OfflineHttpProvider`, and `sw-core.js` must guarantee read-your-own-writes consistency and reverse-proxy resilience:
+* **Read-Only Inspection & Tenant-Agnostic Fallback:** Entity reads (`getVFSBlob`) must execute within `readonly` transactions without synchronous write locks, falling back to `default::` keys when `SutramDB._isTenantAgnosticUrl(filepath)` is true.
+* **Atomic Outbox & VFS Cache Overlay:** When queueing offline mutations via `SutramDB.enqueueMutation`, callers supplying a `cacheOverlay` (`cacheBlobUrl`, `cacheBlobContent`, `deletedCacheUrls`) MUST update or tombstone `vfs_cache` within the same `readwrite` IndexedDB transaction as `sutram_outbox`.
+* **Gateway Fallback & App Shell Vault (`/__sutram_app_shell__`):** Both `OfflineHttpProvider` and `sw-core.js` treat HTTP `502`, `503`, and `504` responses as unreachable gateway states, falling back to cached blobs or the `/__sutram_app_shell__` vault entry after verifying daemon unreachability (`_verifyDaemonUnreachable`).
+* **Lazy LRU Buffering:** Access timestamps must be buffered in memory (`_lruBuffer`) and committed asynchronously to `manifest_cache` (`vfs_lru_index`) via `requestIdleCallback`. Cache pruning and prefix eviction (`evictByPrefix`) tasks must flush in-memory buffers prior to mutating cache state.
 
 ### Consolidated Theme Observer Pattern
 Components requiring dynamic theme adaptation MUST NOT instantiate individual `MutationObserver` instances on `document.body`. Components MUST extend `YenvuiBase` (which auto-subscribes via `subscribeToTheme`) or call `this.observeTheme()` in `SutramElement` to utilize the shared, Set-based theme subscriber registry.
