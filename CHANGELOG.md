@@ -2,6 +2,26 @@
 
 <!-- version list -->
 
+## v2.7.0 (2026-11-08)
+
+### Chores
+
+- Global workspace sweep
+  ([`444c87e`](https://github.com/Callosemic/sutram/commit/444c87e201dc10276f5862a7e01c66bb2b3282ea))
+
+### Features
+
+- **kernel**: Add offline app shell vault, atomic cache overlays, functional store initializers, and
+  user column capacity
+  ([`2833e80`](https://github.com/Callosemic/sutram/commit/2833e80c408389b4d83f35780bf782cac5896a88))
+
+- **yenvui**: Add interactive markdown link widgets and click events to editor
+  ([`acf8b4b`](https://github.com/Callosemic/sutram/commit/acf8b4b7cf98edd3ddedd512fc23a762a972362c))
+
+- **yenvui**: Add interactive markdown link widgets and click events to editor
+  ([`5f74a50`](https://github.com/Callosemic/sutram/commit/5f74a50174a7d5d04fcc0eb668be54e496f2ee26))
+
+
 ## v2.6.3 (2026-11-05)
 
 ### Bug Fixes
