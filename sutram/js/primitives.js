@@ -2104,6 +2104,9 @@ export class SutramEditor extends SutramContextMixin(YenvuiEditor) {
         this.addEventListener('yenvui-editor-scroll', e => {
             this.dispatchEvent(new CustomEvent('editor-scroll', { detail: e.detail, bubbles: true, composed: true }));
         });
+        this.addEventListener('yenvui-editor-link-clicked', e => {
+            this.dispatchEvent(new CustomEvent('editor-link-clicked', { detail: e.detail, bubbles: true, composed: true }));
+        });
     }
 }
 customElements.define('sutram-editor', SutramEditor);

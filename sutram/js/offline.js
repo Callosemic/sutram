@@ -1,10 +1,43 @@
 // sutram/js/offline.js
 // Phase 1: Sutram Offline Micro-Kernel
-const DB_NAME = 'sutram_offline_db';
-const DB_VERSION = 4;
+const DB_NAME = 'sutram_offline_db', DB_VERSION = 4;
+const _idbOnly = (val) => (typeof IDBKeyRange !== 'undefined' ? IDBKeyRange.only(val) : val);
+
+export function emitOfflineTelemetry(message, type = 'info', category = 'offline', details = null, scopeId = 'default') {
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('sutram:offline-telemetry', {
+            detail: {
+                timestamp: Date.now(),
+                type,
+                category,
+                message,
+                details,
+                scopeId
+            }
+        }));
+        if (typeof window.Sutram?.offlineLog === 'function') {
+            window.Sutram.offlineLog(message, type, details);
+        }
+    }
+}
+
 export class SutramDB {
     static _lruBuffer = new Map();
+
+    static subscribeTelemetry(listener) {
+        if (typeof window === 'undefined' || typeof listener !== 'function') return () => {};
+        const handler = (e) => listener(e.detail || {});
+        window.addEventListener('sutram:offline-telemetry', handler);
+        return () => window.removeEventListener('sutram:offline-telemetry', handler);
+    }
     static _lruFlushTimer = null;
+    static _tenantAgnosticUrlPredicate = (filepath) => !String(filepath || '').includes('://');
+
+    static configure(options = {}) {
+        if (typeof options.isTenantAgnosticUrl === 'function') {
+            this._tenantAgnosticUrlPredicate = options.isTenantAgnosticUrl;
+        }
+    }
 
     static _scheduleLRUFlush(delayMs = 5000) {
         if (this._lruFlushTimer) return;
@@ -109,28 +142,81 @@ export class SutramDB {
         });
     }
 
+    static async evictByPrefix(scopeId, substringOrPrefix) {
+        if (!substringOrPrefix) return 0;
+        await this._flushLRUQueue();
+        const db = await this.getDB();
+        const scopePrefix = `${scopeId}::`;
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(['vfs_cache', 'manifest_cache'], 'readwrite');
+            const store = tx.objectStore('vfs_cache');
+            const manifestStore = tx.objectStore('manifest_cache');
+            const idxReq = manifestStore.get('vfs_lru_index');
+            idxReq.onsuccess = () => {
+                const lruIndex = (idxReq.result && typeof idxReq.result === 'object') ? idxReq.result : {};
+                let evictedCount = 0;
+                const cursorReq = store.openKeyCursor();
+                cursorReq.onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if (cursor) {
+                        const k = String(cursor.key || '');
+                        if (k.startsWith(scopePrefix) && k.includes(substringOrPrefix)) {
+                            store.delete(cursor.key);
+                            delete lruIndex[k];
+                            this._lruBuffer.delete(k);
+                            evictedCount++;
+                        }
+                        cursor.continue();
+                    } else {
+                        manifestStore.put(lruIndex, 'vfs_lru_index');
+                        if (evictedCount > 0) {
+                            emitOfflineTelemetry(`Evicted ${evictedCount} cached blob(s) matching '${substringOrPrefix}'`, 'warning', 'cache', { evictedCount, prefix: substringOrPrefix }, scopeId);
+                        }
+                        resolve(evictedCount);
+                    }
+                };
+                cursorReq.onerror = () => reject(cursorReq.error);
+            };
+            idxReq.onerror = () => reject(idxReq.error);
+        });
+    }
+
+    static _isTenantAgnosticUrl(filepath) {
+        return Boolean(this._tenantAgnosticUrlPredicate(String(filepath || '')));
+    }
+
     static async getVFSBlob(scopeId, filepath) {
         const db = await this.getDB();
-        const key = this._normalizeCacheKey(scopeId, filepath);
+        const primaryKey = this._normalizeCacheKey(scopeId, filepath);
+        const fallbackKey = (scopeId !== 'default' && this._isTenantAgnosticUrl(filepath))
+            ? this._normalizeCacheKey('default', filepath)
+            : null;
         return new Promise((resolve) => {
             const tx = db.transaction('vfs_cache', 'readonly');
-            const req = tx.objectStore('vfs_cache').get(key);
-            req.onsuccess = () => {
-                const data = req.result;
-                if (!data) return resolve(null);
-
-                // Backwards compatibility for legacy pure blobs
+            const store = tx.objectStore('vfs_cache');
+            const extractBlob = (keyUsed, data) => {
+                if (!data) return null;
                 if (data instanceof Blob) {
-                    this._lruBuffer.set(key, Date.now());
+                    this._lruBuffer.set(keyUsed, Date.now());
                     this._scheduleLRUFlush();
-                    resolve(data);
-                } else if (data.blob) {
-                    this._lruBuffer.set(key, Date.now());
-                    this._scheduleLRUFlush();
-                    resolve(data.blob);
-                } else {
-                    resolve(null);
+                    return data;
                 }
+                if (data.blob) {
+                    this._lruBuffer.set(keyUsed, Date.now());
+                    this._scheduleLRUFlush();
+                    return data.blob;
+                }
+                return null;
+            };
+            const req = store.get(primaryKey);
+            req.onsuccess = () => {
+                const found = extractBlob(primaryKey, req.result);
+                if (found || !fallbackKey) {
+                    return resolve(found);
+                }
+                const fbReq = store.get(fallbackKey);
+                fbReq.onsuccess = () => resolve(extractBlob(fallbackKey, fbReq.result));
+                fbReq.onerror = () => resolve(null);
             };
             req.onerror = () => resolve(null);
         });
@@ -171,6 +257,9 @@ export class SutramDB {
                             freed += entry.size;
                         }
                         manifestStore.put(lruIndex, 'vfs_lru_index');
+                        if (freed > 0) {
+                            emitOfflineTelemetry(`Pruned ${Math.round(freed / 1024)} KB from LRU VFS cache`, 'warning', 'cache', { freedBytes: freed }, 'default');
+                        }
                         resolve(freed);
                     }
                 };
@@ -179,11 +268,16 @@ export class SutramDB {
             idxReq.onerror = () => reject(idxReq.error);
         });
     }
-    static async enqueueMutation(scopeId, path, method, headers, bodyString, collapseKey = null) {
+    static async enqueueMutation(scopeId, path, method, headers, bodyString, collapseKey = null, cacheOverlay = null) {
         const db = await this.getDB();
+        const now = Date.now();
+        const hasBlobOverlay = Boolean(cacheOverlay && typeof cacheOverlay === 'object' && cacheOverlay.cacheBlobUrl && cacheOverlay.cacheBlobContent !== undefined);
+        const hasDeleteOverlay = Boolean(cacheOverlay && typeof cacheOverlay === 'object' && Array.isArray(cacheOverlay.deletedCacheUrls) && cacheOverlay.deletedCacheUrls.length > 0);
+        const needsVfsStore = hasBlobOverlay || hasDeleteOverlay;
         return new Promise((resolve, reject) => {
-            const tx = db.transaction('sutram_outbox', 'readwrite');
+            const tx = db.transaction(needsVfsStore ? ['sutram_outbox', 'vfs_cache'] : 'sutram_outbox', 'readwrite');
             const store = tx.objectStore('sutram_outbox');
+            const vfsStore = needsVfsStore ? tx.objectStore('vfs_cache') : null;
             const record = {
                 scope_id: scopeId,
                 path,
@@ -191,12 +285,34 @@ export class SutramDB {
                 headers,
                 bodyString,
                 collapseKey,
-                timestamp: Date.now()
+                timestamp: now
             };
+
+            // Atomic Read-Your-Writes Overlay: update or tombstone vfs_cache in the same transaction
+            if (needsVfsStore && vfsStore) {
+                if (hasBlobOverlay) {
+                    const cacheKey = this._normalizeCacheKey(scopeId, cacheOverlay.cacheBlobUrl);
+                    const blob = cacheOverlay.cacheBlobContent instanceof Blob
+                        ? cacheOverlay.cacheBlobContent
+                        : new Blob([String(cacheOverlay.cacheBlobContent)], { type: 'text/plain;charset=utf-8' });
+                    vfsStore.put({ blob, ts: now }, cacheKey);
+                    this._lruBuffer.set(cacheKey, now);
+                    this._scheduleLRUFlush();
+                }
+                if (hasDeleteOverlay) {
+                    cacheOverlay.deletedCacheUrls.forEach((delUrl) => {
+                        if (!delUrl) return;
+                        const delKey = this._normalizeCacheKey(scopeId, delUrl);
+                        vfsStore.delete(delKey);
+                        this._lruBuffer.set(delKey, null);
+                    });
+                    this._scheduleLRUFlush();
+                }
+            }
 
             if (collapseKey) {
                 const index = store.index('by_scope');
-                const req = index.openCursor(IDBKeyRange.only(scopeId));
+                const req = index.openCursor(_idbOnly(scopeId));
                 let updated = false;
                 req.onsuccess = (e) => {
                     const cursor = e.target.result;
@@ -225,7 +341,10 @@ export class SutramDB {
                 store.add(record);
             }
 
-            tx.oncomplete = () => resolve();
+            tx.oncomplete = () => {
+                emitOfflineTelemetry(`Queued offline mutation: [${method}] ${path}`, 'warning', 'outbox', { collapseKey, hasBlobOverlay, hasDeleteOverlay }, scopeId);
+                resolve();
+            };
             tx.onerror = () => reject(tx.error);
         });
     }
@@ -234,7 +353,7 @@ export class SutramDB {
         return new Promise((resolve) => {
             const tx = db.transaction('sutram_outbox', 'readonly');
             const index = tx.objectStore('sutram_outbox').index('by_scope');
-            const req = index.count(IDBKeyRange.only(scopeId));
+            const req = index.count(_idbOnly(scopeId));
             req.onsuccess = () => resolve(req.result || 0);
             req.onerror = () => resolve(0);
         });
@@ -250,9 +369,17 @@ export class SutramDB {
                     const scopePrefix = `${scopeId}::`;
                     const defaultPrefix = 'default::';
                     const matches = keys
-                        .filter(k => typeof k === 'string' && (k.startsWith(scopePrefix) || k.startsWith(defaultPrefix)))
+                        .filter(k => {
+                            if (typeof k !== 'string') return false;
+                            if (k.startsWith(scopePrefix)) return true;
+                            if (scopeId !== 'default' && k.startsWith(defaultPrefix)) {
+                                const rawUrl = k.slice(defaultPrefix.length);
+                                return this._isTenantAgnosticUrl(rawUrl);
+                            }
+                            return false;
+                        })
                         .map(k => k.replace(/^(?:[^:]+)::/, ''));
-                    resolve(matches);
+                    resolve(Array.from(new Set(matches)));
                 };
                 req.onerror = () => resolve([]);
             } catch (e) {
@@ -268,7 +395,7 @@ export class SutramDB {
             return new Promise((resolve) => {
                 const tx = db.transaction('sutram_outbox', 'readonly');
                 const index = tx.objectStore('sutram_outbox').index('by_scope');
-                const req = index.getAll(IDBKeyRange.only(scopeId));
+                const req = index.getAll(_idbOnly(scopeId));
                 req.onsuccess = () => resolve(req.result || []);
                 req.onerror = () => resolve([]);
             });
@@ -329,7 +456,7 @@ export class SutramDB {
 
             if (item.collapseKey) {
                 const index = tx.objectStore('sutram_outbox').index('by_scope');
-                const req = index.openCursor(IDBKeyRange.only(item.scope_id));
+                const req = index.openCursor(_idbOnly(item.scope_id));
                 let updated = false;
 
                 req.onsuccess = (e) => {
@@ -360,34 +487,84 @@ export class SutramDB {
 export class OfflineHttpProvider {
     constructor(options = {}) {
         this.isOfflineCapable = options.isOfflineCapable || (() => true);
+        this.shouldCacheGet = options.shouldCacheGet || (() => true);
+        this.probeUrl = options.probeUrl || '/';
+        this.probeMethod = options.probeMethod || 'HEAD';
         this.onEnqueue = options.onEnqueue || (() => {});
         this.onError = options.onOfflineError || (() => {});
         this.onCacheWrite = options.onCacheWrite || (() => {});
         this.checkOfflineState = options.checkOfflineState || (() => false);
-        this.setOfflineState = options.setOfflineState || (() => {});
+        const rawSetOffline = options.setOfflineState || (() => {});
+        this.setOfflineState = (val) => {
+            const boolVal = Boolean(val);
+            const prev = Boolean(this.checkOfflineState());
+            rawSetOffline(boolVal);
+            if (prev !== boolVal && typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('sutram:offline-state-changed', {
+                    detail: { isOffline: boolVal, timestamp: Date.now() }
+                }));
+                emitOfflineTelemetry(
+                    boolVal ? 'Transitioned to Offline Mode' : 'Restored Online Mode',
+                    boolVal ? 'warning' : 'success',
+                    'network',
+                    { isOffline: boolVal }
+                );
+            }
+        };
     }
+
+    async _verifyDaemonUnreachable() {
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+        try {
+            const sep = this.probeUrl.includes('?') ? '&' : '?';
+            const probeOpts = {
+                method: this.probeMethod,
+                cache: 'no-store',
+                signal: AbortSignal.timeout(1500)
+            };
+            if (this.probeMethod === 'POST') {
+                probeOpts.headers = { 'Content-Type': 'application/json' };
+                probeOpts.body = '{}';
+            }
+            const probe = await fetch(`${this.probeUrl}${sep}t=${Date.now()}`, probeOpts);
+            return !probe || [502, 503, 504].includes(probe.status);
+        } catch (_) {
+            return true;
+        }
+    }
+
     async get(url, options = {}, scopeId = 'default') {
         const cacheKeyUrl = url.replace(/([?&])t=\d+&?/, '$1').replace(/[?&]$/, '');
+        const browserOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
 
-        if (this.checkOfflineState() || options.onlyIfMissing) {
+        // 1. Background cache warming (onlyIfMissing) or hard browser offline state: check SutramDB first.
+        // For interactive reads when navigator.onLine is true, ALWAYS try the network first so fresh files pull through!
+        if (options.onlyIfMissing || (this.checkOfflineState() && browserOffline)) {
             const cachedBlob = await SutramDB.getVFSBlob(scopeId, cacheKeyUrl);
             if (cachedBlob) return new Response(cachedBlob, { status: 200 });
-            if (options.onlyIfMissing && this.checkOfflineState()) {
+            if (options.onlyIfMissing && (this.checkOfflineState() || browserOffline)) {
                 throw new TypeError("Failed to fetch (offline)");
             }
         }
 
         // Circuit Breaker: Abort background warming if cache is heavily loaded
         if (options.onlyIfMissing) {
-            const offlineState = window.Sutram?.stores?.Offline?.getState() || {};
-            const limitBytes = 250 * 1024 * 1024; // Align with core schema setting
+            const offlineStore = window.Sutram?.storeRegistry?.get?.('Offline') || window.Sutram?.stores?.Offline;
+            const offlineState = offlineStore?.getState?.() || {};
+            const limitBytes = this.maxCacheBytes || (250 * 1024 * 1024);
             if (offlineState.storageUsage > limitBytes * 0.8) {
                 return new Response(null, { status: 204, statusText: 'Cache Full Circuit Breaker' });
             }
         }
         try {
-            const res = await fetch(url, options);
-            if (!this.checkOfflineState() && res.ok && !cacheKeyUrl.includes('/deltas') && !cacheKeyUrl.includes('/jobs/')) {
+            const fetchOptions = { cache: 'no-store', ...options };
+            const res = await fetch(url, fetchOptions);
+
+            if ([502, 503, 504].includes(res.status)) {
+                throw new TypeError(`Gateway unreachable (HTTP ${res.status})`);
+            }
+
+            if (res.ok && this.shouldCacheGet(cacheKeyUrl, scopeId)) {
                 try {
                     const clone = res.clone();
                     const blob = await clone.blob();
@@ -399,43 +576,37 @@ export class OfflineHttpProvider {
         } catch (err) {
             if (err.name === 'AbortError' || err.name === 'TimeoutError') throw err;
             if (!options.onlyIfMissing) {
-                if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                const unreachable = await this._verifyDaemonUnreachable();
+                if (unreachable) {
                     this.setOfflineState(true);
-                } else {
-                    try {
-                        const probe = await fetch('/?t=' + Date.now(), { method: 'HEAD', cache: 'no-store', signal: AbortSignal.timeout(1500) });
-                        if (!probe.ok) this.setOfflineState(true);
-                    } catch (_) {
-                        this.setOfflineState(true);
-                    }
                 }
             }
             const cachedBlob = await SutramDB.getVFSBlob(scopeId, cacheKeyUrl);
-            if (cachedBlob) return new Response(cachedBlob, { status: 200 });
+            if (cachedBlob) {
+                emitOfflineTelemetry(`Served cached offline blob: ${cacheKeyUrl}`, 'info', 'cache', null, scopeId);
+                return new Response(cachedBlob, { status: 200 });
+            }
             throw err;
         }
     }
+
     async executeMutation(url, method, bodyString, options = {}, scopeId = 'default') {
-        if (this.checkOfflineState()) {
+        if (this.checkOfflineState() && (typeof navigator !== 'undefined' && navigator.onLine === false)) {
             return this._handleOfflineQueue(url, method, bodyString, options, scopeId, false);
         }
 
         try {
-            return await fetch(url, options);
+            const res = await fetch(url, options);
+            if ([502, 503, 504].includes(res.status)) {
+                throw new TypeError(`Gateway unreachable (HTTP ${res.status})`);
+            }
+            return res;
         } catch (err) {
             const isAbort = err.name === 'AbortError' || err.name === 'TimeoutError';
             if (isAbort) {
                 throw err;
             }
-            let serverUnreachable = (typeof navigator !== 'undefined' && navigator.onLine === false);
-            if (!serverUnreachable) {
-                try {
-                    const probe = await fetch('/?t=' + Date.now(), { method: 'HEAD', cache: 'no-store', signal: AbortSignal.timeout(1500) });
-                    if (!probe.ok) serverUnreachable = true;
-                } catch (_) {
-                    serverUnreachable = true;
-                }
-            }
+            const serverUnreachable = await this._verifyDaemonUnreachable();
             if (!serverUnreachable) {
                 throw err;
             }
@@ -445,7 +616,7 @@ export class OfflineHttpProvider {
     }
 
     async _handleOfflineQueue(url, method, bodyString, options, scopeId, isAbort = false) {
-        if (!this.isOfflineCapable(url) || (isAbort && url.includes('/search'))) {
+        if (!this.isOfflineCapable(url, method, options)) {
             if (isAbort) throw new DOMException("Aborted", "AbortError");
             this.onError("Feature disabled or read-only while offline.", url);
             return new Response(JSON.stringify({ error: "Feature disabled while offline." }), { status: 503, statusText: "Service Unavailable" });
@@ -459,7 +630,12 @@ export class OfflineHttpProvider {
         try {
             const collapseKey = options.collapseKey || null;
             const headers = options.plainHeaders || {};
-            await SutramDB.enqueueMutation(scopeId, url, method, headers, bodyString, collapseKey);
+            const cacheOverlay = {
+                cacheBlobUrl: options.cacheBlobUrl || null,
+                cacheBlobContent: options.cacheBlobContent,
+                deletedCacheUrls: options.deletedCacheUrls || []
+            };
+            await SutramDB.enqueueMutation(scopeId, url, method, headers, bodyString, collapseKey, cacheOverlay);
             const count = await SutramDB.getOutboxCount(scopeId);
 
             this.onEnqueue(count, bodyString, headers, url, method, scopeId, options);
@@ -537,7 +713,7 @@ export class OutboxReconciler {
             try {
                 const tx = db.transaction('sutram_outbox', 'readonly');
                 const index = tx.objectStore('sutram_outbox').index('by_scope');
-                const req = index.openCursor(IDBKeyRange.only(scopeId));
+                const req = index.openCursor(_idbOnly(scopeId));
                 const results = [];
                 req.onsuccess = (e) => {
                     const cursor = e.target.result;
@@ -557,7 +733,9 @@ export class OutboxReconciler {
         if (!pendingItems || pendingItems.length === 0) return;
         // Stage 2: Sequentially process network mutations and shift IDB keys
         for (const { key, data } of pendingItems) {
-            const logger = window.Sutram?.offlineLog || (() => {});
+            const logger = (msg, type = 'info', details = null) => {
+                emitOfflineTelemetry(msg, type, 'reconciler', details, data.scope_id || scopeId);
+            };
             try {
                 const fetchOptions = {
                     method: data.method,
@@ -608,7 +786,11 @@ export class OutboxReconciler {
     }
 }
 
-export async function purgeSutramCaches() {
+export async function purgeSutramCaches({ forceWhenOffline = false } = {}) {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false && !forceWhenOffline) {
+        console.warn('[Sutram Offline] Refusing to purge Service Worker & CacheStorage while offline.');
+        return false;
+    }
     if ('caches' in window) {
         try {
             const keys = await caches.keys();
@@ -621,13 +803,146 @@ export async function purgeSutramCaches() {
             for (const reg of regs) await reg.unregister();
         } catch (e) {}
     }
+    return true;
+}
+
+export async function ensureSutramAppShellCached(options = {}) {
+    if (typeof window === 'undefined' || !('caches' in window)) return;
+    const {
+        cacheVersion = 'v8',
+        staticPathPrefix = '/static/',
+        excludePathPrefix = null,
+        additionalAssets = [],
+        onLog = null
+    } = options;
+
+    try {
+        const allCacheKeys = await caches.keys();
+        const matchingCaches = allCacheKeys.filter(k => k.startsWith('sutram-offline-'));
+        const activeCacheName = matchingCaches[matchingCaches.length - 1] || `sutram-offline-${cacheVersion}`;
+        const cache = await caches.open(activeCacheName);
+
+        // 1. Guarantee root '/' and '/__sutram_app_shell__' are fresh from server when online (never serialize mutated live DOM)
+        if (navigator.onLine !== false) {
+            try {
+                const rootRes = await fetch('/', { cache: 'no-cache', credentials: 'same-origin' });
+                if (rootRes && rootRes.status === 200) {
+                    await cache.put('/', rootRes.clone());
+                    await cache.put('/__sutram_app_shell__', rootRes.clone());
+                }
+            } catch (_) {}
+        } else {
+            return;
+        }
+
+        // 2. Collect all critical boot & module assets (importmap, link tags, performance resources, and host declarations)
+        const candidateUrls = new Set();
+        const resolvedAdditional = typeof additionalAssets === 'function' ? additionalAssets() : additionalAssets;
+        (resolvedAdditional || []).forEach(u => { if (u) candidateUrls.add(u); });
+
+        if (typeof document !== 'undefined') {
+            document.querySelectorAll('script[type="importmap"]').forEach(el => {
+                try {
+                    const parsed = JSON.parse(el.textContent || '{}');
+                    Object.values(parsed.imports || {}).forEach(u => {
+                        if (typeof u === 'string') candidateUrls.add(u);
+                    });
+                } catch (_) {}
+            });
+            document.querySelectorAll('link[rel="stylesheet"], link[rel="modulepreload"], script[src]').forEach(el => {
+                const raw = el.getAttribute('href') || el.getAttribute('src');
+                if (raw) candidateUrls.add(raw);
+            });
+        }
+
+        if (typeof window.performance?.getEntriesByType === 'function') {
+            window.performance.getEntriesByType('resource').forEach(r => {
+                if (r.name && r.name.includes(staticPathPrefix) && (!excludePathPrefix || !r.name.includes(excludePathPrefix))) {
+                    candidateUrls.add(r.name);
+                }
+            });
+        }
+
+        const sameOriginPaths = [];
+        candidateUrls.forEach(rawUrl => {
+            try {
+                const u = new URL(rawUrl, window.location.origin);
+                if (u.origin === window.location.origin && (!excludePathPrefix || !u.pathname.startsWith(excludePathPrefix))) {
+                    sameOriginPaths.push(u.pathname);
+                }
+            } catch (_) {}
+        });
+
+        let syncedCount = 0;
+        await Promise.allSettled(
+            sameOriginPaths.map(async (pathname) => {
+                // Always revalidate with cache: 'no-cache' when online so updated JS/CSS files overwrite stale SW entries
+                const res = await fetch(pathname, { cache: 'no-cache', priority: 'low', credentials: 'same-origin' });
+                if (res && res.status === 200) {
+                    await cache.put(pathname, res.clone());
+                    syncedCount++;
+                }
+            })
+        );
+
+        if (syncedCount > 0 && onLog) {
+            onLog(`App Shell Vault: Synced ${syncedCount} fresh boot module asset(s).`, 'success');
+        }
+    } catch (_) {}
+}
+
+export class SutramCacheWarmer {
+    static _queue = [];
+    static _isDraining = false;
+
+    static enqueue(scopeId, urls = [], fetcher = null) {
+        if (!Array.isArray(urls) || urls.length === 0) return;
+        const existingKeys = new Set(this._queue.map(item => `${item.scopeId}::${item.url}`));
+        urls.forEach((url) => {
+            if (url && !existingKeys.has(`${scopeId}::${url}`)) {
+                this._queue.push({ scopeId, url, fetcher });
+                existingKeys.add(`${scopeId}::${url}`);
+            }
+        });
+        this.drain();
+    }
+
+    static clear() {
+        this._queue = [];
+    }
+
+    static async drain(delayMs = 150) {
+        if (this._isDraining) return;
+        this._isDraining = true;
+        try {
+            while (this._queue.length > 0) {
+                if (typeof navigator !== 'undefined' && navigator.onLine === false) break;
+                if (window.Sutram?.stores?.Environment?.getState?.()?.isOffline) break;
+                const next = this._queue.shift();
+                if (!next) continue;
+                try {
+                    if (typeof next.fetcher === 'function') {
+                        await next.fetcher(next.url, next.scopeId);
+                    } else {
+                        await fetch(next.url, { priority: 'low', credentials: 'same-origin' });
+                    }
+                } catch (_) {}
+                if (delayMs > 0 && this._queue.length > 0) {
+                    await new Promise(r => setTimeout(r, delayMs));
+                }
+            }
+        } finally {
+            this._isDraining = false;
+        }
+    }
 }
 
 export function bootSutramServiceWorker(options = {}) {
     const {
         swUrl = '/sw.js',
         staticPathPrefix = '/static/',
-        excludePathPrefix = '/api/',
+        excludePathPrefix = null,
+        additionalAssets = [],
         isReconciling = () => false,
         subscribeReconciling = null,
         onStatus = null,
@@ -643,42 +958,21 @@ export function bootSutramServiceWorker(options = {}) {
     }
 
     const hadControllerOnBoot = Boolean(navigator.serviceWorker.controller);
-    let isFirstInstall = !hadControllerOnBoot;
-    let reloadScheduled = false;
 
-    const warmDynamicBootAssets = () => {
-        try {
-            const resources = window.performance.getEntriesByType('resource');
-            const urlsToCache = resources
-                .filter(r => r.name.includes(staticPathPrefix) && (!excludePathPrefix || !r.name.includes(excludePathPrefix)))
-                .map(r => r.name);
-
-            urlsToCache.forEach(url => fetch(url, { priority: 'low' }).catch(() => {}));
-            if (onLog) {
-                onLog(`First install: Warmed SW cache with ${urlsToCache.length} dynamic boot assets.`, 'success');
-            }
-        } catch (e) {}
+    const syncShellVault = () => {
+        ensureSutramAppShellCached({
+            staticPathPrefix,
+            excludePathPrefix,
+            additionalAssets,
+            onLog
+        }).catch(() => {});
     };
-
-    const scheduleFirstInstallReload = () => {
-        if (reloadScheduled) return;
-        reloadScheduled = true;
-        warmDynamicBootAssets();
-        console.log('SW installed for the first time. Hydrating dynamic module cache...');
-        setTimeout(() => window.location.reload(), 500);
-    };
-
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (isFirstInstall) {
-            isFirstInstall = false;
-            scheduleFirstInstallReload();
-        }
-    });
 
     const trackInstallingWorker = (worker) => {
         if (!worker) return;
         worker.addEventListener('statechange', () => {
             if (worker.state === 'installed') {
+                syncShellVault();
                 if (hadControllerOnBoot) {
                     if (isReconciling()) {
                         console.log('New update deferred until outbox drains...');
@@ -691,20 +985,19 @@ export function bootSutramServiceWorker(options = {}) {
                         worker.postMessage({ type: 'SKIP_WAITING' });
                         window.location.reload();
                     }
-                } else {
-                    scheduleFirstInstallReload();
                 }
+            } else if (worker.state === 'activated') {
+                syncShellVault();
             }
         });
     };
 
     navigator.serviceWorker.register(swUrl).then(reg => {
         if (onStatus) onStatus("Service Worker Active", 3000);
+        syncShellVault();
 
         if (reg.installing) {
             trackInstallingWorker(reg.installing);
-        } else if (!hadControllerOnBoot && (reg.waiting || reg.active)) {
-            scheduleFirstInstallReload();
         }
 
         reg.addEventListener('updatefound', () => {
@@ -722,3 +1015,4 @@ export function bootSutramServiceWorker(options = {}) {
         if (onError) onError("SW Registration Failed: " + err.message);
     });
 }
+

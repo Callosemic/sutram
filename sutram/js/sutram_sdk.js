@@ -135,18 +135,24 @@ export const StoreRegistry = {
         localStorage.removeItem(`${prefix}_${ws}_${key}`);
     }
 };
-export function createSutramStore(name, initialState, persistenceSchema = {}, getScopeId = null, prefix = 'sutram') {
+export function createSutramStore(name, initialStateOrFn, persistenceSchema = {}, getScopeId = null, prefix = 'sutram') {
     const resolveScope = typeof getScopeId === 'function' ? getScopeId : () => StoreRegistry.getActiveScope();
-    const isLegacyArray = Array.isArray(persistenceSchema);
-    const schema = isLegacyArray ? { localSync: persistenceSchema } : (persistenceSchema || {});
-    const localKeys = (schema.localSync || []).filter(k => Object.prototype.hasOwnProperty.call(initialState, k));
-    const sessionKeys = (schema.sessionSync || []).filter(k => Object.prototype.hasOwnProperty.call(initialState, k));
-    const preserveKeys = (schema.preserveOnSwitch || []).filter(k => Object.prototype.hasOwnProperty.call(initialState, k));
-    const storeScope = schema.scope || 'tenant';
-    const customResetFn = typeof initialState.resetState === 'function' ? initialState.resetState : null;
-
     let storeRef = null;
-    const processedState = { ...initialState };
+    const rawInitialState = typeof initialStateOrFn === 'function'
+        ? initialStateOrFn(
+            (...args) => storeRef?.setState(...args),
+            () => storeRef?.getState(),
+            () => storeRef
+        )
+        : (initialStateOrFn || {});
+    const schema = persistenceSchema || {};
+    const localKeys = (schema.localSync || []).filter(k => Object.prototype.hasOwnProperty.call(rawInitialState, k));
+    const sessionKeys = (schema.sessionSync || []).filter(k => Object.prototype.hasOwnProperty.call(rawInitialState, k));
+    const preserveKeys = (schema.preserveOnSwitch || []).filter(k => Object.prototype.hasOwnProperty.call(rawInitialState, k));
+    const storeScope = schema.scope || 'tenant';
+    const customResetFn = typeof rawInitialState.resetState === 'function' ? rawInitialState.resetState : null;
+
+    const processedState = { ...rawInitialState };
     Object.keys(processedState).forEach(key => {
         if (key.startsWith('fetch') && typeof processedState[key] === 'function' && !processedState[key]._isEpochGuarded) {
             const origFn = processedState[key];
@@ -217,16 +223,16 @@ export function createSutramStore(name, initialState, persistenceSchema = {}, ge
         const hydrated = {};
         const allSyncedKeys = new Set([...localKeys, ...sessionKeys]);
         allSyncedKeys.forEach(k => {
-            hydrated[k] = _cloneInitialValue(initialState[k]);
+            hydrated[k] = _cloneInitialValue(rawInitialState[k]);
         });
 
         localKeys.forEach(k => {
-            const storageKey = isLegacyArray ? `${prefix}_${name.toLowerCase()}_${k}_${scope}` : `${prefix}_local_${scope}_${name}_${k}`;
+            const storageKey = `${prefix}_local_${scope}_${name}_${k}`;
             const val = localStorage.getItem(storageKey);
             if (val !== null) {
                 try {
                     const parsed = JSON.parse(val);
-                    hydrated[k] = initialState[k] instanceof Set ? new Set(parsed) : parsed;
+                    hydrated[k] = rawInitialState[k] instanceof Set ? new Set(parsed) : parsed;
                 } catch (e) {}
             }
         });
@@ -238,14 +244,14 @@ export function createSutramStore(name, initialState, persistenceSchema = {}, ge
                     const parsed = JSON.parse(val);
                     const isSharedWithLocal = localKeys.includes(k);
                     if (!isSharedWithLocal || !_isEmptyPersistedValue(k, parsed) || _isEmptyPersistedValue(k, hydrated[k])) {
-                        hydrated[k] = initialState[k] instanceof Set ? new Set(parsed) : parsed;
+                        hydrated[k] = rawInitialState[k] instanceof Set ? new Set(parsed) : parsed;
                     }
                 } catch (e) {}
             }
         });
 
         if (typeof schema.urlParser === 'function' && typeof window !== 'undefined') {
-            const urlState = schema.urlParser(window.location.hash);
+            const urlState = schema.urlParser(window.location.hash, hydrated);
             if (urlState && typeof urlState === 'object') {
                 Object.assign(hydrated, urlState);
             }
@@ -289,7 +295,7 @@ export function createSutramStore(name, initialState, persistenceSchema = {}, ge
                     preservedPatch[k] = currentSt[k];
                 }
             });
-            if (Object.prototype.hasOwnProperty.call(initialState, 'activeWorkspace')) {
+            if (Object.prototype.hasOwnProperty.call(rawInitialState, 'activeWorkspace')) {
                 preservedPatch.activeWorkspace = targetScope;
             }
             store._boundScope = targetScope;
@@ -321,7 +327,7 @@ export function createSutramStore(name, initialState, persistenceSchema = {}, ge
 
             dirtyLocalKeys.forEach(k => {
                 const valToSave = state[k] instanceof Set ? Array.from(state[k]) : state[k];
-                const storageKey = isLegacyArray ? `${prefix}_${name.toLowerCase()}_${k}_${scope}` : `${prefix}_local_${scope}_${name}_${k}`;
+                const storageKey = `${prefix}_local_${scope}_${name}_${k}`;
                 localStorage.setItem(storageKey, JSON.stringify(valToSave));
             });
             dirtyLocalKeys.clear();
@@ -1314,7 +1320,8 @@ export const LayoutStore = createSutramStore('Layout', {
     focusHistory: [], // Global MRU stack of { col, id }
     focusedColumn: 'center',
     mobileViewportIndex: 1, // 0 = left, 1 = center, 2 = right
-    capacity: 3, // 1, 2, or 3 columns
+    capacity: 3, // 1, 2, or 3 columns (viewport-clamped effective capacity)
+    userCapacity: 3, // User-selected desired column capacity (1, 2, or 3)
     layoutRatios: null, // e.g., [1, 2, 1]
     windows: [],
     activePopoutWindows: new Map(),
@@ -1508,6 +1515,17 @@ export const LayoutStore = createSutramStore('Layout', {
     },
     setCapacity: (cap) => {
         LayoutStore.setState({ capacity: cap });
+        LayoutStore.getState().enforceWindowBounds();
+    },
+    setUserCapacity: (cap) => {
+        const cleanCap = Math.min(3, Math.max(1, Number(cap) || 3));
+        const maxViewportCap = (typeof window !== 'undefined' && window.innerWidth)
+            ? Math.min(3, Math.max(1, Math.floor(window.innerWidth / 360)))
+            : 3;
+        LayoutStore.setState({
+            userCapacity: cleanCap,
+            capacity: Math.min(cleanCap, maxViewportCap)
+        });
         LayoutStore.getState().enforceWindowBounds();
     },
     rekeyProjection: (oldId, newId, newLabel = null, options = {}) => {
@@ -1829,8 +1847,16 @@ export const LayoutStore = createSutramStore('Layout', {
         }
     }
 }, {
-    sessionSync: ['columns', 'focusHistory', 'capacity', 'mobileViewportIndex', 'windows', 'layoutRatios'],
-    localSync: ['columns', 'focusHistory', 'layoutRatios']
+    sessionSync: ['columns', 'focusHistory', 'capacity', 'userCapacity', 'mobileViewportIndex', 'windows', 'layoutRatios'],
+    localSync: ['columns', 'focusHistory', 'capacity', 'userCapacity', 'mobileViewportIndex', 'layoutRatios'],
+    urlParser: (_hash, hydratedState) => {
+        if (typeof window === 'undefined' || !window.innerWidth) return null;
+        const maxCap = Math.min(3, Math.max(1, Math.floor(window.innerWidth / 360)));
+        const st = hydratedState || window.Sutram?.stores?.Layout?.getState?.();
+        const desiredCap = st?.userCapacity || st?.capacity || 3;
+        const clampedCap = Math.min(desiredCap, maxCap);
+        return (st?.capacity || 3) !== clampedCap ? { capacity: clampedCap } : null;
+    }
 });
 
 if (typeof window !== 'undefined' && _layoutBus) {

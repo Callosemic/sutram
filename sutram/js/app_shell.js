@@ -565,9 +565,11 @@ export class SutramAppShell extends SutramElement {
                 const storeState = LayoutStore.getState();
                 if (storeState) {
                     const currentCap = storeState.capacity || 3;
+                    const desiredCap = storeState.userCapacity || 3;
+                    const targetCap = Math.min(desiredCap, maxCapacity);
                     const colMap = { 'left': 0, 'center': 1, 'right': 2 };
-                    if (currentCap !== maxCapacity && typeof storeState.setCapacity === 'function') {
-                        storeState.setCapacity(maxCapacity);
+                    if (currentCap !== targetCap && typeof storeState.setCapacity === 'function') {
+                        storeState.setCapacity(targetCap);
                     }
                     if ((maxCapacity === 1 || storeState.capacity === 1) && storeState.focusedColumn) {
                         const expectedIdx = colMap[storeState.focusedColumn] ?? 1;
@@ -603,6 +605,9 @@ export class SutramAppShell extends SutramElement {
             };
             this._handleResize = debounce(syncViewportCapacity, 100);
             window.addEventListener('resize', this._handleResize);
+            this.registerGlobalListener('sutram:scope-transition-end', window, () => {
+                syncViewportCapacity();
+            });
             syncViewportCapacity();
         }
         // Break synchronous infinite loops by debouncing the layout compilation listener
