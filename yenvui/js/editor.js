@@ -115,6 +115,7 @@ export class YenvuiEditor extends LitElement {
         readOnly: { type: Boolean },
         language: { type: String },
         writingMode: { type: Boolean },
+        enableMarkdownLinks: { type: Boolean },
         customExtensions: { type: Array }, // Accepts an array of CodeMirror extensions from the host
         languageResolver: { attribute: false }
     };
@@ -162,6 +163,30 @@ export class YenvuiEditor extends LitElement {
         .cm-content, .cm-line {
             font-variant-ligatures: none !important;
             font-feature-settings: "liga" 0, "calt" 0 !important;
+        }
+        .cm-md-link-widget {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 3px;
+            padding: 0 5px;
+            height: 1.15em;
+            border-radius: 4px;
+            background: color-mix(in srgb, var(--intent-highlight, #06b6d4) 18%, var(--input-bg, #0b0d14));
+            border: 1px solid color-mix(in srgb, var(--intent-highlight, #06b6d4) 45%, var(--border, #334155));
+            color: var(--intent-highlight, #06b6d4);
+            font-family: var(--font-mono, monospace);
+            font-size: 0.75em;
+            font-weight: 700;
+            line-height: 1;
+            cursor: pointer;
+            user-select: none;
+            vertical-align: baseline;
+            transition: background 0.15s ease, transform 0.1s ease;
+        }
+        .cm-md-link-widget:hover {
+            background: color-mix(in srgb, var(--intent-highlight, #06b6d4) 32%, var(--input-bg, #0b0d14));
+            transform: translateY(-1px);
         }
 
         /* Legacy CodeMirror & Dialog Fallbacks */
@@ -215,6 +240,7 @@ export class YenvuiEditor extends LitElement {
         this.readOnly = false;
         this.language = 'markdown';
         this.writingMode = false;
+        this.enableMarkdownLinks = true;
         this.customExtensions = [];
         this._view = null;
         this._EditorView = null;
@@ -224,6 +250,7 @@ export class YenvuiEditor extends LitElement {
         this.languageConf = null;
         this.readOnlyConf = null;
         this.writingModeConf = null;
+        this.mdLinksConf = null;
         this.customConf = null;
         this.themeConf = null;
         this.attributesConf = null;
@@ -319,6 +346,9 @@ export class YenvuiEditor extends LitElement {
                         this._view.dispatch({ effects: this.languageConf.reconfigure(ext) });
                     }
                 });
+            }
+            if ((changedProperties.has('language') || changedProperties.has('enableMarkdownLinks')) && this.mdLinksConf) {
+                this._updateMarkdownLinksExtension();
             }
             if (changedProperties.has('customExtensions') && this.customConf) {
                 this._view.dispatch({
@@ -521,6 +551,161 @@ export class YenvuiEditor extends LitElement {
             });
         }
     }
+    _emitLinkClicked(href, text = '', originalEvent = null) {
+        const cleanHref = String(href || '').trim();
+        if (!cleanHref) return;
+        this.dispatchEvent(new CustomEvent('yenvui-editor-link-clicked', {
+            detail: { href: cleanHref, text: String(text || '').trim(), originalEvent },
+            bubbles: true,
+            composed: true
+        }));
+    }
+
+    async _buildMarkdownLinksExtension() {
+        const isMd = ['markdown', 'md'].includes(String(this.language || '').trim().toLowerCase());
+        if (!isMd || !this.enableMarkdownLinks) return [];
+
+        const { WidgetType, ViewPlugin, StateField, Decoration, RangeSetBuilder, EditorView, syntaxTree } = await import('codemirror-core');
+        const hostEl = this;
+        const MD_LINK_RE = /(?<!!)\[([^\][\n]+)\]\((<[^>\n]+>|[^()\s]+(?:\([^()\s]*\)[^()\s]*)*)(?:\s+"[^"]*")?\)/g;
+
+        class MarkdownLinkWidget extends WidgetType {
+            constructor(href, label) {
+                super();
+                this.href = href;
+                this.label = label;
+            }
+            eq(other) {
+                return other.href === this.href && other.label === this.label;
+            }
+            toDOM() {
+                const btn = document.createElement('span');
+                btn.className = 'cm-md-link-widget';
+                btn.title = `Open link: ${this.href}`;
+                btn.setAttribute('role', 'button');
+                btn.setAttribute('aria-label', `Open ${this.href}`);
+                btn.textContent = '↗';
+                btn.addEventListener('pointerdown', (e) => {
+                    e.stopPropagation();
+                });
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    hostEl._emitLinkClicked(this.href, this.label, e);
+                });
+                return btn;
+            }
+            ignoreEvent() {
+                return true;
+            }
+        }
+
+        const isPosInCodeBlock = (state, pos) => {
+            try {
+                if (typeof syntaxTree === 'function') {
+                    let node = syntaxTree(state).resolveInner(pos, -1);
+                    while (node) {
+                        if (/Code|Fenced/i.test(node.name)) return true;
+                        node = node.parent;
+                    }
+                }
+            } catch (_) {}
+            return false;
+        };
+
+        const buildLinkDecorationsInRanges = (state, ranges) => {
+            const builder = new RangeSetBuilder();
+            let lastLineNo = 0;
+            for (const { from, to } of ranges) {
+                const startLine = state.doc.lineAt(from).number;
+                const endLine = state.doc.lineAt(to).number;
+                for (let lineNo = Math.max(startLine, lastLineNo + 1); lineNo <= endLine; lineNo++) {
+                    lastLineNo = lineNo;
+                    const line = state.doc.line(lineNo);
+                    const text = line.text;
+                    if (text.length > 2000 || !text.includes('](') || /^\s*(?:```|~~~)/.test(text)) continue;
+                    MD_LINK_RE.lastIndex = 0;
+                    let m;
+                    while ((m = MD_LINK_RE.exec(text)) !== null) {
+                        const before = text.slice(0, m.index);
+                        if (((before.match(/`/g) || []).length % 2) === 1) continue;
+                        const matchPos = line.from + m.index;
+                        if (isPosInCodeBlock(state, matchPos)) continue;
+                        const label = m[1];
+                        const rawTarget = m[2].replace(/^<|>$/g, '').trim();
+                        if (!rawTarget) continue;
+                        const endPos = matchPos + m[0].length;
+                        builder.add(endPos, endPos, Decoration.widget({
+                            widget: new MarkdownLinkWidget(rawTarget, label),
+                            side: 1
+                        }));
+                    }
+                }
+            }
+            return builder.finish();
+        };
+
+        const mdLinkPlugin = ViewPlugin?.fromClass
+            ? ViewPlugin.fromClass(class {
+                constructor(view) {
+                    this.decorations = buildLinkDecorationsInRanges(view.state, view.visibleRanges);
+                }
+                update(update) {
+                    if (update.docChanged || update.viewportChanged) {
+                        this.decorations = buildLinkDecorationsInRanges(update.state, update.view.visibleRanges);
+                    }
+                }
+            }, { decorations: v => v.decorations })
+            : StateField.define({
+                create(state) {
+                    return buildLinkDecorationsInRanges(state, [{ from: 0, to: state.doc.length }]);
+                },
+                update(decorations, tr) {
+                    if (tr.docChanged) return buildLinkDecorationsInRanges(tr.state, [{ from: 0, to: tr.state.doc.length }]);
+                    return decorations;
+                },
+                provide: f => EditorView.decorations.from(f)
+            });
+
+        const cmdClickHandler = EditorView.domEventHandlers({
+            click: (e, view) => {
+                if (!(e.metaKey || e.ctrlKey)) return false;
+                const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
+                if (pos === null) return false;
+                const line = view.state.doc.lineAt(pos);
+                if (line.text.length > 2000) return false;
+                const offset = pos - line.from;
+                MD_LINK_RE.lastIndex = 0;
+                let m;
+                while ((m = MD_LINK_RE.exec(line.text)) !== null) {
+                    const start = m.index;
+                    const end = m.index + m[0].length;
+                    if (offset >= start && offset <= end) {
+                        const rawTarget = m[2].replace(/^<|>$/g, '').trim();
+                        if (rawTarget) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            hostEl._emitLinkClicked(rawTarget, m[1], e);
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+        });
+
+        return [mdLinkPlugin, cmdClickHandler];
+    }
+
+    async _updateMarkdownLinksExtension() {
+        if (!this._view || !this.mdLinksConf) return;
+        const seq = (this._mdLinksSeq = (this._mdLinksSeq || 0) + 1);
+        const ext = await this._buildMarkdownLinksExtension();
+        if (this._view && this.mdLinksConf && seq === this._mdLinksSeq) {
+            this._view.dispatch({ effects: this.mdLinksConf.reconfigure(ext) });
+        }
+    }
+
     async _updateTheme() {
         if (this._view && this.themeConf) {
             const theme = document.body.getAttribute('data-theme') || 'dark';
@@ -552,6 +737,7 @@ export class YenvuiEditor extends LitElement {
         this.languageConf = new Compartment();
         this.readOnlyConf = new Compartment();
         this.writingModeConf = new Compartment();
+        this.mdLinksConf = new Compartment();
         this.customConf = new Compartment();
         this.themeConf = new Compartment();
         this.attributesConf = new Compartment();
@@ -581,6 +767,7 @@ export class YenvuiEditor extends LitElement {
         // Await the language pack to prevent Lezer tree reconfiguration race conditions 
         // with the autocomplete worker during the initial EditorView boot.
         let initialLangExt = await loadLanguageExtension(this.language, this.languageResolver);
+        let initialMdLinksExt = await this._buildMarkdownLinksExtension();
 
         if (!this.isConnected) {
             this._initializingEditor = false;
@@ -602,6 +789,7 @@ export class YenvuiEditor extends LitElement {
                     EditorView.exceptionSink.of((err) => console.warn("[CodeMirror] Suppressed internal plugin crash:", err)),
                     this.languageConf.of(initialLangExt),
                     this.writingModeConf.of([]),
+                    this.mdLinksConf.of(initialMdLinksExt),
                     this.themeConf.of(document.body.getAttribute('data-theme') !== 'light' ? syntaxHighlighting(oneDarkHighlightStyle) : []),
                     this.readOnlyConf.of(EditorView.editable.of(!this.readOnly)),
                     this.customConf.of(this.customExtensions || []),
