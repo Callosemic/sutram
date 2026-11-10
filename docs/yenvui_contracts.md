@@ -145,11 +145,16 @@ Any replacement library must export the following Custom Elements.
     *   *Events:* `@sutram-input-changed`.
 *   **`<sutram-target-binding>`**: Compound endpoint and model selector pairing `<sutram-select>` with `<sutram-combobox>`.
     *   *Properties:* `.label`, `.value` (String `endpoint::model` or Object `{endpoint, model}`), `.endpoints` (Array), `.models` (Array or Function `endpointId => Array`), `.endpointKey`, `.modelKey`, `.endpointPlaceholder`, `.modelPlaceholder`, `?allowEmptyEndpoint`, `?disabled`, `?flush`.
+    *   *Behavior:* Preserves selected model value when switching endpoints if the model remains valid in the new candidate catalog. Contained child input events do not leak duplicate `@sutram-input-changed` emissions.
     *   *Events:* `@sutram-input-changed`.
-*   **`<sutram-composer>`**: Unified prompt and slash-command message composer.
+*   **`<sutram-composer>`**: Unified prompt and slash-command message composer with internal native `<textarea>` synchronization.
     *   *Properties:* `.value` (String), `.placeholder` (String), `.triggerPrefix` (String, default `'/'`), `.triggers` (Array of command objects `{ id, token, label, icon, badge, description }`), `.activeTrigger` (Object), `.intent` (`'primary'`|`'success'`|`'warning'`|`'danger'`|`'highlight'`), `?disabled` (Boolean).
+    *   *Behavior:* Synchronizes text and command tokens directly to the underlying `<textarea>` element value and contains intermediate input bubbling.
     *   *Events:* `@sutram-input-changed`, `@sutram-trigger-changed`, `@sutram-composer-submit`.
     *   *Slots:* `header`, `prefix`, default, `footer`.
+*   **`SutramCacheWarmer`**: Low-priority background asset pre-fetcher and warming engine.
+    *   *Properties:* `.size` (Number, returns current queue count).
+    *   *Methods:* `enqueue(scopeId, urls, fetcher)`, `removeByPrefix(scopeId, urlPrefix)`, `clear()`, `drain(delayMs)`.
 *   **`<yenvui-dropdown>`**: Floating action menu utilizing native `#top-layer` Popover API.
     *   *Properties:* `.items` (Array of `{id, label, icon, onClick, asyncAction, divider}`), `?open`, `.align` (`'auto'`|`'left'`|`'right'`), `.direction` (`'auto'`|`'up'`|`'down'`).
     *   *Events:* `@yenvui-action-error` (dispatched on unhandled action exception).

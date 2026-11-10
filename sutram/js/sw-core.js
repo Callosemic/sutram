@@ -1,11 +1,82 @@
 // sutram/js/sw-core.js
 // Phase 2: Abstracted Service Worker Core
-const CACHE_NAME = self.OS_CACHE_VERSION ? `sutram-offline-${self.OS_CACHE_VERSION}` : 'sutram-offline-v2';
+const DEFAULT_CACHE_NAME = self.OS_CACHE_VERSION ? `sutram-offline-${self.OS_CACHE_VERSION}` : 'sutram-offline-v2';
 const APP_SHELL_KEY = '/__sutram_app_shell__';
+const ACTIVE_BUILD_MARKER = '/__sutram_active_build__';
+// T9: which build is active, and which complete build waits for the next page load, survive SW restarts here.
+const META_CACHE = 'sutram-meta';
+const PENDING_BUILD_MARKER = '/__sutram_pending_build__';
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 // Host supplies HOST_ASSETS via self.HOST_ASSETS before importScripts; fallback is purely root '/'
 const ASSETS = self.HOST_ASSETS || ['/'];
 
+let activeBuildCacheName = self.OS_BUILD_ID ? `sutram-build-${self.OS_BUILD_ID}` : DEFAULT_CACHE_NAME;
 let isReconciling = false;
+
+function _isLoopbackOrigin() {
+    const host = String(self.location?.hostname || '').toLowerCase();
+    return LOOPBACK_HOSTS.has(host);
+}
+
+function _isCacheableResponse(res) {
+    if (!res || res.status !== 200 || res.redirected) return false;
+    if (res.type && res.type !== 'basic' && res.type !== 'default') return false;
+    if (res.url) {
+        try {
+            if (new URL(res.url, self.location.origin).origin !== self.location.origin) return false;
+        } catch (_) {
+            return false;
+        }
+    }
+    return true;
+}
+
+let metaLoaded = false;
+
+async function _readMetaName(key) {
+    try {
+        const meta = await caches.open(META_CACHE);
+        const hit = await meta.match(key);
+        return hit ? (await hit.text()) : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+// T9: a staged build becomes active only on a page load, so a running page never gets another build's lazy imports.
+async function _promotePendingBuild() {
+    const pending = await _readMetaName(PENDING_BUILD_MARKER);
+    if (!pending) return;
+    const meta = await caches.open(META_CACHE);
+    await meta.delete(PENDING_BUILD_MARKER);
+    const keys = await caches.keys();
+    if (!keys.includes(pending)) return;
+    activeBuildCacheName = pending;
+    metaLoaded = true;
+    await meta.put(ACTIVE_BUILD_MARKER, new Response(pending, { status: 200 }));
+    await Promise.all(keys
+        .filter(k => (k.startsWith('sutram-build-') || k.startsWith('sutram-offline-')) && k !== pending)
+        .map(k => caches.delete(k)));
+}
+
+async function _resolveActiveCache() {
+    const keys = await caches.keys();
+    if (!metaLoaded) {
+        const recorded = await _readMetaName(ACTIVE_BUILD_MARKER);
+        if (recorded && keys.includes(recorded)) activeBuildCacheName = recorded;
+        metaLoaded = true;
+    }
+    if (keys.includes(activeBuildCacheName)) {
+        return caches.open(activeBuildCacheName);
+    }
+    const pending = await _readMetaName(PENDING_BUILD_MARKER);
+    const buildKeys = keys.filter(k => k.startsWith('sutram-build-') && k !== pending);
+    if (buildKeys.length > 0) {
+        activeBuildCacheName = buildKeys[buildKeys.length - 1];
+        return caches.open(activeBuildCacheName);
+    }
+    return caches.open(DEFAULT_CACHE_NAME);
+}
 
 function _extractSameOriginAssetsFromHtml(htmlText) {
     if (!htmlText || typeof htmlText !== 'string') return [];
@@ -43,7 +114,7 @@ async function _cacheAssetResilient(cache, rawUrl) {
     try {
         const req = new Request(rawUrl, { cache: 'no-cache', credentials: 'same-origin' });
         const res = await fetch(req);
-        if (res && res.status === 200) {
+        if (_isCacheableResponse(res)) {
             await cache.put(rawUrl, res.clone());
             const parsed = new URL(rawUrl, self.location.origin);
             await cache.put(parsed.pathname, res.clone());
@@ -57,7 +128,7 @@ async function _cacheAssetResilient(cache, rawUrl) {
                     const hit = await cache.match(p, { ignoreSearch: true });
                     if (!hit) {
                         const subRes = await fetch(new Request(p, { cache: 'no-cache', credentials: 'same-origin' }));
-                        if (subRes && subRes.status === 200) {
+                        if (_isCacheableResponse(subRes)) {
                             await cache.put(p, subRes.clone());
                         }
                     }
@@ -84,8 +155,9 @@ async function _matchCachedShellOrAsset(cache, request, url, isNavigation) {
 self.addEventListener('install', (e) => {
     self.skipWaiting();
     e.waitUntil(
-        caches.open(CACHE_NAME).then(async (cache) => {
+        caches.open(activeBuildCacheName).then(async (cache) => {
             await Promise.allSettled(ASSETS.map((url) => _cacheAssetResilient(cache, url)));
+            await cache.put(ACTIVE_BUILD_MARKER, new Response(activeBuildCacheName, { status: 200 }));
         })
     );
 });
@@ -94,19 +166,24 @@ self.addEventListener('message', (event) => {
     const data = event.data || {};
     if (data.type === 'SET_RECONCILING') {
         isReconciling = data.value;
+    } else if (data.type === 'ACTIVATE_BUILD_CACHE' && data.cacheName) {
+        activeBuildCacheName = String(data.cacheName);
     } else if (data.type === 'SKIP_WAITING' && !isReconciling) {
         self.skipWaiting();
     }
 });
 
 self.addEventListener('activate', (e) => {
-    e.waitUntil(
-        caches.keys().then((keyList) => {
-            return Promise.all(keyList.map((key) => {
-                if (key !== CACHE_NAME) return caches.delete(key);
-            }));
-        })
-    );
+    e.waitUntil((async () => {
+        // A new service worker keeps the recorded active build, a staged build and the meta cache.
+        const keep = new Set([activeBuildCacheName, DEFAULT_CACHE_NAME, META_CACHE]);
+        const recorded = await _readMetaName(ACTIVE_BUILD_MARKER);
+        if (recorded) keep.add(recorded);
+        const pending = await _readMetaName(PENDING_BUILD_MARKER);
+        if (pending) keep.add(pending);
+        const keyList = await caches.keys();
+        await Promise.all(keyList.filter(key => !keep.has(key)).map(key => caches.delete(key)));
+    })());
     return self.clients.claim();
 });
 
@@ -114,6 +191,8 @@ self.addEventListener('fetch', (e) => {
     const url = new URL(e.request.url);
 
     if (e.request.method !== 'GET') return;
+    // Build staging (offline.js) must see the server, never this worker's cache.
+    if (e.request.headers.get('X-Sutram-Revalidate') === '1') return;
     // Never intercept cross-origin requests (e.g. Google Fonts) so offline mode never throws on external CDNs
     if (url.origin !== self.location.origin) return;
 
@@ -126,17 +205,22 @@ self.addEventListener('fetch', (e) => {
     const isNavigation = e.request.mode === 'navigate' || (e.request.headers.get('accept') || '').includes('text/html');
 
     e.respondWith(
-        caches.open(CACHE_NAME).then(async (cache) => {
+        (isNavigation ? _promotePendingBuild().catch(() => {}) : Promise.resolve()).then(() => _resolveActiveCache()).then(async (cache) => {
             const finalCached = await _matchCachedShellOrAsset(cache, e.request, url, isNavigation);
+            const preferCacheFirst = !_isLoopbackOrigin();
 
-            // Always attempt Network-First (revalidating with the server) so fresh HTML/JS/CSS edits
-            // pull through immediately on both localhost and Tailscale/remote hosts.
+            // Cache-First on non-localhost origins (Tailscale / mobile) when a complete build is cached;
+            // Network-First on localhost so local edits appear on reload.
+            if (preferCacheFirst && finalCached) {
+                return finalCached;
+            }
+
             try {
                 const fetchReq = isNavigation
                     ? new Request(e.request.url, { method: 'GET', headers: e.request.headers, cache: 'no-cache', credentials: 'same-origin' })
                     : e.request;
                 const response = await fetch(fetchReq);
-                if (response && response.status === 200) {
+                if (_isCacheableResponse(response)) {
                     cache.put(e.request, response.clone()).catch(() => {});
                     cache.put(url.pathname, response.clone()).catch(() => {});
                     if (isNavigation || url.pathname === '/') {
@@ -149,7 +233,7 @@ self.addEventListener('fetch', (e) => {
                                     cache.match(p, { ignoreSearch: true }).then((hit) => {
                                         if (!hit) {
                                             fetch(new Request(p, { cache: 'no-cache', credentials: 'same-origin' }))
-                                                .then((r) => { if (r && r.status === 200) cache.put(p, r); })
+                                                .then((r) => { if (_isCacheableResponse(r)) cache.put(p, r); })
                                                 .catch(() => {});
                                         }
                                     }).catch(() => {});
@@ -159,9 +243,8 @@ self.addEventListener('fetch', (e) => {
                     }
                     return response;
                 }
-                // If a reverse proxy (e.g. Tailscale Serve) returns 502/503/504 because the local daemon is stopped,
-                // fall back to the cached App Shell / module rather than rendering a Bad Gateway error.
-                if (finalCached && response && [502, 503, 504].includes(response.status)) {
+                // Fall back to cached shell/asset on reverse-proxy 502/503/504 or captive-portal 511 / redirects
+                if (finalCached && response && ([502, 503, 504, 511].includes(response.status) || response.redirected)) {
                     return finalCached;
                 }
                 return response;

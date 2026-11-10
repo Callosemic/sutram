@@ -75,6 +75,23 @@ def check_sutram_rules():
                         continue
                     report_violation("CODE_INDEX_PLACEHOLDER_BAN", code_index_path, idx, f"Unresolved comment placeholder: {line.strip()}")
 
+    detached_window_mock_re = re.compile(r'globalThis\.window\s*=\s*\{')
+    for test_fp in collect_unique_files([PROJECT_ROOT / "tests"], [".py", ".mjs", ".js"]):
+        if test_fp.name == "rules_sutram.py":
+            continue
+        try:
+            test_text = test_fp.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for m in detached_window_mock_re.finditer(test_text):
+            line_no = test_text[:m.start()].count("\n") + 1
+            report_violation(
+                "DETACHED_WINDOW_MOCK_BAN",
+                test_fp,
+                line_no,
+                "Assigning a detached object literal to 'globalThis.window = {...}' splits window.<api> from globalThis.<api>. Use js_loader.mjs or 'Object.assign(globalThis, {...}); globalThis.window = globalThis;'."
+            )
+
     insetu_dir = PROJECT_ROOT.parent / "insetu"
     py_scan_dirs = [PROJECT_ROOT / "tests"] + ([insetu_dir] if insetu_dir.exists() else [])
     for py_path in collect_unique_files(py_scan_dirs, [".py"]):

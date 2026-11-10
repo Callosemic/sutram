@@ -44,6 +44,7 @@ sutram/
 │   │   ├── 0029_host_agnostic_language_descriptors_stream_modes_and_plaintext_fallback.md # ADR-0029: Host-Agnostic Editor Language Descriptors, StreamLanguage Wrapping, Per-Language Caching, and Plain-Text Fallback
 │   │   ├── 0030_zero_css_lego_layout_primitives_semantic_tokens_and_composer.md # ADR-0030: Zero-CSS Lego Layout Primitives, Semantic Token Parameterization, SutramComposer, and Floating HUD
 │   │   ├── 0031_offline_app_shell_vault_atomic_cache_overlays_and_markdown_link_widgets.md # ADR-0031: Offline App Shell Vault, Atomic Read-Your-Writes Cache Overlays, Functional Store Initializers, User Column Capacity, and Editor Markdown Link Widgets
+│   │   ├── 0032_versioned_build_staging_navigation_cutover_and_esm_loader.md # ADR-0032: Versioned Build Staging, Navigation-Gated Cutover, Captive-Portal Defense, and Zero-Dependency ESM Test Loader
 │   │   └── archived/               # Deeply embedded baseline architectural records preserved for historical reference
 │   │       ├── 0001_sutram_ioc_microkernel_architecture.md # ADR-0001: IoC microkernel and slot layout architecture
 │   │       ├── 0002_sutram_bootloader_and_resilience_patterns.md # ADR-0002: Stage 1 bootloader and error boundary standards
@@ -71,18 +72,18 @@ sutram/
 │       │   ├── class SutramTextarea # Multiline auto-sizing textarea bridged to Sutram event bus
 │       │   ├── class SutramToggle  # Boolean toggle switch bridged to Sutram event bus
 │       │   ├── class SutramCombobox # Searchable and filterable text combobox with dropdown options
-│       │   ├── class SutramTargetBinding # Compound endpoint and model selector pairing select and combobox
-│       │   └── class SutramComposer # Slash-command message composer with token chip extraction
+│       │   ├── class SutramTargetBinding # Compound endpoint and model selector pairing select and combobox with model candidate validity retention
+│       │   └── class SutramComposer # Slash-command message composer with token chip extraction and native textarea synchronization
 │       ├── offline.js              # Offline IndexedDB persistence manager, outbox reconciler, and network hysteresis manager
 │       │   ├── function emitOfflineTelemetry(message, type = 'info', category...) # Dispatches structured sutram:offline-telemetry events across the window bus.
-│       │   ├── class SutramDB      # IndexedDB storage engine for VFS blob caching, atomic cache overlays, prefix eviction, lazy LRU tracking, and DLQ management.
+│       │   ├── class SutramDB      # IndexedDB storage engine for VFS blob caching, atomic cache overlays, prefix eviction, lazy LRU tracking, outbox mutation sets, and DLQ management.
 │       │   ├── class OfflineHttpProvider # Network-first HTTP gateway with 502/503/504 gateway fallback, IoC cache predicates, and offline outbox queueing.
 │       │   ├── class NetworkHysteresisManager # Burst-verification connectivity probe preventing premature online transitions on flaky networks.
 │       │   ├── class OutboxReconciler # Two-stage sequential outbox drainer with Web Locks API coordination, telemetry emission, and 4xx poison-pill DLQ isolation.
-│       │   ├── function purgeSutramCaches() # Safely clears CacheStorage and Service Worker registrations while guarding offline sessions.
-│       │   ├── function ensureSutramAppShellCached() # Syncs the root App Shell HTML and discovered importmap/module URLs into CacheStorage.
-│       │   ├── class SutramCacheWarmer # Background low-priority cache warmer with deduplication and offline circuit-breaking.
-│       │   └── function bootSutramServiceWorker() # Registers the Service Worker, wires reconciliation state, and triggers App Shell vault warming.
+│       │   ├── function purgeSutramCaches({ forceWhenOffline = false } = {}) # Safely clears CacheStorage and Service Worker registrations while guarding offline sessions.
+│       │   ├── function ensureSutramAppShellCached(options = {}) # Stages and synchronizes versioned App Shell builds into CacheStorage with captive-portal and partial-failure guards.
+│       │   ├── class SutramCacheWarmer # Background low-priority cache warmer with queue inspection, prefix pruning, and offline circuit-breaking.
+│       │   └── function bootSutramServiceWorker(options = {}) # Registers the Service Worker, wires reconciliation state, and triggers App Shell vault warming.
 │       ├── poller.js               # Background job status polling factory with tier-0 API integration
 │       │   └── function createJobPoller(apiClient) # sutram/js/poller.js Standalone background job status polling routine
 │       ├── primitives.js           # Presentation primitives (buttons, modals, toast, selection, status)
@@ -143,8 +144,8 @@ sutram/
 │       │   └── function initShortcutRouter(registry, getActiveContexts) # sutram/js/shortcuts.js Centralized hierarchical shortcut router
 │       ├── sutram-boot.js          # Stage 1 bootloader for importmap synthesis, SemVer parsing, and guardrails
 │       ├── sutram_sdk.js           # IoC Micro-Kernel, SutramElement base class, SutramContextMixin, and ExtensionRegistry
-│       │   ├── function createSutramStore() # Multi-tenant Zustand store factory supporting functional initializers, debounced storage sync, and epoch-guarded fetches.
-│       │   ├── function bindStoreInput() # Declarative helper rendering a store-bound Sutram input control for a state path.
+│       │   ├── function createSutramStore(name, initialStateOrFn, persiste...) # [comment required]
+│       │   ├── function bindStoreInput(store, statePath, currentValue,...) # [comment required]
 │       │   ├── function SutramContextMixin(SuperClass) # Mixin equipping Web Components with automatic Zustand subscriptions, intervals, and global listener teardown.
 │       │   ├── class SutramElement # Base LitElement class with SutramContextMixin lifecycle management and render error boundaries.
 │       │   └── function canUseMultiWindowPopout() # Evaluates whether the current viewport and display mode support multi-window popouts.
@@ -159,18 +160,18 @@ sutram/
 │       │   ├── function slugify(str) # [comment required]
 │       │   ├── function truncateFilename(filename, maxLen = 24, ellipsis...) # [comment required]
 │       │   ├── function clone(obj) # [comment required]
-│       │   ├── function compileDagWavefronts() # [comment required]
-│       │   ├── function extractTemplateVariables() # [comment required]
-│       │   ├── function interpolateTemplateVariables() # [comment required]
+│       │   ├── function compileDagWavefronts(nodes, options = {}) # [comment required]
+│       │   ├── function extractTemplateVariables(text, options = {}) # [comment required]
+│       │   ├── function interpolateTemplateVariables(text, values = {}, options = {}) # [comment required]
 │       │   ├── function copyToClipboard(text) # [comment required]
 │       │   ├── function copyRichHtml(htmlStr, plainText = null) # [comment required]
 │       │   ├── function copyRawText(text, successCallback, errorCall...) # [comment required]
 │       │   ├── function downloadBlob(blob, filename) # [comment required]
 │       │   ├── function nativeShareFiles(fileObjects) # [comment required]
-│       │   ├── function downloadFile() # [comment required]
-│       │   ├── function bindGhostDrag() # [comment required]
-│       │   ├── function buildFileTree() # [comment required]
-│       │   ├── function resolveDirectoryState() # [comment required]
+│       │   ├── function downloadFile(fetchUrl, fallbackFilename, fetc...) # [comment required]
+│       │   ├── function bindGhostDrag(e, label, icon = '📄', payloadDat...) # [comment required]
+│       │   ├── function buildFileTree(files, stripPrefix = '', options...) # [comment required]
+│       │   ├── function resolveDirectoryState(treeRoot, currentPath = [], opti...) # [comment required]
 │       │   ├── function timeAgo(timestamp) # [comment required]
 │       │   ├── function formatDate(timestamp) # [comment required]
 │       │   ├── function resolveSutramAsset(relativePath, fallbackMetaUrl =...) # [comment required]
@@ -203,6 +204,8 @@ sutram/
 │   │   └── def check_host_domain_decoupling(target_dir) # Fitness Function: Enforces pure host-neutral Inversion of Control.
 │   └── unit/                       # Behavioral unit and integration tests for the Sutram runtime
 │       ├── __init__.py             # Unit test package initializer
+│       ├── js_loader.mjs           # Zero-dependency Node.js ESM loader and minimal browser environment shim for Sutram & yenVUI unit tests.
+│       │   └── class MemoryStorage # [comment required]
 │       ├── test_consumer_linter.py # Tests the consumer linter: Lit bindings in button labels, whole-tag rules across lines, and undeclared property bindings
 │       │   ├── class TestConsumerLinterButtonLabels(unittest.TestCase) # SUTRAM_BUTTON_DECLARATIVE_LABEL_MANDATE must ignore '=>' and '>' inside Lit ${...} bindings.
 │       │   └── class TestConsumerLinterWholeTags(unittest.TestCase) # Tag-level rules read whole tags; undeclared and attribute-mismatched bindings are flagged.
@@ -233,7 +236,7 @@ sutram/
         │   ├── function parseRawHunks(searchStr = '', replaceStr = '') # [comment required]
         │   ├── function parseNdiff(diffStr = '') # [comment required]
         │   ├── function parseUnifiedDiff(diffStr = '') # [comment required]
-        │   └── function parseDiffPayload() # [comment required]
+        │   └── function parseDiffPayload({ diffText = '', searchStr = '',...) # [comment required]
         ├── diff-viewer.js          # Dual-box and interleaved split-pane diff presentation component
         │   └── class YenvuiDiffViewer # [comment required]
         ├── drop-zone.js            # Top-layer popover drop overlay and drop target presentation primitives
@@ -244,7 +247,7 @@ sutram/
         │   └── class YenvuiFilterDropdown # [comment required]
         ├── editor.js               # CodeMirror 6 code editor wrapper with descriptor-based language loading, StreamLanguage wrapping, and per-language caching
         │   ├── function loadLanguageExtension(lang, customResolver = null) # Resolves a CodeMirror language extension from core built-ins or a host descriptor ({url, kind, export, options}), falling back to plain text.
-        │   └── class YenvuiEditor  # Encapsulated CodeMirror 6 editor with minimal diff updates, prose helpers, and interactive Markdown link widgets.
+        │   └── class YenvuiEditor  # [stale?] Encapsulated CodeMirror 6 editor with minimal diff updates, prose helpers, and interactive Markdown link widgets.
         ├── empty-state.js          # Centered empty state feedback container with icon and text slot
         │   └── class YenvuiEmptyState # [comment required]
         ├── filter-group.js         # Interactive pill array for multi-attribute filtering
@@ -273,9 +276,9 @@ sutram/
         │   ├── function releaseBodyScrollLock() # [comment required]
         │   ├── function getEventPath(e) # [comment required]
         │   ├── function getEventTarget(e, selector = null) # Traverses the event path to find the first element matching a given CSS selector.
-        │   ├── function anchorTopLayerPopover() # Computes and applies true viewport coordinates for a #top-layer popover element.
-        │   ├── function syncTopLayerPopover() # Promotes or dismisses a popover element in the browser's #top-layer and synchronizes its anchor coordinates.
-        │   ├── function startKineticThrow() # 60fps Inertial Momentum Throw Engine Applies exponential decay (0.94 friction) to a scroll container's scrollLeft/scrollTop based on recent...
+        │   ├── function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) # Computes and applies true viewport coordinates for a #top-layer popover element.
+        │   ├── function syncTopLayerPopover(triggerEl, popoverEl, isOpen, op...) # Promotes or dismisses a popover element in the browser's #top-layer and synchronizes its anchor coordinates.
+        │   ├── function startKineticThrow(scrollEl, samples, { axis = 'y',...) # 60fps Inertial Momentum Throw Engine Applies exponential decay (0.94 friction) to a scroll container's scrollLeft/scrollTop based on recent...
         │   ├── class YenvuiViewportGuard # [stale?] Singleton Root Viewport Physics Guard (Tier 0 Chassis) Centralizes iOS Safari edge-swipe history navigation prevention across the entire doc...
         │   ├── function getDeepElementFromPoint(x, y, selector = null) # [comment required]
         │   └── class YenvuiGestureController # Universal Gesture Controller Normalizes PointerEvents for unified desktop/mobile dragging while maintaining an invisible TouchEvent listener...

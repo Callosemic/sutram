@@ -433,10 +433,13 @@ export class SutramTargetBinding extends SutramElement {
                     .value=${selectedEp}
                     .options=${epOptions}
                     @sutram-input-changed=${(e) => {
+                        e.stopPropagation();
                         const nextEp = e.detail.value;
                         const nextModels = typeof this.models === 'function' ? this.models(nextEp) : (this.models || []);
-                        const firstMod = nextModels[0] ? (typeof nextModels[0] === 'object' ? nextModels[0].value : nextModels[0]) : '';
-                        const nextMod = nextEp ? (cur[modKey] || firstMod || '') : '';
+                        const validValues = nextModels.map(m => (typeof m === 'object' && m !== null) ? String(m.value ?? m.id ?? '') : String(m));
+                        const firstMod = validValues[0] || '';
+                        const keepCur = cur[modKey] && (validValues.length === 0 || validValues.includes(cur[modKey]));
+                        const nextMod = nextEp ? (keepCur ? cur[modKey] : (firstMod || cur[modKey] || '')) : '';
                         this._emitBinding({ [epKey]: nextEp, [modKey]: nextMod });
                     }}>
                 </sutram-select>
@@ -447,6 +450,7 @@ export class SutramTargetBinding extends SutramElement {
                     .placeholder=${this.modelPlaceholder || 'Select or type model...'}
                     .options=${candidateModels}
                     @sutram-input-changed=${(e) => {
+                        e.stopPropagation();
                         this._emitBinding({ [epKey]: selectedEp, [modKey]: e.detail.value });
                     }}>
                 </sutram-combobox>
@@ -543,11 +547,23 @@ export class SutramComposer extends SutramElement {
         this._focused = false;
     }
 
+    _syncInnerTextareaValue(val) {
+        const ta = this.shadowRoot?.querySelector('sutram-textarea');
+        if (ta) {
+            ta.value = val;
+            const nativeTa = ta.shadowRoot?.querySelector('textarea, input') || ta.querySelector?.('textarea, input');
+            if (nativeTa && nativeTa.value !== val) {
+                nativeTa.value = val;
+            }
+        }
+    }
+
     _selectTrigger(trig, remainingText = null) {
         this.activeTrigger = trig || null;
         this._menuOpen = false;
         if (remainingText !== null) {
             this.value = remainingText;
+            this._syncInnerTextareaValue(remainingText);
         }
         this.dispatchEvent(new CustomEvent('sutram-trigger-changed', {
             detail: { trigger: this.activeTrigger, remainingText: this.value },
@@ -557,6 +573,9 @@ export class SutramComposer extends SutramElement {
     }
 
     _handleTextInput(e) {
+        if (e && typeof e.stopPropagation === 'function') {
+            e.stopPropagation();
+        }
         let nextVal = e.detail?.value ?? '';
         const prefix = this.triggerPrefix ?? '/';
         const dd = this.shadowRoot?.querySelector('sutram-dropdown');
@@ -591,6 +610,7 @@ export class SutramComposer extends SutramElement {
             dd._searchQuery = '';
         }
         this.value = nextVal;
+        this._syncInnerTextareaValue(nextVal);
         this.dispatchEvent(new CustomEvent('sutram-input-changed', {
             detail: { value: this.value, activeTrigger: this.activeTrigger },
             bubbles: true,

@@ -1,5 +1,5 @@
 // sutram/js/index.js
-// Layer 2: Sutram Headless State, Offline & Layout Kernel Public Entrypoint
+// Layer 2: Sutram Headless State, Offline and Layout Kernel Public Entrypoint
 import * as Chassis from 'sutram-chassis';
 
 export * from './sutram_sdk.js';

@@ -273,6 +273,8 @@ export class SutramDB {
         const now = Date.now();
         const hasBlobOverlay = Boolean(cacheOverlay && typeof cacheOverlay === 'object' && cacheOverlay.cacheBlobUrl && cacheOverlay.cacheBlobContent !== undefined);
         const hasDeleteOverlay = Boolean(cacheOverlay && typeof cacheOverlay === 'object' && Array.isArray(cacheOverlay.deletedCacheUrls) && cacheOverlay.deletedCacheUrls.length > 0);
+        const pendingMutations = (cacheOverlay && Array.isArray(cacheOverlay.pendingMutations)) ? [...cacheOverlay.pendingMutations] : [];
+        const deletedMutations = (cacheOverlay && Array.isArray(cacheOverlay.deletedMutations)) ? [...cacheOverlay.deletedMutations] : [];
         const needsVfsStore = hasBlobOverlay || hasDeleteOverlay;
         return new Promise((resolve, reject) => {
             const tx = db.transaction(needsVfsStore ? ['sutram_outbox', 'vfs_cache'] : 'sutram_outbox', 'readwrite');
@@ -285,6 +287,8 @@ export class SutramDB {
                 headers,
                 bodyString,
                 collapseKey,
+                pendingMutations,
+                deletedMutations,
                 timestamp: now
             };
 
@@ -329,6 +333,10 @@ export class SutramDB {
                                 }
                                 record.bodyString = JSON.stringify(nextPayload);
                             } catch (_) {}
+                            const mergedPending = new Set([...(cursor.value.pendingMutations || []), ...pendingMutations]);
+                            const mergedDeleted = new Set([...(cursor.value.deletedMutations || []), ...deletedMutations]);
+                            record.pendingMutations = Array.from(mergedPending);
+                            record.deletedMutations = Array.from(mergedDeleted);
                             cursor.update(record);
                             updated = true;
                         }
@@ -351,9 +359,7 @@ export class SutramDB {
     static async getOutboxCount(scopeId) {
         const db = await this.getDB();
         return new Promise((resolve) => {
-            const tx = db.transaction('sutram_outbox', 'readonly');
-            const index = tx.objectStore('sutram_outbox').index('by_scope');
-            const req = index.count(_idbOnly(scopeId));
+            const req = db.transaction('sutram_outbox', 'readonly').objectStore('sutram_outbox').index('by_scope').count(_idbOnly(scopeId));
             req.onsuccess = () => resolve(req.result || 0);
             req.onerror = () => resolve(0);
         });
@@ -362,72 +368,45 @@ export class SutramDB {
         const db = await this.getDB();
         return new Promise((resolve) => {
             try {
-                const tx = db.transaction('vfs_cache', 'readonly');
-                const req = tx.objectStore('vfs_cache').getAllKeys();
+                const req = db.transaction('vfs_cache', 'readonly').objectStore('vfs_cache').getAllKeys();
                 req.onsuccess = () => {
-                    const keys = req.result || [];
-                    const scopePrefix = `${scopeId}::`;
-                    const defaultPrefix = 'default::';
-                    const matches = keys
-                        .filter(k => {
-                            if (typeof k !== 'string') return false;
-                            if (k.startsWith(scopePrefix)) return true;
-                            if (scopeId !== 'default' && k.startsWith(defaultPrefix)) {
-                                const rawUrl = k.slice(defaultPrefix.length);
-                                return this._isTenantAgnosticUrl(rawUrl);
-                            }
-                            return false;
-                        })
-                        .map(k => k.replace(/^(?:[^:]+)::/, ''));
+                    const scopePrefix = `${scopeId}::`, defaultPrefix = 'default::';
+                    const matches = (req.result || []).filter(k => typeof k === 'string' && (
+                        k.startsWith(scopePrefix) || (scopeId !== 'default' && k.startsWith(defaultPrefix) && this._isTenantAgnosticUrl(k.slice(defaultPrefix.length)))
+                    )).map(k => k.replace(/^(?:[^:]+)::/, ''));
                     resolve(Array.from(new Set(matches)));
                 };
                 req.onerror = () => resolve([]);
-            } catch (e) {
-                console.error("Failed to read vfs_cache keys:", e);
-                resolve([]);
-            }
+            } catch (_) { resolve([]); }
         });
     }
-
     static async getOutboxItems(scopeId) {
         try {
             const db = await this.getDB();
             return new Promise((resolve) => {
-                const tx = db.transaction('sutram_outbox', 'readonly');
-                const index = tx.objectStore('sutram_outbox').index('by_scope');
-                const req = index.getAll(_idbOnly(scopeId));
+                const req = db.transaction('sutram_outbox', 'readonly').objectStore('sutram_outbox').index('by_scope').getAll(_idbOnly(scopeId));
                 req.onsuccess = () => resolve(req.result || []);
                 req.onerror = () => resolve([]);
             });
-        } catch (e) {
-            return [];
-        }
+        } catch (_) { return []; }
     }
     static async getDeadLetters(scopeId) {
         try {
             const db = await this.getDB();
             return new Promise((resolve) => {
-                const tx = db.transaction('dead_letter', 'readonly');
-                const req = tx.objectStore('dead_letter').openCursor();
+                const req = db.transaction('dead_letter', 'readonly').objectStore('dead_letter').openCursor();
                 const items = [];
                 req.onsuccess = (e) => {
-                    const cursor = e.target.result;
-                    if (cursor) {
-                        if (cursor.value.scope_id === scopeId) {
-                            items.push({ _key: cursor.primaryKey, ...cursor.value });
-                        }
-                        cursor.continue();
-                    } else {
-                        resolve(items);
-                    }
+                    const c = e.target.result;
+                    if (c) {
+                        if (c.value.scope_id === scopeId) items.push({ _key: c.primaryKey, ...c.value });
+                        c.continue();
+                    } else resolve(items);
                 };
                 req.onerror = () => resolve([]);
             });
-        } catch (e) {
-            return [];
-        }
+        } catch (_) { return []; }
     }
-
     static async deleteDeadLetter(key) {
         const db = await this.getDB();
         return new Promise((resolve, reject) => {
@@ -437,47 +416,31 @@ export class SutramDB {
             tx.onerror = () => reject(tx.error);
         });
     }
-
     static async retryDeadLetter(item) {
         const db = await this.getDB();
         return new Promise((resolve, reject) => {
             const tx = db.transaction(['dead_letter', 'sutram_outbox'], 'readwrite');
-
-            // Reconstruct the outbox envelope
             const record = {
-                scope_id: item.scope_id,
-                path: item.path,
-                method: item.method,
-                headers: item.headers,
-                bodyString: item.bodyString,
-                collapseKey: item.collapseKey,
-                timestamp: Date.now() // Fresh timestamp for the retry
+                scope_id: item.scope_id, path: item.path, method: item.method, headers: item.headers,
+                bodyString: item.bodyString, collapseKey: item.collapseKey,
+                pendingMutations: Array.isArray(item.pendingMutations) ? [...item.pendingMutations] : [],
+                deletedMutations: Array.isArray(item.deletedMutations) ? [...item.deletedMutations] : [],
+                timestamp: Date.now()
             };
-
             if (item.collapseKey) {
-                const index = tx.objectStore('sutram_outbox').index('by_scope');
-                const req = index.openCursor(_idbOnly(item.scope_id));
+                const req = tx.objectStore('sutram_outbox').index('by_scope').openCursor(_idbOnly(item.scope_id));
                 let updated = false;
-
                 req.onsuccess = (e) => {
-                    const cursor = e.target.result;
-                    if (cursor) {
-                        if (cursor.value.collapseKey === item.collapseKey) {
-                            cursor.update(record);
-                            updated = true;
-                        }
-                        cursor.continue();
-                    } else if (!updated) {
-                        tx.objectStore('sutram_outbox').add(record);
-                    }
+                    const c = e.target.result;
+                    if (c) {
+                        if (c.value.collapseKey === item.collapseKey) { c.update(record); updated = true; }
+                        c.continue();
+                    } else if (!updated) tx.objectStore('sutram_outbox').add(record);
                 };
             } else {
                 tx.objectStore('sutram_outbox').add(record);
             }
-
-            // Remove it from the DLQ
             tx.objectStore('dead_letter').delete(item._key);
-
             tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
         });
@@ -633,7 +596,9 @@ export class OfflineHttpProvider {
             const cacheOverlay = {
                 cacheBlobUrl: options.cacheBlobUrl || null,
                 cacheBlobContent: options.cacheBlobContent,
-                deletedCacheUrls: options.deletedCacheUrls || []
+                deletedCacheUrls: options.deletedCacheUrls || [],
+                pendingMutations: options.pendingMutations || [],
+                deletedMutations: options.deletedMutations || []
             };
             await SutramDB.enqueueMutation(scopeId, url, method, headers, bodyString, collapseKey, cacheOverlay);
             const count = await SutramDB.getOutboxCount(scopeId);
@@ -791,7 +756,7 @@ export async function purgeSutramCaches({ forceWhenOffline = false } = {}) {
         console.warn('[Sutram Offline] Refusing to purge Service Worker & CacheStorage while offline.');
         return false;
     }
-    if ('caches' in window) {
+    if (typeof caches !== 'undefined') {
         try {
             const keys = await caches.keys();
             await Promise.all(keys.map(k => caches.delete(k)));
@@ -806,94 +771,124 @@ export async function purgeSutramCaches({ forceWhenOffline = false } = {}) {
     return true;
 }
 
+function _isCacheableBuildResponse(res) {
+    if (!res || res.status !== 200 || res.redirected) return false;
+    if (res.type && res.type !== 'basic' && res.type !== 'default') return false;
+    if (res.url && typeof window !== 'undefined' && window.location?.origin) {
+        try { if (new URL(res.url, window.location.origin).origin !== window.location.origin) return false; } catch (_) { return false; }
+    }
+    return true;
+}
+
 export async function ensureSutramAppShellCached(options = {}) {
-    if (typeof window === 'undefined' || !('caches' in window)) return;
+    if (typeof window === 'undefined' || typeof caches === 'undefined' || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+        return { complete: false, updated: false };
+    }
     const {
-        cacheVersion = 'v8',
+        cacheVersion = 'v9',
+        buildId = (typeof window !== 'undefined' && (window.SUTRAM_BUILD_ID || document?.querySelector?.('meta[name="sutram-build-id"]')?.content)) || null,
+        buildIdHeader = 'X-Sutram-Build-ID',
+        serverBuildIdUrl = null,
         staticPathPrefix = '/static/',
         excludePathPrefix = null,
         additionalAssets = [],
-        onLog = null
+        onLog = null,
+        onUpdateReady = null
     } = options;
 
     try {
-        const allCacheKeys = await caches.keys();
-        const matchingCaches = allCacheKeys.filter(k => k.startsWith('sutram-offline-'));
-        const activeCacheName = matchingCaches[matchingCaches.length - 1] || `sutram-offline-${cacheVersion}`;
-        const cache = await caches.open(activeCacheName);
+        const rootRes = await fetch('/', { cache: 'no-cache', credentials: 'same-origin', headers: { 'X-Sutram-Revalidate': '1' } });
+        if (!_isCacheableBuildResponse(rootRes)) return { complete: false, updated: false };
 
-        // 1. Guarantee root '/' and '/__sutram_app_shell__' are fresh from server when online (never serialize mutated live DOM)
-        if (navigator.onLine !== false) {
+        let discoveredBuildId = null;
+        if (serverBuildIdUrl) {
             try {
-                const rootRes = await fetch('/', { cache: 'no-cache', credentials: 'same-origin' });
-                if (rootRes && rootRes.status === 200) {
-                    await cache.put('/', rootRes.clone());
-                    await cache.put('/__sutram_app_shell__', rootRes.clone());
+                const bRes = await fetch(serverBuildIdUrl, { cache: 'no-store', credentials: 'same-origin' });
+                if (_isCacheableBuildResponse(bRes)) {
+                    const bData = await bRes.json().catch(() => ({}));
+                    if (bData?.build_id) discoveredBuildId = String(bData.build_id);
                 }
             } catch (_) {}
-        } else {
-            return;
         }
 
-        // 2. Collect all critical boot & module assets (importmap, link tags, performance resources, and host declarations)
-        const candidateUrls = new Set();
-        const resolvedAdditional = typeof additionalAssets === 'function' ? additionalAssets() : additionalAssets;
-        (resolvedAdditional || []).forEach(u => { if (u) candidateUrls.add(u); });
+        const rootHtml = await rootRes.clone().text().catch(() => '');
+        const metaMatch = rootHtml.match(/<meta\s+name=["'][^"']*build-id["']\s+content=["']([^"']+)["']/i);
+        const headerBuildId = discoveredBuildId || rootRes.headers?.get?.(buildIdHeader) || rootRes.headers?.get?.('X-Sutram-Build-ID') || (metaMatch ? metaMatch[1] : null);
+        const effectiveBuildId = headerBuildId || buildId || cacheVersion;
+        const isNewerBuild = Boolean(buildId && headerBuildId && headerBuildId !== buildId);
+        const targetCacheName = effectiveBuildId ? `sutram-build-${effectiveBuildId}` : `sutram-offline-${cacheVersion}`;
 
+        const candidateUrls = new Set((typeof additionalAssets === 'function' ? additionalAssets() : additionalAssets) || []);
         if (typeof document !== 'undefined') {
             document.querySelectorAll('script[type="importmap"]').forEach(el => {
-                try {
-                    const parsed = JSON.parse(el.textContent || '{}');
-                    Object.values(parsed.imports || {}).forEach(u => {
-                        if (typeof u === 'string') candidateUrls.add(u);
-                    });
-                } catch (_) {}
+                try { Object.values(JSON.parse(el.textContent || '{}').imports || {}).forEach(u => { if (typeof u === 'string') candidateUrls.add(u); }); } catch (_) {}
             });
             document.querySelectorAll('link[rel="stylesheet"], link[rel="modulepreload"], script[src]').forEach(el => {
                 const raw = el.getAttribute('href') || el.getAttribute('src');
                 if (raw) candidateUrls.add(raw);
             });
         }
-
         if (typeof window.performance?.getEntriesByType === 'function') {
             window.performance.getEntriesByType('resource').forEach(r => {
-                if (r.name && r.name.includes(staticPathPrefix) && (!excludePathPrefix || !r.name.includes(excludePathPrefix))) {
-                    candidateUrls.add(r.name);
-                }
+                if (r.name && r.name.includes(staticPathPrefix) && (!excludePathPrefix || !r.name.includes(excludePathPrefix))) candidateUrls.add(r.name);
             });
         }
 
         const sameOriginPaths = [];
         candidateUrls.forEach(rawUrl => {
+            if (!rawUrl) return;
             try {
                 const u = new URL(rawUrl, window.location.origin);
-                if (u.origin === window.location.origin && (!excludePathPrefix || !u.pathname.startsWith(excludePathPrefix))) {
+                if (u.origin === window.location.origin && u.pathname !== '/recovery' && (!excludePathPrefix || !u.pathname.startsWith(excludePathPrefix))) {
                     sameOriginPaths.push(u.pathname);
                 }
             } catch (_) {}
         });
 
-        let syncedCount = 0;
-        await Promise.allSettled(
-            sameOriginPaths.map(async (pathname) => {
-                // Always revalidate with cache: 'no-cache' when online so updated JS/CSS files overwrite stale SW entries
-                const res = await fetch(pathname, { cache: 'no-cache', priority: 'low', credentials: 'same-origin' });
-                if (res && res.status === 200) {
-                    await cache.put(pathname, res.clone());
-                    syncedCount++;
-                }
-            })
-        );
+        const uniquePaths = Array.from(new Set(sameOriginPaths));
+        const cache = await caches.open(targetCacheName);
+        await cache.put('/', rootRes.clone());
+        await cache.put('/__sutram_app_shell__', rootRes.clone());
 
-        if (syncedCount > 0 && onLog) {
-            onLog(`App Shell Vault: Synced ${syncedCount} fresh boot module asset(s).`, 'success');
+        let syncedCount = 0, failedCount = 0;
+        await Promise.all(uniquePaths.map(async (pathname) => {
+            if (pathname === '/') return;
+            try {
+                const res = await fetch(pathname, { cache: 'no-cache', priority: 'low', credentials: 'same-origin', headers: { 'X-Sutram-Revalidate': '1' } });
+                if (_isCacheableBuildResponse(res)) { await cache.put(pathname, res.clone()); syncedCount++; }
+                else failedCount++;
+            } catch (_) { failedCount++; }
+        }));
+
+        if (failedCount === 0) {
+            await cache.put('/__sutram_active_build__', new Response(targetCacheName, { status: 200 }));
+            const meta = await caches.open('sutram-meta');
+            if (isNewerBuild) {
+                await meta.put('/__sutram_pending_build__', new Response(targetCacheName, { status: 200 }));
+                if (syncedCount > 0 && onLog) onLog(`App Shell Vault [${effectiveBuildId}]: Staged ${syncedCount} boot module asset(s) for the next load.`, 'success');
+                if (typeof onUpdateReady === 'function') onUpdateReady(effectiveBuildId, targetCacheName);
+                return { complete: true, updated: true, buildId: effectiveBuildId, cacheName: targetCacheName };
+            }
+            await meta.put('/__sutram_active_build__', new Response(targetCacheName, { status: 200 }));
+            if (typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) {
+                navigator.serviceWorker.controller.postMessage({ type: 'ACTIVATE_BUILD_CACHE', cacheName: targetCacheName, buildId: effectiveBuildId });
+            }
+            const allKeys = await caches.keys();
+            await Promise.all(allKeys.filter(k => (k.startsWith('sutram-build-') || k.startsWith('sutram-offline-')) && k !== targetCacheName).map(k => caches.delete(k)));
+            if (syncedCount > 0 && onLog) onLog(`App Shell Vault [${effectiveBuildId}]: Synced ${syncedCount} boot module asset(s).`, 'success');
+            return { complete: true, updated: false, buildId: effectiveBuildId, cacheName: targetCacheName };
         }
-    } catch (_) {}
+        return { complete: false, updated: false, buildId: effectiveBuildId, cacheName: targetCacheName };
+    } catch (_) { return { complete: false, updated: false }; }
 }
 
 export class SutramCacheWarmer {
     static _queue = [];
     static _isDraining = false;
+
+    static get size() {
+        return this._queue.length;
+    }
 
     static enqueue(scopeId, urls = [], fetcher = null) {
         if (!Array.isArray(urls) || urls.length === 0) return;
@@ -905,6 +900,11 @@ export class SutramCacheWarmer {
             }
         });
         this.drain();
+    }
+
+    static removeByPrefix(scopeId, urlPrefix) {
+        if (!urlPrefix) return;
+        this._queue = this._queue.filter(item => !(item.scopeId === scopeId && String(item.url || '').startsWith(urlPrefix)));
     }
 
     static clear() {
