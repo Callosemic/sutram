@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v2.8.0 (2026-11-10)
+
+### Chores
+
+- Global workspace sweep
+  ([`a434d81`](https://github.com/Callosemic/sutram/commit/a434d81be76426a13fd021ff4f220f41a283d1c7))
+
+### Features
+
+- **offline**: Versioned build staging, captive-portal guard, and ESM test loader
+  ([`cfa12ef`](https://github.com/Callosemic/sutram/commit/cfa12efea1aaf6cbdb0234fc70f778a54ad543a3))
+
+
 ## v2.7.0 (2026-11-08)
 
 ### Chores
