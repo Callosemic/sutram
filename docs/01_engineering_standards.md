@@ -25,6 +25,8 @@ All components across `yenVUI` and `Sutram` are strictly forbidden from assignin
 All monospaced text rendering surfaces (code editors, diff viewers, `<pre>`, `<code>`) MUST explicitly suppress contextual font ligatures using `font-variant-ligatures: none` and `font-feature-settings: "liga" 0, "calt" 0` to preserve 1:1 physical character-to-glyph column positioning.
 ### Substrate Input Control Standardization
 Presentation components, workspace overlays, and modals MUST NOT render raw, un-encapsulated HTML form controls (`<input>`, `<textarea>`, `<select>`). All user input and parameter entry MUST utilize standardized substrate primitives (`<sutram-input>`, `<sutram-textarea>`, `<sutram-select>`, `<sutram-toggle>`, `<sutram-combobox>`, `<sutram-target-binding>`, `<sutram-composer>`) binding to `@sutram-input-changed` events. This guarantees uniform design token inheritance, focus trapping, and theme-neutral high-contrast compliance.
+
+* **Post-Render `<select>` Value Synchronization:** Wrapper primitives rendering native `<select>` elements MUST NOT bind `.value` directly on `<select>` in Lit `render()` when `<option>` children are dynamically generated, as Lit evaluates `.value` prior to reconciling child `<option>` nodes. Synchronize `select.value` inside `updated()` after `<option>` elements have rendered.
 ### Clean Dynamic ESM Specifier Standard
 Dynamic module batch loaders (`ExtensionRegistry.loadBatches`) MUST NOT append query parameters (such as `?v=timestamp`) to import URLs. All dynamic module imports must preserve bare specifiers or clean path URLs to ensure deterministic compatibility with browser-native import maps (`<script type="importmap">`) and native module graph deduplication.
 
@@ -218,6 +220,6 @@ Every defect or regression discovered across the `sutram` micro-kernel or `yenVU
 
 
 3. **Isolated Logic Flaw $\rightarrow$ Local Unit Regression Test:**
-* *Criterion:* If the defect is an algorithmic edge case inside a pure utility or physics function (e.g., `threeWayMergeText` Zombie-ACK subslice detection, `_applyMinimalDiff` cursor anchor mapping, or `anchorTopLayerPopover` viewport boundary flipping), add a targeted assertion to the unit test suite.
+* *Criterion:* If the defect is an algorithmic edge case inside a pure utility or physics function (e.g., `threeWayMergeText` in `sutram/js/merge.js`, `_applyMinimalDiff` cursor anchor mapping, or `anchorTopLayerPopover` viewport boundary flipping), add a targeted assertion to the unit test suite and keep cross-language parity twins (`sutram/js/merge.js` and Python `akasa/merge.py`) synchronized statement-for-statement.
 
 

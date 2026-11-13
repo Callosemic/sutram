@@ -4,6 +4,9 @@ This index serves as the architectural map. It outlines the core directories and
 
 ```text
 sutram/
+├── .github/                        # GitHub repository configuration
+│   └── workflows/                  # GitHub Actions workflows
+│       └── ci.yml                  # Runs the shared Callosemic stack battery (akasa -> sutram -> insetu) on every push to main.
 ├── .gitignore                      # Git exclusion rules and workspace tracking ignores
 ├── .gitkeep                        # Folder preservation tracking marker
 ├── CHANGELOG.md                    # Automated semantic release change log ledger
@@ -74,6 +77,8 @@ sutram/
 │       │   ├── class SutramCombobox # Searchable and filterable text combobox with dropdown options
 │       │   ├── class SutramTargetBinding # Compound endpoint and model selector pairing select and combobox with model candidate validity retention
 │       │   └── class SutramComposer # Slash-command message composer with token chip extraction and native textarea synchronization
+│       ├── merge.js                # The three-way text merge moves into its own module.
+│       │   └── function threeWayMergeText(baseText, localText, remoteText) # Deterministic three-way text merge of two edits of baseText: the local one and the remote one.
 │       ├── offline.js              # Offline IndexedDB persistence manager, outbox reconciler, and network hysteresis manager
 │       │   ├── function emitOfflineTelemetry(message, type = 'info', category...) # Dispatches structured sutram:offline-telemetry events across the window bus.
 │       │   ├── class SutramDB      # IndexedDB storage engine for VFS blob caching, atomic cache overlays, prefix eviction, lazy LRU tracking, outbox mutation sets, and DLQ management.
@@ -151,7 +156,6 @@ sutram/
 │       │   └── function canUseMultiWindowPopout() # Evaluates whether the current viewport and display mode support multi-window popouts.
 │       ├── sw-core.js              # Abstracted Service Worker core runtime for offline caching and navigation fallbacks
 │       ├── utils.js                # Pure algorithmic utility helpers (fuzzy filter, debounce, coalescedAsync, slugify, time formatting, nativeShareFiles)
-│       │   ├── function threeWayMergeText(baseText, localText, remoteText) # [comment required]
 │       │   ├── function shallowEqual(a, b) # [comment required]
 │       │   ├── function normalizeAccentText(str) # [comment required]
 │       │   ├── function fuzzyFilterObjects(items, query, getSearchString =...) # [comment required]
@@ -204,6 +208,12 @@ sutram/
 │   │   └── def check_host_domain_decoupling(target_dir) # Fitness Function: Enforces pure host-neutral Inversion of Control.
 │   └── unit/                       # Behavioral unit and integration tests for the Sutram runtime
 │       ├── __init__.py             # Unit test package initializer
+│       ├── js/                     # Standalone Node.js ESM behavioral integration test suites
+│       │   └── sw_core_staging.mjs # Node behavioral test exercising ensureSutramAppShellCached through sw-core.js's real fetch event handler on a non-localhost origin.
+│       │       ├── class FakeCache # [comment required]
+│       │       ├── class FakeCacheStorage # [comment required]
+│       │       ├── function networkFetch(input, init = {}) # [comment required]
+│       │       └── function swInterceptedFetch(input, init = {}) # Route page fetch() through sw-core.js's real fetch listener
 │       ├── js_loader.mjs           # Zero-dependency Node.js ESM loader and minimal browser environment shim for Sutram & yenVUI unit tests.
 │       │   └── class MemoryStorage # [comment required]
 │       ├── test_consumer_linter.py # Tests the consumer linter: Lit bindings in button labels, whole-tag rules across lines, and undeclared property bindings

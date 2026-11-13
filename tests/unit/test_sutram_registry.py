@@ -243,6 +243,28 @@ const crlfMerge = threeWayMergeText('one\r\ntwo\r\nthree', 'one_mod\r\ntwo\r\nth
 assert.deepEqual(crlfMerge, { merged: 'one_mod\r\ntwo\r\nthree_mod', clean: true });
 const conflictMerge = threeWayMergeText('alpha\nbeta\ngamma', 'alpha\nbeta_local\ngamma', 'alpha\nbeta_remote\ngamma');
 assert.equal(conflictMerge.clean, false);
+assert.equal(conflictMerge.merged, 'alpha\nbeta_local\ngamma', 'A conflict returns the local text untouched');
+
+// 9b. The same algorithm runs in akasa (akasa/merge.py); insetu's tests/parity/three_way_merge.json checks the two agree.
+assert.deepEqual(
+    threeWayMergeText('d\nc\nf\nf\nb\nb', 'd\nc\nf\nf\nb', 'd\nf\nf\nb*\nb'),
+    { merged: 'd\nf\nf\nb*', clean: true },
+    'A deleted line next to a line the other side changed must not be lost (insetu issue #18)'
+);
+assert.deepEqual(threeWayMergeText('a\nb\nc', 'a\nb\nn\nc', 'a\nB\nc'), { merged: 'a\nB\nn\nc', clean: true });
+assert.equal(threeWayMergeText('a\nb', 'a\ny\nb', 'a\nx\nb').clean, false, 'Two different insertions at one place are a conflict');
+const longBase = Array.from({ length: 5000 }, (_, i) => `row ${i}`);
+const longLocal = longBase.slice();
+const longRemote = longBase.slice();
+longLocal[4990] = 'changed near the end';
+longRemote[10] = 'changed near the top';
+const longWant = longRemote.slice();
+longWant[4990] = 'changed near the end';
+assert.deepEqual(
+    threeWayMergeText(longBase.join('\n'), longLocal.join('\n'), longRemote.join('\n')),
+    { merged: longWant.join('\n'), clean: true },
+    'Edits far apart in a long file must merge, not fall back to one whole-file block'
+);
 
 // 10. SutramProjectionCompiler & SutramProjectionPool (Generational Mark-and-Sweep, Rekey, & Evict)
 ExtensionRegistry.setTabOrder(['tasks', 'context']);
