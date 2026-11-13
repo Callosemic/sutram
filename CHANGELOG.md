@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v2.8.1 (2026-11-13)
+
+### Bug Fixes
+
+- **merge**: Extract patience-anchored three-way text merge module
+  ([`04d6cce`](https://github.com/Callosemic/sutram/commit/04d6cce78bcefb159bbd2dc3707e81eb4c0f7807))
+
+- **yenvui**: Sync select value post-render and truncate card titles
+  ([`ae783b7`](https://github.com/Callosemic/sutram/commit/ae783b75c111f9b13f67c48c497cc842558544f3))
+
+### Chores
+
+- Sweep remaining state
+  ([`3279c1a`](https://github.com/Callosemic/sutram/commit/3279c1a060f1ea6b95cbb51c71648a193cf4a1b3))
+
+### Testing
+
+- **offline**: Add service worker build staging and merge parity tests
+  ([`b52ea78`](https://github.com/Callosemic/sutram/commit/b52ea787a471d61ec3de0782c11b957b6f0123fc))
+
+
 ## v2.8.0 (2026-11-10)
 
 ### Chores
