@@ -87,13 +87,19 @@ export class YenvuiSelect extends LitElement {
         }));
     }
 
+    updated() {
+        // Lit applies a <select>'s .value before its <option> children update, so set the value once they have.
+        const select = this.querySelector('select.yv-select');
+        if (select && select.value !== (this.value || '')) select.value = this.value || '';
+    }
+
     render() {
         const wrapClass = `yv-form-wrapper ${this.flush ? 'yv-form-wrapper--flush' : ''} ${this.inline ? 'yv-form-wrapper--inline' : ''}`;
         return html`
             <div class="${wrapClass}">
                 ${this.label ? html`<yenvui-label .text=${this.label}></yenvui-label>` : ''}
-                <select class="yv-select" .value=${this.value || ''} ?disabled=${this.disabled} @change=${this._onChange}>
-                    ${(this.options || []).map(opt => html`<option value=${opt.value} ?selected=${this.value === opt.value}>${opt.label || opt.value}</option>`)}
+                <select class="yv-select" ?disabled=${this.disabled} @change=${this._onChange}>
+                    ${(this.options || []).map(opt => html`<option value=${opt.value}>${opt.label || opt.value}</option>`)}
                 </select>
             </div>
         `;

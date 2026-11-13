@@ -155,9 +155,9 @@ export class YenvuiCard extends YenvuiBase {
             gap: 6px;
             flex: 1 1 35%;
             min-width: 0;
+            white-space: nowrap;
             overflow: hidden;
-            overflow-wrap: anywhere;
-            word-break: break-word;
+            text-overflow: ellipsis;
         }
         .card-header-actions {
             display: flex;
