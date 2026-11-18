@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v2.9.0 (2026-11-18)
+
+### Chores
+
+- Sweep remaining state
+  ([`5b19935`](https://github.com/Callosemic/sutram/commit/5b19935fb3bad0940aa3b7dea37358bce2efde24))
+
+### Features
+
+- **kernel**: Pluggable backend adapter, adapter-routed offline transport, bounded shell sync
+  ([`f011c6e`](https://github.com/Callosemic/sutram/commit/f011c6ebe62568a7cfc145380f3c69384c5db313))
+
+
 ## v2.8.1 (2026-11-13)
 
 ### Bug Fixes
