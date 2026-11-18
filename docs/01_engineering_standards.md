@@ -5,6 +5,9 @@
 ### Pluggable Chassis Provider Contract (`sutram-chassis`)
 All Layer 2 presentation primitives, spatial app shells, and layout coordinators MUST import presentation components exclusively via the bare specifier `'sutram-chassis'`. Hardcoding relative filesystem imports targeting chassis repositories (e.g., `../../yenvui/js/*`) is strictly prohibited. Consuming host applications map `'sutram-chassis'` to their active presentation library via HTML import maps. All chassis providers must export all 28 primitives defined in `REQUIRED_CHASSIS_PRIMITIVES`.
 
+### Pluggable Backend Adapter Contract (`SutramBackendAdapter`)
+All Layer 2 offline transport gateways (`OfflineHttpProvider`), connectivity hysteresis probes (`NetworkHysteresisManager`), background cache warmers (`SutramCacheWarmer`), and app-shell build stagers (`ensureSutramAppShellCached`) MUST route network I/O and health checks through `getBackendAdapter()` (`fetchRaw` / `probeHealth`) when a backend adapter is registered, rather than issuing unauthenticated bare `fetch()` calls. Registered adapters MUST implement all 8 methods in `REQUIRED_BACKEND_ADAPTER_METHODS` (`bootstrap`, `fetchRaw`, `request`, `resolveScopedUrl`, `probeHealth`, `getBuildId`, `pollJob`, `connectStream`) and pass `validateBackendAdapter(adapter)`.
+
 ### Higher-Order Form Input Event Bridging
 Sutram input primitives (`<sutram-input>`, `<sutram-select>`, `<sutram-textarea>`, `<sutram-toggle>`) MUST inherit directly from chassis input classes wrapped with `bridgeInputEvents`. This wrapper normalizes chassis `yenvui-input-changed` events into `@sutram-input-changed` events, eliminating duplicated template rendering while preserving standard UDF event dispatching.
 

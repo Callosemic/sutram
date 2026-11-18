@@ -342,6 +342,35 @@ export const sharedStyles = css`
     .yv-interactive-row:hover {
         background: var(--bg-hover);
     }
+
+    /* --- BASE HTML TABLE VACUUM (Standard 08 §X) --- */
+    table, .dev-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: var(--font-mono, monospace);
+        font-size: 0.8rem;
+    }
+    th, .dev-table th {
+        text-align: left;
+        padding: 8px 12px;
+        border-bottom: 2px solid var(--border);
+        color: var(--text);
+        font-weight: 700;
+    }
+    td, .dev-table td {
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text);
+    }
+    td.cell-truncate {
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    td.cell-bold {
+        font-weight: 700;
+    }
 `;
 
 // Global Light DOM Injection (SSOT)

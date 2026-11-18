@@ -3,6 +3,7 @@
 import * as Chassis from 'sutram-chassis';
 
 export * from './sutram_sdk.js';
+export * from './client.js';
 export * from './offline.js';
 export * from './poller.js';
 export * from './shortcuts.js';

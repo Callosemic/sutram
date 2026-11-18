@@ -1,23 +1,15 @@
 // sutram/js/offline.js
 // Phase 1: Sutram Offline Micro-Kernel
+const getBackendAdapter = () => globalThis.__SUTRAM_BACKEND_ADAPTER__ || (typeof window !== 'undefined' && window.Sutram?.backendAdapter) || null;
 const DB_NAME = 'sutram_offline_db', DB_VERSION = 4;
 const _idbOnly = (val) => (typeof IDBKeyRange !== 'undefined' ? IDBKeyRange.only(val) : val);
 
 export function emitOfflineTelemetry(message, type = 'info', category = 'offline', details = null, scopeId = 'default') {
     if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('sutram:offline-telemetry', {
-            detail: {
-                timestamp: Date.now(),
-                type,
-                category,
-                message,
-                details,
-                scopeId
-            }
+            detail: { timestamp: Date.now(), type, category, message, details, scopeId }
         }));
-        if (typeof window.Sutram?.offlineLog === 'function') {
-            window.Sutram.offlineLog(message, type, details);
-        }
+        if (typeof window.Sutram?.offlineLog === 'function') window.Sutram.offlineLog(message, type, details);
     }
 }
 
@@ -81,33 +73,19 @@ export class SutramDB {
     static async getDB() {
         if (this._db) return this._db;
         if (this._dbPromise) return this._dbPromise;
-
         this._dbPromise = new Promise((resolve, reject) => {
             const req = indexedDB.open(DB_NAME, DB_VERSION);
             req.onupgradeneeded = (e) => {
                 const db = e.target.result;
-                if (!db.objectStoreNames.contains('vfs_cache')) {
-                    db.createObjectStore('vfs_cache');
-                }
-                if (!db.objectStoreNames.contains('manifest_cache')) {
-                    db.createObjectStore('manifest_cache');
-                }
+                if (!db.objectStoreNames.contains('vfs_cache')) db.createObjectStore('vfs_cache');
+                if (!db.objectStoreNames.contains('manifest_cache')) db.createObjectStore('manifest_cache');
                 if (!db.objectStoreNames.contains('sutram_outbox')) {
-                    const store = db.createObjectStore('sutram_outbox', { autoIncrement: true });
-                    store.createIndex('by_scope', 'scope_id');
+                    db.createObjectStore('sutram_outbox', { autoIncrement: true }).createIndex('by_scope', 'scope_id');
                 }
-                if (!db.objectStoreNames.contains('dead_letter')) {
-                    db.createObjectStore('dead_letter', { autoIncrement: true });
-                }
+                if (!db.objectStoreNames.contains('dead_letter')) db.createObjectStore('dead_letter', { autoIncrement: true });
             };
-            req.onsuccess = () => {
-                this._db = req.result;
-                resolve(this._db);
-            };
-            req.onerror = () => {
-                this._dbPromise = null;
-                reject(req.error);
-            };
+            req.onsuccess = () => { this._db = req.result; resolve(this._db); };
+            req.onerror = () => { this._dbPromise = null; reject(req.error); };
         });
         return this._dbPromise;
     }
@@ -449,10 +427,11 @@ export class SutramDB {
 
 export class OfflineHttpProvider {
     constructor(options = {}) {
+        this.adapter = options.adapter || null;
+        this.maxCacheBytes = options.maxCacheBytes || (250 * 1024 * 1024);
         this.isOfflineCapable = options.isOfflineCapable || (() => true);
         this.shouldCacheGet = options.shouldCacheGet || (() => true);
-        this.probeUrl = options.probeUrl || '/';
-        this.probeMethod = options.probeMethod || 'HEAD';
+        this.probeUrl = options.probeUrl || '/'; this.probeMethod = options.probeMethod || 'HEAD';
         this.onEnqueue = options.onEnqueue || (() => {});
         this.onError = options.onOfflineError || (() => {});
         this.onCacheWrite = options.onCacheWrite || (() => {});
@@ -476,24 +455,26 @@ export class OfflineHttpProvider {
         };
     }
 
+    _getNetworkAdapter() { return this.adapter || getBackendAdapter(); }
+
+    _netFetch(url, fetchOptions, scopeId = 'default') {
+        const adapter = this._getNetworkAdapter();
+        return (adapter && typeof adapter.fetchRaw === 'function') ? adapter.fetchRaw(url, fetchOptions, scopeId) : fetch(url, fetchOptions);
+    }
+
     async _verifyDaemonUnreachable() {
         if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+        const adapter = this._getNetworkAdapter();
+        if (adapter && typeof adapter.probeHealth === 'function') {
+            try { return !(await adapter.probeHealth()); } catch (_) { return true; }
+        }
         try {
             const sep = this.probeUrl.includes('?') ? '&' : '?';
-            const probeOpts = {
-                method: this.probeMethod,
-                cache: 'no-store',
-                signal: AbortSignal.timeout(1500)
-            };
-            if (this.probeMethod === 'POST') {
-                probeOpts.headers = { 'Content-Type': 'application/json' };
-                probeOpts.body = '{}';
-            }
-            const probe = await fetch(`${this.probeUrl}${sep}t=${Date.now()}`, probeOpts);
+            const probeOpts = { method: this.probeMethod, cache: 'no-store', signal: AbortSignal.timeout(1500) };
+            if (this.probeMethod === 'POST') { probeOpts.headers = { 'Content-Type': 'application/json' }; probeOpts.body = '{}'; }
+            const probe = await this._netFetch(`${this.probeUrl}${sep}t=${Date.now()}`, probeOpts);
             return !probe || [502, 503, 504].includes(probe.status);
-        } catch (_) {
-            return true;
-        }
+        } catch (_) { return true; }
     }
 
     async get(url, options = {}, scopeId = 'default') {
@@ -521,7 +502,7 @@ export class OfflineHttpProvider {
         }
         try {
             const fetchOptions = { cache: 'no-store', ...options };
-            const res = await fetch(url, fetchOptions);
+            const res = await this._netFetch(url, fetchOptions, scopeId);
 
             if ([502, 503, 504].includes(res.status)) {
                 throw new TypeError(`Gateway unreachable (HTTP ${res.status})`);
@@ -559,7 +540,7 @@ export class OfflineHttpProvider {
         }
 
         try {
-            const res = await fetch(url, options);
+            const res = await this._netFetch(url, options, scopeId);
             if ([502, 503, 504].includes(res.status)) {
                 throw new TypeError(`Gateway unreachable (HTTP ${res.status})`);
             }
@@ -612,47 +593,43 @@ export class OfflineHttpProvider {
     }
 }
 export class NetworkHysteresisManager {
-    constructor(pingUrl, threshold = 3) {
+    constructor(pingUrl = null, threshold = 3, options = {}) {
         this.pingUrl = pingUrl;
         this.threshold = threshold;
+        this.adapter = options.adapter || null;
         this.isChecking = false;
     }
 
+    async _pingOnce() {
+        const adapter = this.adapter || getBackendAdapter();
+        if (!this.pingUrl && adapter && typeof adapter.probeHealth === 'function') {
+            return await adapter.probeHealth();
+        }
+        if (!this.pingUrl) return false;
+        const url = this.pingUrl.replace('{t}', Date.now());
+        const pingOpts = { method: 'HEAD', cache: 'no-store', signal: AbortSignal.timeout(2000) };
+        const res = (adapter && typeof adapter.fetchRaw === 'function')
+            ? await adapter.fetchRaw(url, pingOpts)
+            : await fetch(url, pingOpts);
+        return Boolean(res && res.ok);
+    }
+
     async check(onRestored) {
-        // Concurrency Guard: Prevent overlapping bursts if interval fires before execution finishes
         if (this.isChecking) return;
         this.isChecking = true;
-
         try {
-            // Primary slow-polling ping with a strict 2s fail-fast timeout
-            const url = this.pingUrl.replace('{t}', Date.now());
-            const res = await fetch(url, { method: 'HEAD', cache: 'no-store', signal: AbortSignal.timeout(2000) });
-
-            if (res.ok) {
-                // First ping succeeded! Enter rapid verification burst.
+            if (await this._pingOnce()) {
                 let successCount = 1;
                 for (let i = 1; i < this.threshold; i++) {
                     await new Promise(resolve => setTimeout(resolve, 1000));
-                    const burstUrl = this.pingUrl.replace('{t}', Date.now());
                     try {
-                        const burstRes = await fetch(burstUrl, { method: 'HEAD', cache: 'no-store', signal: AbortSignal.timeout(2000) });
-                        if (burstRes.ok) {
-                            successCount++;
-                        } else {
-                            break; // Burst failed, revert to slow polling
-                        }
-                    } catch (e) {
-                        break; // Network dropped or timed out during burst
-                    }
+                        if (await this._pingOnce()) successCount++;
+                        else break;
+                    } catch (_) { break; }
                 }
-
-                if (successCount >= this.threshold) {
-                    await onRestored();
-                }
+                if (successCount >= this.threshold) await onRestored();
             }
-        } catch (e) {
-            // Network remains offline, continue slow polling
-        } finally {
+        } catch (_) {} finally {
             this.isChecking = false;
         }
     }
@@ -780,13 +757,46 @@ function _isCacheableBuildResponse(res) {
     return true;
 }
 
-export async function ensureSutramAppShellCached(options = {}) {
+let _shellSyncInFlight = null;
+let _shellSettled = null;
+
+// One app-shell sync at a time: concurrent callers share the run in flight, and once a build has been
+// fully staged or verified, later calls return that result until the backend reports a different build.
+export function ensureSutramAppShellCached(options = {}) {
+    const adapter = options.adapter || getBackendAdapter();
+    const observedBuildId = (adapter && typeof adapter.getBuildId === 'function') ? adapter.getBuildId() : null;
+    if (!options.force && _shellSettled && observedBuildId && observedBuildId === _shellSettled.buildId) {
+        return Promise.resolve({ ..._shellSettled, skipped: true });
+    }
+    if (_shellSyncInFlight) {
+        return _shellSyncInFlight.then((res) => {
+            if (res?.updated && typeof options.onUpdateReady === 'function') {
+                try { options.onUpdateReady(res.buildId, res.cacheName); } catch (_) {}
+            }
+            return res;
+        });
+    }
+    _shellSyncInFlight = _syncAppShell(options)
+        .then((res) => {
+            if (res?.complete && res.buildId) _shellSettled = res;
+            return res;
+        })
+        .finally(() => { _shellSyncInFlight = null; });
+    return _shellSyncInFlight;
+}
+
+async function _syncAppShell(options = {}) {
     if (typeof window === 'undefined' || typeof caches === 'undefined' || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
         return { complete: false, updated: false };
     }
+    const adapter = options.adapter || getBackendAdapter();
+    const netFetch = (url, fetchOpts) => (adapter && typeof adapter.fetchRaw === 'function')
+        ? adapter.fetchRaw(url, fetchOpts)
+        : fetch(url, fetchOpts);
+
     const {
         cacheVersion = 'v9',
-        buildId = (typeof window !== 'undefined' && (window.SUTRAM_BUILD_ID || document?.querySelector?.('meta[name="sutram-build-id"]')?.content)) || null,
+        buildId = (typeof window !== 'undefined' && (window.SUTRAM_BUILD_ID || document?.querySelector?.('meta[name="sutram-build-id"]')?.content)) || adapter?.getBuildId?.() || null,
         buildIdHeader = 'X-Sutram-Build-ID',
         serverBuildIdUrl = null,
         staticPathPrefix = '/static/',
@@ -797,13 +807,13 @@ export async function ensureSutramAppShellCached(options = {}) {
     } = options;
 
     try {
-        const rootRes = await fetch('/', { cache: 'no-cache', credentials: 'same-origin', headers: { 'X-Sutram-Revalidate': '1' } });
+        const rootRes = await netFetch('/', { cache: 'no-cache', credentials: 'same-origin', headers: { 'X-Sutram-Revalidate': '1' } });
         if (!_isCacheableBuildResponse(rootRes)) return { complete: false, updated: false };
 
         let discoveredBuildId = null;
         if (serverBuildIdUrl) {
             try {
-                const bRes = await fetch(serverBuildIdUrl, { cache: 'no-store', credentials: 'same-origin' });
+                const bRes = await netFetch(serverBuildIdUrl, { cache: 'no-store', credentials: 'same-origin' });
                 if (_isCacheableBuildResponse(bRes)) {
                     const bData = await bRes.json().catch(() => ({}));
                     if (bData?.build_id) discoveredBuildId = String(bData.build_id);
@@ -813,7 +823,12 @@ export async function ensureSutramAppShellCached(options = {}) {
 
         const rootHtml = await rootRes.clone().text().catch(() => '');
         const metaMatch = rootHtml.match(/<meta\s+name=["'][^"']*build-id["']\s+content=["']([^"']+)["']/i);
-        const headerBuildId = discoveredBuildId || rootRes.headers?.get?.(buildIdHeader) || rootRes.headers?.get?.('X-Sutram-Build-ID') || (metaMatch ? metaMatch[1] : null);
+        const headerBuildId = discoveredBuildId
+            || rootRes.headers?.get?.(buildIdHeader)
+            || rootRes.headers?.get?.('X-Akasa-Build-ID')
+            || rootRes.headers?.get?.('X-Sutram-Build-ID')
+            || adapter?.getBuildId?.()
+            || (metaMatch ? metaMatch[1] : null);
         const effectiveBuildId = headerBuildId || buildId || cacheVersion;
         const isNewerBuild = Boolean(buildId && headerBuildId && headerBuildId !== buildId);
         const targetCacheName = effectiveBuildId ? `sutram-build-${effectiveBuildId}` : `sutram-offline-${cacheVersion}`;
@@ -850,14 +865,32 @@ export async function ensureSutramAppShellCached(options = {}) {
         await cache.put('/', rootRes.clone());
         await cache.put('/__sutram_app_shell__', rootRes.clone());
 
+        // Only when the build ID hashes every served asset: a complete cache for this build already holds them all.
+        if (options.trustBuildId && !isNewerBuild && await cache.match('/__sutram_active_build__')) {
+            return { complete: true, updated: false, buildId: effectiveBuildId, cacheName: targetCacheName };
+        }
+
         let syncedCount = 0, failedCount = 0;
-        await Promise.all(uniquePaths.map(async (pathname) => {
-            if (pathname === '/') return;
-            try {
-                const res = await fetch(pathname, { cache: 'no-cache', priority: 'low', credentials: 'same-origin', headers: { 'X-Sutram-Revalidate': '1' } });
-                if (_isCacheableBuildResponse(res)) { await cache.put(pathname, res.clone()); syncedCount++; }
-                else failedCount++;
-            } catch (_) { failedCount++; }
+        // A few requests at a time, so the sweep never starves the host's own requests for connections.
+        const pending = uniquePaths.filter(p => p !== '/');
+        const workerCount = Math.max(1, Math.min(Number(options.concurrency) || 4, pending.length));
+        await Promise.all(Array.from({ length: workerCount }, async () => {
+            while (pending.length > 0) {
+                const pathname = pending.shift();
+                try {
+                    // Revalidate against the copy already cached: an unchanged file comes back as a bodiless 304.
+                    // The lookup is only an optimization, so a failed one means a plain fetch, never a failed asset.
+                    let previous = null;
+                    try { previous = typeof caches.match === 'function' ? await caches.match(pathname) : null; } catch (_) {}
+                    const etag = previous?.headers?.get('ETag') || null;
+                    const headers = { 'X-Sutram-Revalidate': '1' };
+                    if (etag) headers['If-None-Match'] = etag;
+                    const res = await netFetch(pathname, { cache: etag ? 'no-store' : 'no-cache', priority: 'low', credentials: 'same-origin', headers });
+                    if (res && res.status === 304 && previous) { await cache.put(pathname, previous.clone()); syncedCount++; }
+                    else if (_isCacheableBuildResponse(res)) { await cache.put(pathname, res.clone()); syncedCount++; }
+                    else failedCount++;
+                } catch (_) { failedCount++; }
+            }
         }));
 
         if (failedCount === 0) {
@@ -924,7 +957,12 @@ export class SutramCacheWarmer {
                     if (typeof next.fetcher === 'function') {
                         await next.fetcher(next.url, next.scopeId);
                     } else {
-                        await fetch(next.url, { priority: 'low', credentials: 'same-origin' });
+                        const adapter = getBackendAdapter();
+                        if (adapter && typeof adapter.fetchRaw === 'function') {
+                            await adapter.fetchRaw(next.url, { priority: 'low', credentials: 'same-origin' }, next.scopeId);
+                        } else {
+                            await fetch(next.url, { priority: 'low', credentials: 'same-origin' });
+                        }
                     }
                 } catch (_) {}
                 if (delayMs > 0 && this._queue.length > 0) {
@@ -947,7 +985,8 @@ export function bootSutramServiceWorker(options = {}) {
         subscribeReconciling = null,
         onStatus = null,
         onLog = null,
-        onError = null
+        onError = null,
+        shellSyncDelayMs = 4000
     } = options;
 
     if (!('serviceWorker' in navigator)) {
@@ -994,7 +1033,8 @@ export function bootSutramServiceWorker(options = {}) {
 
     navigator.serviceWorker.register(swUrl).then(reg => {
         if (onStatus) onStatus("Service Worker Active", 3000);
-        syncShellVault();
+        // Let the host's boot requests go first; a sync started elsewhere in the meantime is shared, not repeated.
+        setTimeout(syncShellVault, Math.max(0, Number(shellSyncDelayMs) || 0));
 
         if (reg.installing) {
             trackInstallingWorker(reg.installing);

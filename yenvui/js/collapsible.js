@@ -6,6 +6,7 @@ export class YenvuiCollapsible extends YenvuiBase {
         titleText: { type: String },
         open: { type: Boolean, reflect: true },
         intent: { type: String },
+        compact: { type: Boolean, reflect: true },
         flush: { type: Boolean, reflect: true }
     };
     static styles = css`
@@ -75,6 +76,27 @@ export class YenvuiCollapsible extends YenvuiBase {
             text-transform: uppercase;
             letter-spacing: 0.04em;
             color: var(--text);
+            min-width: 0;
+            flex: 1 1 0%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        :host([compact]) .header {
+            padding: 6px 10px;
+            border-radius: 6px;
+            border-bottom: 1px solid var(--border);
+        }
+        :host([compact][open]) .header {
+            margin-bottom: 6px;
+        }
+        :host([compact]) .title {
+            font-size: 0.76rem;
+            text-transform: none;
+            letter-spacing: 0.01em;
+        }
+        :host([compact][open]) .content {
+            padding: 0 0 6px 0;
         }
 
         /* Semantic Intent Accents */
@@ -124,7 +146,11 @@ export class YenvuiCollapsible extends YenvuiBase {
             :host([open]) .header, :host([flush][open]) .header {
                 margin-bottom: 12px !important;
             }
+            :host([compact][open]) .header {
+                margin-bottom: 6px !important;
+            }
             :host([open]) .content { padding: 0 0 12px 0 !important; }
+            :host([compact][open]) .content { padding: 0 0 6px 0 !important; }
         }
         /* High Contrast Theme Hooks */
         :host([data-theme="e-ink"]) .header {
@@ -155,6 +181,7 @@ export class YenvuiCollapsible extends YenvuiBase {
         super();
         this.open = true;
         this.intent = 'neutral';
+        this.compact = false;
         this.flush = false;
     }
     render() {

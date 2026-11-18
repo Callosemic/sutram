@@ -394,10 +394,13 @@ export class YenvuiCard extends YenvuiBase {
         }
         :host([compact]) .content-col {
             flex-direction: row;
+            justify-content: flex-start;
             align-items: center;
             padding: 6px 12px;
         }
         :host([compact]) .card-header {
+            flex: 1 1 0%;
+            min-width: 0;
             margin-bottom: 0;
         }
         :host([compact]) .card-title {
@@ -636,7 +639,8 @@ export class YenvuiCard extends YenvuiBase {
                 @mouseleave=${() => { if (window.matchMedia('(hover: hover)').matches && (!this._gestureController || !this._gestureController.active)) this._overlayActive = false; }}
                 @pointerdown=${(e) => { this._initGestureController(); this._gestureController.start(e); }}>
 
-                ${!this.disableSelection ? html`<div class="selection-hit-zone" title="Select Item" @click=${(e) => { e.stopPropagation(); this._toggleSelection(); }}></div><div class="selection-strip"></div>` : ''}
+                ${!this.disableSelection ? html`<div class="selection-hit-zone" title="Select Item" @click=${(e) => { e.stopPropagation(); this._toggleSelection(); }}></div>` : ''}
+                <div class="selection-strip" @click=${(e) => { if (!this.disableSelection) { e.stopPropagation(); this._toggleSelection(); } }}></div>
                 <div class="content-col" @click=${(e) => {
                     if (this._isPanning) {
                         e.stopPropagation();

@@ -285,6 +285,12 @@ export class YenvuiStack extends YenvuiBase {
             flex-direction: row !important;
             align-items: center;
             width: auto;
+            max-width: 100%;
+            flex-shrink: 1;
+        }
+        :host([direction="row"][justify="between"]),
+        :host([direction="row"][wrap]) {
+            width: 100%;
         }
         :host([direction="col"]),
         :host([direction="column"]) {
@@ -694,13 +700,13 @@ export class YenvuiSidebarLayout extends YenvuiBase {
             display: none;
         }
         .sidebar-rail {
-            width: 240px;
+            width: var(--yv-sidebar-width, 300px);
             border-right: 1px solid var(--border);
             background: var(--input-bg);
             display: flex;
             flex-direction: column;
             padding: 10px;
-            gap: 6px;
+            gap: 8px;
             flex-shrink: 0;
             box-sizing: border-box;
             overflow: hidden;
@@ -718,8 +724,8 @@ export class YenvuiSidebarLayout extends YenvuiBase {
                 top: 0;
                 bottom: 0;
                 left: 0;
-                width: 260px;
-                max-width: 82%;
+                width: min(340px, 88vw);
+                max-width: 88vw;
                 background: color-mix(in srgb, var(--pane-bg) 96%, transparent);
                 backdrop-filter: blur(10px);
                 -webkit-backdrop-filter: blur(10px);

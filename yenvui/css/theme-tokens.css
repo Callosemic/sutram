@@ -228,6 +228,33 @@ pre {
    color: var(--intent-warning);
    font-size: 1.1rem;
 }
+table, .dev-table {
+   width: 100%;
+   border-collapse: collapse;
+   font-family: var(--font-mono);
+   font-size: 0.8rem;
+}
+th, .dev-table th {
+   text-align: left;
+   padding: 8px 12px;
+   border-bottom: 2px solid var(--border);
+   color: var(--text);
+   font-weight: 700;
+}
+td, .dev-table td {
+   padding: 8px 12px;
+   border-bottom: 1px solid var(--border);
+   color: var(--text);
+}
+td.cell-truncate {
+   max-width: 300px;
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+}
+td.cell-bold {
+   font-weight: 700;
+}
 /* Declarative Interactive Row Hover Mechanics */
 .yv-interactive-row {
    transition: background 0.2s ease, border-color 0.2s ease;

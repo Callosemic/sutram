@@ -48,6 +48,7 @@ sutram/
 │   │   ├── 0030_zero_css_lego_layout_primitives_semantic_tokens_and_composer.md # ADR-0030: Zero-CSS Lego Layout Primitives, Semantic Token Parameterization, SutramComposer, and Floating HUD
 │   │   ├── 0031_offline_app_shell_vault_atomic_cache_overlays_and_markdown_link_widgets.md # ADR-0031: Offline App Shell Vault, Atomic Read-Your-Writes Cache Overlays, Functional Store Initializers, User Column Capacity, and Editor Markdown Link Widgets
 │   │   ├── 0032_versioned_build_staging_navigation_cutover_and_esm_loader.md # ADR-0032: Versioned Build Staging, Navigation-Gated Cutover, Captive-Portal Defense, and Zero-Dependency ESM Test Loader
+│   │   ├── 0033_pluggable_backend_adapter_and_authenticated_offline_transport.md # ADR-0033: Pluggable Backend Adapter Contract, Akasa Reference Adapter, and Adapter-Routed Offline Transport
 │   │   └── archived/               # Deeply embedded baseline architectural records preserved for historical reference
 │   │       ├── 0001_sutram_ioc_microkernel_architecture.md # ADR-0001: IoC microkernel and slot layout architecture
 │   │       ├── 0002_sutram_bootloader_and_resilience_patterns.md # ADR-0002: Stage 1 bootloader and error boundary standards
@@ -62,9 +63,17 @@ sutram/
 │       │   ├── function getSpatialMetrics(capacity, activeViewport, layout...) # Computes proportional column widths, track offsets, and window bounds across 1-3 column capacities.
 │       │   ├── function pinMatchesSlot(pin, slotOrId) # Evaluates whether a pinned projection entry matches a layout slot definition or target identifier.
 │       │   └── class SutramAppShell # Top-level 3-column spatial viewport shell coordinating tab routing, user-clamped capacity, projection pooling, and windowed surfaces.
-│       ├── client.js               # Agnostic data provider client and HTTP transport provider interface
-│       │   ├── class SutramDataClient # sutram/js/client.js Phase 0: Sutram Micro-Kernel Data Provider Interface
-│       │   └── class HttpProvider  # Default fetch-backed HTTP transport provider for GET, POST, and DELETE requests.
+│       ├── chassis_adapter.js      # Composite DAG tree and corner-pinned floating telemetry HUD primitives
+│       │   ├── class SutramDagTree # Universal wavefront and hierarchy DAG tree visualization primitive.
+│       │   └── class SutramFloatingHud # Corner-pinned collapsible status and telemetry HUD drawer.
+│       ├── client.js               # Pluggable backend adapter contract, Akasa reference adapter, and HTTP transport provider interface
+│       │   ├── function validateBackendAdapter(adapter) # Verifies that a backend adapter implements all required transport, auth, and stream methods.
+│       │   ├── function registerBackendAdapter(adapter) # Validates and registers the active BackendAdapterRegistry singleton instance.
+│       │   ├── function getBackendAdapter() # Returns the currently registered backend adapter instance or null.
+│       │   ├── class SutramBackendAdapter # Base pluggable backend transport adapter defining default scoped fetch, health probe, and job polling hooks.
+│       │   ├── class AkasaBackendAdapter # Reference backend adapter implementing token bootstrap, 401 retry, build ID sniffing, scoped abort signals, and SSE streams.
+│       │   ├── class SutramDataClient # Agnostic data provider client delegating reads and mutations to an injected transport provider.
+│       │   └── class HttpProvider  # Default globalThis.fetch-backed HTTP transport provider for GET, POST, and DELETE requests.
 │       ├── drag-coordinator.js     # Spatial drag-and-drop overlay coordinator for interactive column reordering
 │       │   └── class SutramDragCoordinator # Dual-mode spatial drag HUD coordinating tab docking, column reordering, window spanning, and popout ejection.
 │       ├── index.js                # Public Layer 2 barrel entrypoint exporting Sutram stores, offline engines, and UI primitives
@@ -80,15 +89,16 @@ sutram/
 │       ├── merge.js                # The three-way text merge moves into its own module.
 │       │   └── function threeWayMergeText(baseText, localText, remoteText) # Deterministic three-way text merge of two edits of baseText: the local one and the remote one.
 │       ├── offline.js              # Offline IndexedDB persistence manager, outbox reconciler, and network hysteresis manager
+│       │   ├── function getBackendAdapter() # Resolves the active BackendAdapterRegistry instance from globalThis or window.Sutram.
 │       │   ├── function emitOfflineTelemetry(message, type = 'info', category...) # Dispatches structured sutram:offline-telemetry events across the window bus.
 │       │   ├── class SutramDB      # IndexedDB storage engine for VFS blob caching, atomic cache overlays, prefix eviction, lazy LRU tracking, outbox mutation sets, and DLQ management.
-│       │   ├── class OfflineHttpProvider # Network-first HTTP gateway with 502/503/504 gateway fallback, IoC cache predicates, and offline outbox queueing.
-│       │   ├── class NetworkHysteresisManager # Burst-verification connectivity probe preventing premature online transitions on flaky networks.
+│       │   ├── class OfflineHttpProvider # Adapter-routed network-first HTTP gateway with 502/503/504 gateway fallback, IoC cache predicates, and offline outbox queueing.
+│       │   ├── class NetworkHysteresisManager # Adapter-aware burst-verification connectivity probe preventing premature online transitions on flaky networks.
 │       │   ├── class OutboxReconciler # Two-stage sequential outbox drainer with Web Locks API coordination, telemetry emission, and 4xx poison-pill DLQ isolation.
 │       │   ├── function purgeSutramCaches({ forceWhenOffline = false } = {}) # Safely clears CacheStorage and Service Worker registrations while guarding offline sessions.
-│       │   ├── function ensureSutramAppShellCached(options = {}) # Stages and synchronizes versioned App Shell builds into CacheStorage with captive-portal and partial-failure guards.
-│       │   ├── class SutramCacheWarmer # Background low-priority cache warmer with queue inspection, prefix pruning, and offline circuit-breaking.
-│       │   └── function bootSutramServiceWorker(options = {}) # Registers the Service Worker, wires reconciliation state, and triggers App Shell vault warming.
+│       │   ├── function ensureSutramAppShellCached(options = {}) # Single-flight versioned App Shell vault stager with ETag 304 revalidation, captive-portal defense, and adapter-routed transport.
+│       │   ├── class SutramCacheWarmer # Background low-priority cache warmer routing requests through the registered backend adapter with queue inspection and offline circuit-breaking.
+│       │   └── function bootSutramServiceWorker(options = {}) # Registers the Service Worker, wires reconciliation state, and schedules deferred App Shell vault warming.
 │       ├── poller.js               # Background job status polling factory with tier-0 API integration
 │       │   └── function createJobPoller(apiClient) # sutram/js/poller.js Standalone background job status polling routine
 │       ├── primitives.js           # Presentation primitives (buttons, modals, toast, selection, status)
@@ -138,9 +148,7 @@ sutram/
 │       │   ├── class SutramSelectorModal # [stale?] 15.
 │       │   ├── class SutramReportProjection # [stale?] 16.
 │       │   ├── class SutramDiffViewer # 17.
-│       │   ├── class SutramSubtabMenu # [stale?] 18.
-│       │   ├── class SutramDagTree # 19. Universal Wavefront & Hierarchy DAG Tree Primitive
-│       │   └── class SutramFloatingHud # 20. Corner-Pinned Collapsible Status & Telemetry HUD
+│       │   └── class SutramSubtabMenu # [stale?] 18.
 │       ├── projection_engine.js    # Declarative layout projection compiler (SutramProjectionCompiler)
 │       │   ├── class SutramProjectionCompiler # [comment required]
 │       │   └── class SutramProjectionPool # [comment required]

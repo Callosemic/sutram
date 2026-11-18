@@ -959,6 +959,216 @@ console.log('EDITOR_LOADER_TESTS_PASSED');
         res = self._run_node_script(test_mjs, extra_files=extra_files)
         self.assertIn("EDITOR_LOADER_TESTS_PASSED", res.stdout)
 
+    def test_sutram_backend_adapter_contract_and_offline_transport_in_node(self):
+        """Verifies validateBackendAdapter, AkasaBackendAdapter, and offline.js network I/O routing through the registered adapter."""
+        test_mjs = r"""
+import assert from 'node:assert/strict';
+
+const {
+    REQUIRED_BACKEND_ADAPTER_METHODS,
+    validateBackendAdapter,
+    BackendAdapterRegistry,
+    registerBackendAdapter,
+    getBackendAdapter,
+    SutramBackendAdapter,
+    AkasaBackendAdapter
+} = await import('sutram/client.js');
+const {
+    OfflineHttpProvider,
+    NetworkHysteresisManager,
+    ensureSutramAppShellCached,
+    SutramCacheWarmer
+} = await import('sutram/offline.js');
+
+// 1. validateBackendAdapter rejects incomplete adapters and accepts valid ones
+assert.throws(
+    () => validateBackendAdapter({ name: 'BrokenAdapter', bootstrap: async () => ({}) }),
+    /\[Sutram Boot Error\] Backend adapter 'BrokenAdapter' fails contract\. Missing methods:/
+);
+assert.equal(validateBackendAdapter(new SutramBackendAdapter()), true);
+
+// 2. AkasaBackendAdapter: bootstrap, passive X-Akasa-Build-ID sniffing, 401 retry & scoped URL resolution
+const recordedRequests = [];
+let serverBuildId = 'build_100';
+let issuedToken = 'tok_initial';
+let rejectFirstGet = false;
+const mismatches = [];
+
+const mockFetch = async (url, init = {}) => {
+    const headers = new Headers(init.headers || {});
+    recordedRequests.push({
+        url: String(url),
+        method: init.method || 'GET',
+        body: init.body ?? null,
+        akasaToken: headers.get('X-Akasa-Token'),
+        aliasToken: headers.get('X-Host-Token'),
+        workspaceId: headers.get('X-Workspace-ID'),
+        revalidate: headers.get('X-Sutram-Revalidate'),
+        ifNoneMatch: headers.get('If-None-Match')
+    });
+
+    if (headers.get('If-None-Match') === '"etag-app"') {
+        return new Response(null, { status: 304 });
+    }
+
+    if (String(url).startsWith('/auth/bootstrap')) {
+        return new Response(JSON.stringify({ status: 'ok', token: issuedToken, build_id: serverBuildId }), {
+            status: 200,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Akasa-Build-ID': serverBuildId
+            }
+        });
+    }
+
+    if (rejectFirstGet) {
+        rejectFirstGet = false;
+        issuedToken = 'tok_refreshed';
+        return new Response(JSON.stringify({ error: 'Expired' }), { status: 401 });
+    }
+
+    return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Akasa-Build-ID': serverBuildId
+        }
+    });
+};
+
+const adapter = new AkasaBackendAdapter({
+    namespace: 'testapp',
+    tokenHeader: 'X-Akasa-Token',
+    tokenAliasHeader: 'X-Host-Token',
+    fetchImpl: mockFetch,
+    getActiveScope: () => 'ws_one',
+    onBuildMismatch: (nextId, prevId) => mismatches.push({ nextId, prevId })
+});
+for (const method of REQUIRED_BACKEND_ADAPTER_METHODS) {
+    assert.equal(typeof adapter[method], 'function', `AkasaBackendAdapter must implement ${method}`);
+}
+registerBackendAdapter(adapter);
+assert.strictEqual(getBackendAdapter(), adapter);
+
+const bootRes = await adapter.bootstrap();
+assert.equal(bootRes.authenticated, true);
+assert.equal(bootRes.token, 'tok_initial');
+assert.equal(adapter.getBuildId(), 'build_100');
+assert.equal(adapter.resolveScopedUrl('fs/fetch', 'ws_one'), '/api/ws_one/fs/fetch');
+
+// 401 single-flight re-authentication + build ID mismatch detection
+rejectFirstGet = true;
+serverBuildId = 'build_200';
+const retriedRes = await adapter.get('system/config');
+assert.equal(retriedRes.status, 200);
+assert.equal(adapter.getBuildId(), 'build_200');
+assert.deepEqual(mismatches, [{ nextId: 'build_200', prevId: 'build_100' }]);
+const lastReq = recordedRequests[recordedRequests.length - 1];
+assert.equal(lastReq.akasaToken, 'tok_refreshed');
+assert.equal(lastReq.aliasToken, 'tok_refreshed');
+assert.equal(lastReq.workspaceId, 'ws_one');
+
+// 3. offline.js components route all network I/O through registered adapter (zero unauthenticated window.fetch calls)
+globalThis.fetch = async (url) => {
+    throw new Error(`Unauthenticated bare globalThis.fetch was called for ${url}`);
+};
+
+const provider = new OfflineHttpProvider({
+    shouldCacheGet: () => false
+});
+const providerRes = await provider.get('/api/ws_one/fs/list', {}, 'ws_one');
+assert.equal(providerRes.status, 200);
+assert.equal(recordedRequests[recordedRequests.length - 1].akasaToken, 'tok_refreshed');
+
+const hysteresis = new NetworkHysteresisManager(null, 2);
+let restoredCount = 0;
+await hysteresis.check(async () => { restoredCount++; });
+assert.equal(restoredCount, 1, 'NetworkHysteresisManager must use adapter.probeHealth() when pingUrl is omitted');
+
+const cacheBuckets = new Map();
+globalThis.caches = {
+    keys: async () => Array.from(cacheBuckets.keys()),
+    delete: async (k) => cacheBuckets.delete(k),
+    open: async (name) => {
+        if (!cacheBuckets.has(name)) cacheBuckets.set(name, new Map());
+        const bucket = cacheBuckets.get(name);
+        return {
+            put: async (k, res) => bucket.set(typeof k === 'string' ? k : k.url, res),
+            match: async (k) => bucket.get(typeof k === 'string' ? k : k.url) || null
+        };
+    }
+};
+globalThis.window.location.origin = 'https://box.tailnet.ts.net';
+globalThis.document.querySelectorAll = () => [];
+globalThis.navigator = { onLine: true, serviceWorker: { controller: { postMessage() {} } } };
+
+serverBuildId = 'build_300';
+const shellRes = await ensureSutramAppShellCached({
+    buildId: 'build_200',
+    additionalAssets: ['/static/js/app.js']
+});
+assert.equal(shellRes.complete, true);
+assert.equal(shellRes.updated, true);
+assert.equal(shellRes.buildId, 'build_300');
+const shellReqs = recordedRequests.slice(-2);
+assert.ok(shellReqs.every(r => r.akasaToken === 'tok_refreshed' && r.revalidate === '1'));
+
+// A settled build is not swept again while the backend reports the same build.
+const beforeSkip = recordedRequests.length;
+const [skipA, skipB] = await Promise.all([
+    ensureSutramAppShellCached({ buildId: 'build_200' }),
+    ensureSutramAppShellCached({ buildId: 'build_200' })
+]);
+assert.equal(recordedRequests.length, beforeSkip, 'a settled build must not trigger another sweep');
+assert.equal(skipA.skipped, true);
+assert.equal(skipB.buildId, 'build_300');
+
+// A new server build triggers one run, shared by concurrent callers.
+serverBuildId = 'build_400';
+adapter._recordObservedBuildId('build_400');
+const beforeShared = recordedRequests.length;
+const [sharedA, sharedB] = await Promise.all([
+    ensureSutramAppShellCached({ buildId: 'build_200', additionalAssets: ['/static/js/app.js'] }),
+    ensureSutramAppShellCached({ buildId: 'build_200', additionalAssets: ['/static/js/app.js'] })
+]);
+assert.equal(recordedRequests.slice(beforeShared).filter(r => r.url === '/').length, 1, 'concurrent calls must share one run');
+assert.equal(sharedA.buildId, 'build_400');
+assert.equal(sharedB.buildId, 'build_400');
+
+// An unchanged asset revalidates with If-None-Match, and a 304 restages the cached copy.
+const cachedApp = new Response('cached app', { status: 200, headers: { ETag: '"etag-app"' } });
+globalThis.caches.match = async (k) => (k === '/static/js/app.js' ? cachedApp.clone() : null);
+serverBuildId = 'build_500';
+adapter._recordObservedBuildId('build_500');
+const before304 = recordedRequests.length;
+const res304 = await ensureSutramAppShellCached({ buildId: 'build_200', additionalAssets: ['/static/js/app.js'] });
+assert.equal(res304.complete, true);
+const appReq = recordedRequests.slice(before304).find(r => r.url === '/static/js/app.js');
+assert.equal(appReq.ifNoneMatch, '"etag-app"');
+assert.equal(await cacheBuckets.get(res304.cacheName).get('/static/js/app.js').text(), 'cached app');
+delete globalThis.caches.match;
+
+// Verify object payloads passed to adapter.request() are JSON-serialized on the wire when online
+const mutRes = await adapter.request('/api/ws_one/notes/create', {
+    method: 'POST',
+    body: { title: 'Serialized Note' }
+}, 'ws_one');
+assert.equal(mutRes.status, 200);
+const lastMutReq = recordedRequests[recordedRequests.length - 1];
+assert.equal(typeof lastMutReq.body, 'string');
+assert.deepEqual(JSON.parse(lastMutReq.body), { title: 'Serialized Note' });
+
+SutramCacheWarmer.clear();
+SutramCacheWarmer.enqueue('ws_one', ['/api/ws_one/fs/fetch?file=vfs://repo/a.py']);
+await SutramCacheWarmer.drain(0);
+assert.equal(recordedRequests[recordedRequests.length - 1].akasaToken, 'tok_refreshed');
+
+BackendAdapterRegistry.clear();
+console.log('BACKEND_ADAPTER_TESTS_PASSED');
+"""
+        res = self._run_node_script(test_mjs)
+        self.assertIn("BACKEND_ADAPTER_TESTS_PASSED", res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

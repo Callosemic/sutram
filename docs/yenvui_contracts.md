@@ -19,7 +19,7 @@ A compliant chassis must consume and respect the following CSS custom properties
 *   **Borders:** `--border`, `--border-dim`
 *   **Typography:** `--text`, `--text-muted`, `--font-mono`
 *   **Semantics:** `--intent-primary`, `--intent-success`, `--intent-danger`, `--intent-warning`, `--intent-highlight`, `--intent-neutral`
-*   **Spatial Grid & Rail Geometry:** `--yv-utility-height`, `--yv-header-height`, `--yv-gutter-x`, `--yv-rail-cell-width`, `--yv-icon-size`, `--yv-icon-gap`, `--textarea-min-height`
+*   **Spatial Grid & Rail Geometry:** `--yv-utility-height`, `--yv-header-height`, `--yv-gutter-x`, `--yv-rail-cell-width`, `--yv-icon-size`, `--yv-icon-gap`, `--textarea-min-height`, `--yv-sidebar-width`
 *   **Structural Width & Column Capability Tokens:** `--yv-col-xs`, `--yv-col-sm`, `--yv-col-md`, `--yv-col-lg`, `--yv-view-sm`, `--yv-view-md`, `--yv-view-lg`, `--yv-view-xl`, `--yv-modal-sm`, `--yv-modal-md`, `--yv-modal-lg`, `--yv-modal-xl`, `--yv-bubble-max-width`, `--yv-surface-min-h-sm`, `--yv-surface-min-h-md`, `--yv-surface-min-h-lg`
 
 ### Layout Markers & Environmental Boundary Contracts
@@ -64,8 +64,12 @@ Any replacement library must export the following Custom Elements.
     *   *Properties:* `.direction` (`'col'`|`'row'`|`'grid'`), `?compact`, `.columns` (`'compact'`|`'normal'`|`'wide'`), `.gap` (`'none'`|`'compact'`|`'normal'`|`'wide'`), `.align`, `.alignSelf` (`'start'`|`'center'`|`'end'`|`'stretch'`), `.justify`, `.padding` (`'none'`|`'compact'`|`'normal'`|`'wide'`), `.width` (`'auto'`|`'bubble'`|`'full'`), `?grow`, `?wrap`, `?flex`, `?scrollable`, `?spanFull`.
 *   **`<yenvui-surface>`**: Semantic surface container.
     *   *Properties:* `.variant` (`'panel'`|`'inset'`|`'tinted'`|`'floating'`|`'ghost'`), `.intent`, `?compact`, `?flush`, `.padding` (`'none'`|`'compact'`|`'normal'`|`'wide'`), `.border` (`'all'`|`'top'`|`'bottom'`|`'left'`|`'none'`), `.radius` (`'none'`|`'compact'`|`'normal'`|`'wide'`), `.gap` (`'none'`|`'compact'`|`'normal'`|`'wide'`), `.align`, `.justify`, `.alignSelf`, `.width` (`'auto'`|`'bubble'`|`'full'`), `.minHeight` (`'compact'`|`'normal'`|`'wide'`), `?flex`, `?interactive`.
+*   **`<yenvui-sidebar-layout>`**: Container-query responsive split-pane sidebar rail and stage layout with mobile slide-over drawer collapse (`--yv-sidebar-width`, default `300px`).
+    *   *Properties:* `.intent`, `?drawerOpen`, `?collapsed`, `.navTitle`, `.navItems`, `.activeNavId`.
+    *   *Events:* `@yenvui-nav-selected`, `@yenvui-drawer-closed`.
+    *   *Slots:* `sidebar`, default.
 *   **`<yenvui-modal>`**: Native `#top-layer` dialog.
-    *   *Properties:* `?open`, `.titleText`, `?compact`, `.size` (`'compact'`|`'normal'`|`'wide'`|`'full'`), `?fullscreen`, `?flush`, `?transparent`.
+    *   *Properties:* `?open`, `.titleText`, `?compact`, `.size` (`'compact'`|`'normal'`|`'wide'`|`'full'`), `?fullscreen`, `?flush`.
     *   *Methods:* `bringToFront()`.
     *   *Events:* `@yenvui-modal-closed`, `@yenvui-modal-closing`.
     *   *Slots:* `body`, `footer`, default.
@@ -79,7 +83,7 @@ Any replacement library must export the following Custom Elements.
     *   *Events:* `@yenvui-card-select-toggled`, `@yenvui-card-clicked`, `@yenvui-card-actions-opened`, `@yenvui-overlay-opened`.
     *   *Slots:* `header-actions`, `detail`, `inline-actions`, `actions`, default.
 *   **`<yenvui-collapsible>`**: Collapsible content section with semantic header styling.
-    *   *Properties:* `.titleText`, `?open`, `.intent` (`primary`|`success`|`highlight`|`warning`|`danger`|`neutral`), `?flush`.
+    *   *Properties:* `.titleText`, `?open`, `.intent` (`primary`|`success`|`highlight`|`warning`|`danger`|`neutral`), `?compact`, `?flush`.
     *   *Events:* `@yenvui-collapsible-toggled` (isolated, non-bubbling).
     *   *Slots:* `actions`, default.
 *   **`<yenvui-drop-overlay>` & `<yenvui-drop-target>`**: Top-layer drag-and-drop backdrop and target zones.
@@ -179,3 +183,11 @@ Any replacement library must export the following Custom Elements.
     *   *Properties:* `.searchQuery`, `.searchPlaceholder`, `?enableFilterDropdown`, `.filterText`, `.activeFilters`, `?hasFiltersOverride`, `?flush`.
 *   **`<yenvui-scrub-track>`**: Horizontal touch-scrubbing track.
     *   *Properties:* `?grow`, `?monospace`.
+
+## V. Backend Adapter Contract (`SutramBackendAdapter`)
+
+Host applications mounting Sutram against authenticated or multi-tenant backends register an adapter instance via `registerBackendAdapter(adapter)` (`sutram/js/client.js`).
+
+*   **Required Methods (`REQUIRED_BACKEND_ADAPTER_METHODS`):** `bootstrap`, `fetchRaw`, `request`, `resolveScopedUrl`, `probeHealth`, `getBuildId`, `pollJob`, `connectStream`.
+*   **Validation:** `validateBackendAdapter(adapter)` throws `[Sutram Boot Error]` if any required method is missing.
+*   **Implementations:** `SutramBackendAdapter` (minimal base adapter) and `AkasaBackendAdapter` (token header injection, single-flight 401 re-authentication, `X-Akasa-Build-ID` / `X-Sutram-Build-ID` passive build sniffing, per-scope `AbortController` signals, `OfflineHttpProvider` delegation, scope-guarded `pollJob`, and `EventSource` `connectStream`).
