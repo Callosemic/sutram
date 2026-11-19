@@ -55,7 +55,7 @@ All custom drag, swipe, spatial reordering, or long-press interactions MUST util
 * **Hit Detection:** Use `getDeepElementFromPoint(x, y, selector)` to pierce Shadow DOM boundaries when resolving gesture drop targets.
 * **Axis Locking:** Explicitly configure `lockAxis` (`'horizontal'`, `'vertical'`, or `'both'`) to prevent interference with native vertical document scrolling.
 * **OS Navigation Defeat:** `YenvuiGestureController` automatically intercepts horizontal drag sequences originating near viewport boundaries to defeat mobile browser edge-swipe back-navigation.
-* **Automated Cleanup:** Drag handles and gesture listeners attached via `YenvuiGestureController` automatically unbind global `pointermove` and `pointerup` handlers when gestures complete or cancel.
+* **Automated Cleanup & Post-Drag Click Suppression:** Drag handles and gesture listeners attached via `YenvuiGestureController` automatically unbind global `pointermove` and `pointerup` handlers when gestures complete or cancel, and automatically intercept the trailing synthetic `click` event in the capture phase whenever a pan or long-press drag occurred so draggable buttons and menu items never double-fire `onClick`.
 
 ### Root Viewport Physics Guard Standard (`YenvuiViewportGuard` & `<yenvui-viewport>`)
 All mobile and edge-native chassis shells MUST wrap their top-level application layout in `<yenvui-viewport>` or initialize `YenvuiViewportGuard.install()`.
@@ -114,8 +114,8 @@ To prevent ghost memory leaks and dangling subscriptions, components extending `
 
 * **Zustand Subscriptions:** Use `this.subscribe(store, selector, listener)` for changes (it does not report the current value, so event- and tick-style slices never fire on mount) and `this.bindStore(store, stateMapper)` to mirror state onto properties (it applies the current slice first).
 * **Timers & Metronomes:** Use `this.registerInterval(callback, delayMs)` or `ExtensionRegistry.registerTick()` instead of raw `setInterval`.
-* **Global DOM Listeners:** Use `this.registerGlobalListener(eventType, targetNode, callback)` and `this.registerOutsideClick(callback)`.
-* **Automatic Disconnection:** All registered subscriptions, intervals, and listeners are automatically torn down within `SutramElement.disconnectedCallback()`.
+* **Global DOM Listeners & Slotted Container Observation:** Use `this.registerGlobalListener(eventType, targetNode, callback)` and `this.registerOutsideClick(callback)` for DOM events, `this.unsubscribe(unsubFn)` when dynamically re-binding store subscriptions, and `this.observeAssignedContainer(callback, selector)` when a Light-DOM widget slotted into a Shadow-DOM container (such as `.spatial-col`) needs reactive width measurements across the slot boundary (never rely on CSS `@container` queries or `this.parentElement.clientWidth` across a Shadow `<slot>` boundary).
+* **Automatic Disconnection:** All registered subscriptions, intervals, resize observers, and listeners are automatically torn down within `SutramElement.disconnectedCallback()`.
 
 ### Top-Layer Popover API & Viewport Coordinate Anchoring
 Floating menus, dropdowns, and spatial drawers susceptible to CSS `overflow: hidden` or stacking context clipping MUST use the native browser `#top-layer` via HTML5 `popover="manual"`.

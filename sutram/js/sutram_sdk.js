@@ -26,6 +26,7 @@ function _buildCleanBaseline(initialState) {
 }
 export const StoreRegistry = {
     _stores: new Map(),
+    _waiters: new Map(),
     _isTransitioning: false,
     _transitionTargetScope: null,
     isTransitioning() {
@@ -60,6 +61,30 @@ export const StoreRegistry = {
     },
     register(name, store) {
         this._stores.set(name, store);
+        const pending = this._waiters.get(name);
+        if (pending && pending.size > 0) {
+            this._waiters.delete(name);
+            pending.forEach(cb => {
+                try { cb(store); } catch (e) {}
+            });
+        }
+    },
+    onRegister(name, callback) {
+        if (typeof callback !== 'function') return () => {};
+        const existing = this._stores.get(name);
+        if (existing) {
+            callback(existing);
+            return () => {};
+        }
+        if (!this._waiters.has(name)) {
+            this._waiters.set(name, new Set());
+        }
+        const set = this._waiters.get(name);
+        set.add(callback);
+        return () => {
+            set.delete(callback);
+            if (set.size === 0) this._waiters.delete(name);
+        };
     },
     get(name) {
         return this._stores.get(name);
@@ -431,6 +456,7 @@ export const SutramContextMixin = (SuperClass) => class extends SuperClass {
         this._managedIntervals = [];
         this._managedTimeouts = new Set();
         this._sutramManagedListeners = [];
+        this._managedResizeObservers = [];
     }
     connectedCallback() {
         if (super.connectedCallback) super.connectedCallback();
@@ -465,32 +491,26 @@ export const SutramContextMixin = (SuperClass) => class extends SuperClass {
                     window.Sutram?.stores?.[storeOrName] ||
                     window.stores?.[storeOrName];
 
-            // Lazy Subscription: If the named store isn't registered yet, defer binding until it hydrates
+            // Lazy Subscription: If the named store isn't registered yet, bind deterministically on registration
             if (!store) {
                 const pendingKey = storeOrName;
                 let activeUnsub = () => {};
-                const checkInterval = setInterval(() => {
-                    const lateStore = StoreRegistry.get(pendingKey) || window.Sutram?.stores?.[pendingKey];
-                    if (lateStore) {
-                        clearInterval(checkInterval);
-                        activeUnsub = listener
-                            ? lateStore.subscribe(selectorOrListener, listener, { equalityFn })
-                            : lateStore.subscribe(selectorOrListener);
-                        if (typeof lateStore.getState === 'function') {
-                            try {
-                                if (listener && typeof selectorOrListener === 'function') {
-                                    listener(selectorOrListener(lateStore.getState()));
-                                } else if (!listener && typeof selectorOrListener === 'function') {
-                                    selectorOrListener(lateStore.getState());
-                                }
-                            } catch (e) {}
-                        }
+                const cancelWait = StoreRegistry.onRegister(pendingKey, (lateStore) => {
+                    activeUnsub = listener
+                        ? lateStore.subscribe(selectorOrListener, listener, { equalityFn })
+                        : lateStore.subscribe(selectorOrListener);
+                    if (typeof lateStore.getState === 'function') {
+                        try {
+                            if (listener && typeof selectorOrListener === 'function') {
+                                listener(selectorOrListener(lateStore.getState()));
+                            } else if (!listener && typeof selectorOrListener === 'function') {
+                                selectorOrListener(lateStore.getState());
+                            }
+                        } catch (e) {}
                     }
-                }, 20);
-
-                this._managedIntervals.push(checkInterval);
+                });
                 const teardown = () => {
-                    clearInterval(checkInterval);
+                    cancelWait();
                     activeUnsub();
                 };
                 this._storeUnsubs.push(teardown);
@@ -510,6 +530,68 @@ export const SutramContextMixin = (SuperClass) => class extends SuperClass {
         }
         this._storeUnsubs.push(unsub);
         return unsub;
+    }
+    unsubscribe(unsubFn) {
+        if (typeof unsubFn !== 'function') return;
+        const idx = this._storeUnsubs.indexOf(unsubFn);
+        if (idx !== -1) {
+            this._storeUnsubs.splice(idx, 1);
+        }
+        try { unsubFn(); } catch (_) {}
+    }
+    resolveAssignedSpatialContainer(selector = '.spatial-col, [data-spatial-boundary]') {
+        let cur = this;
+        const visited = new Set();
+        while (cur && !visited.has(cur)) {
+            visited.add(cur);
+            if (cur !== this && typeof cur.matches === 'function' && cur.matches(selector)) {
+                return cur;
+            }
+            if (cur.assignedSlot) {
+                cur = cur.assignedSlot;
+                continue;
+            }
+            if (cur.parentElement) {
+                cur = cur.parentElement;
+                continue;
+            }
+            const root = typeof cur.getRootNode === 'function' ? cur.getRootNode() : null;
+            cur = (root && root.host) ? root.host : null;
+        }
+        return this.parentElement || null;
+    }
+    observeAssignedContainer(callback, selector = '.spatial-col, [data-spatial-boundary]') {
+        if (typeof callback !== 'function') return () => {};
+        let observedEl = null;
+        let ro = null;
+        const notify = () => {
+            const container = this.resolveAssignedSpatialContainer(selector);
+            if (container && container !== observedEl && ro) {
+                if (observedEl) {
+                    try { ro.unobserve(observedEl); } catch (_) {}
+                }
+                observedEl = container;
+                try { ro.observe(observedEl); } catch (_) {}
+            }
+            const width = container?.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1024);
+            callback(width, container);
+        };
+        if (typeof ResizeObserver !== 'undefined') {
+            ro = new ResizeObserver(() => notify());
+            this._managedResizeObservers.push(ro);
+        }
+        if (typeof window !== 'undefined') {
+            this.registerGlobalListener('resize', window, notify);
+            this.registerGlobalListener('sutram-layout-recompile', window, notify);
+        }
+        notify();
+        return () => {
+            if (ro) {
+                try { ro.disconnect(); } catch (_) {}
+                const idx = this._managedResizeObservers.indexOf(ro);
+                if (idx !== -1) this._managedResizeObservers.splice(idx, 1);
+            }
+        };
     }
     bindStore(store, stateMapper, options = {}) {
         const { autoFetch = 'fetchData', equalityFn } = options;
@@ -595,6 +677,10 @@ export const SutramContextMixin = (SuperClass) => class extends SuperClass {
             }
         });
         this._sutramManagedListeners = [];
+        this._managedResizeObservers.forEach(ro => {
+            try { ro.disconnect(); } catch (_) {}
+        });
+        this._managedResizeObservers = [];
     }
 };
 
@@ -669,6 +755,14 @@ export class SutramElement extends SutramContextMixin(LitElement) {
         super.disconnectedCallback();
     }
 }
+export function resolveSelectionEntityType(items = []) {
+    if (!Array.isArray(items) || items.length === 0) return 'bulk';
+    const types = items.map(i => i?.entityType).filter(Boolean);
+    if (types.length !== items.length) return 'bulk';
+    const unique = new Set(types);
+    return unique.size === 1 ? types[0] : 'bulk';
+}
+
 export const ExtensionRegistry = {
     _manifests: new Map(),
     uiHooks: {},
@@ -678,8 +772,54 @@ export const ExtensionRegistry = {
     _entityFamilyMap: new Map(),
     _actionMiddlewares: [],
     _filterPredicate: null,
+    _actionFilter: null,
+    _warnedVariantSets: new Set(),
     tabOrder: [],
     isBooting: true,
+
+    setActionFilter: function(fn) {
+        this._actionFilter = typeof fn === 'function' ? fn : null;
+    },
+
+    getManifestEntries: function(field, { activeOnly = true } = {}) {
+        if (!field || !this._manifests) return [];
+        const entries = [];
+        this._manifests.forEach((manifest, extName) => {
+            if (activeOnly && typeof this._filterPredicate === 'function' && !this._filterPredicate(extName)) {
+                return;
+            }
+            const value = manifest?.[field];
+            if (value !== undefined && value !== null) {
+                entries.push({ extName, value });
+            }
+        });
+        return entries;
+    },
+
+    collectManifestField: function(field, options = {}) {
+        const entries = this.getManifestEntries(field, options);
+        const collected = [];
+        entries.forEach(({ value }) => {
+            if (Array.isArray(value)) {
+                collected.push(...value);
+            } else if (value !== undefined && value !== null) {
+                collected.push(value);
+            }
+        });
+        return collected;
+    },
+
+    getExtensionNames: function({ activeOnly = false } = {}) {
+        if (!this._manifests) return [];
+        const names = [];
+        this._manifests.forEach((_manifest, extName) => {
+            if (activeOnly && typeof this._filterPredicate === 'function' && !this._filterPredicate(extName)) {
+                return;
+            }
+            names.push(extName);
+        });
+        return names;
+    },
 
     registerActionMiddleware: function(middlewareFn) {
         this._actionMiddlewares.push(middlewareFn);
@@ -738,6 +878,9 @@ export const ExtensionRegistry = {
             sections,
             defaults: { ...(existing?.defaults || {}), ...(setDef.defaults || {}) }
         };
+        Array.from(this._warnedVariantSets).forEach(k => {
+            if (k.startsWith(`${normalized.id}::`)) this._warnedVariantSets.delete(k);
+        });
         this._variantSets.set(normalized.id, normalized);
         return normalized;
     },
@@ -1102,7 +1245,11 @@ export const ExtensionRegistry = {
                     .forEach(v => orderedVariants.push({ ...v, section: sec }));
             });
 
-            if (orderedVariants.length > 8) {
+            const isDevBuild = (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') ||
+                (typeof window !== 'undefined' && ['localhost', '127.0.0.1', '::1'].includes(window.location?.hostname));
+            const warnKey = `${setId}::${entityType}`;
+            if (orderedVariants.length > 8 && isDevBuild && !this._warnedVariantSets.has(warnKey)) {
+                this._warnedVariantSets.add(warnKey);
                 console.warn(`[ExtensionRegistry] Variant set '${setId}' has ${orderedVariants.length} available variants (> 8) for '${entityType}'.`);
             }
 
@@ -1170,7 +1317,13 @@ export const ExtensionRegistry = {
                 }
 
                 // 3. Evaluate the component's native domain logic
-                return !act.match || act.match(data);
+                if (act.match && !act.match(data)) return false;
+
+                // 4. Evaluate host action filter before variant sets collapse
+                if (typeof this._actionFilter === 'function' && !this._actionFilter(act, data, compoundType)) {
+                    return false;
+                }
+                return true;
             });
         return this._collapseVariantSets(filtered, compoundType, data, false);
     },
@@ -1223,7 +1376,13 @@ export const ExtensionRegistry = {
                         return false;
                     });
                     if (!targetMatches) return false;
-                    return typeof act.match === 'function' ? act.match(item.data) : true;
+                    const itemData = item && item.data !== undefined ? item.data : item;
+                    const itemType = item?.entityType || bulkEntityType;
+                    if (typeof act.match === 'function' && !act.match(itemData)) return false;
+                    if (typeof this._actionFilter === 'function' && !this._actionFilter(act, itemData, itemType)) {
+                        return false;
+                    }
+                    return true;
                 });
             });
 
@@ -1284,7 +1443,7 @@ export const ExtensionRegistry = {
             }
         });
 
-        const bulkEntityType = items.length === 1 ? (items[0]?.entityType || 'bulk') : 'bulk';
+        const bulkEntityType = resolveSelectionEntityType(items);
         return this._collapseVariantSets(aggregated, bulkEntityType, items, true);
     },
     executeUIHook: function(zone, data) {

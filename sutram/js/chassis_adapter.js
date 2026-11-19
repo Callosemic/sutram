@@ -89,13 +89,14 @@ export class SutramDagTree extends SutramElement {
                 ${this.stages.map((stageNodes, sIdx) => {
                     const list = Array.isArray(stageNodes) ? stageNodes : [stageNodes];
                     const isParallel = list.length > 1;
-                    const accent = isParallel ? 'var(--intent-highlight)' : (sIdx === 0 ? 'var(--intent-primary)' : 'var(--intent-success)');
+                    const stageIntent = isParallel ? 'highlight' : (sIdx === 0 ? 'primary' : 'success');
+                    const accent = `var(--intent-${stageIntent})`;
                     return html`
                         ${sIdx > 0 ? html`<div class="stage-connector">↓</div>` : ''}
                         <div class="wavefront-stage" style="--stage-accent: ${accent};">
                             <div class="wavefront-header">
                                 <span class="wavefront-title">
-                                    <sutram-icon name=${isParallel ? 'git-branch' : 'layers'} size="sm" style="color: ${accent};"></sutram-icon>
+                                    <sutram-icon name=${isParallel ? 'git-branch' : 'layers'} size="sm" intent=${stageIntent}></sutram-icon>
                                     <span>Wavefront Stage ${sIdx + 1}${sIdx === 0 ? ' (Root)' : ''}</span>
                                 </span>
                                 <sutram-tag text=${isParallel ? `∥ Parallel Stage (${list.length} branches)` : 'Sequential Step'} intent=${isParallel ? 'highlight' : 'neutral'}></sutram-tag>

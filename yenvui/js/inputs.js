@@ -14,6 +14,8 @@ export class YenvuiInput extends LitElement {
         placeholder: { type: String },
         value: { type: String },
         type: { type: String },
+        min: { type: String },
+        max: { type: String },
         disabled: { type: Boolean },
         inline: { type: Boolean, reflect: true },
         flush: { type: Boolean, reflect: true },
@@ -27,6 +29,8 @@ export class YenvuiInput extends LitElement {
         this.type = 'text';
         this.value = '';
         this.placeholder = '';
+        this.min = '';
+        this.max = '';
         this.disabled = false;
         this.inline = false;
         this.flush = false;
@@ -47,6 +51,8 @@ export class YenvuiInput extends LitElement {
                 <input
                     class="yv-input"
                     type=${this.type}
+                    min=${this.min || ''}
+                    max=${this.max || ''}
                     .value=${this.value || ''}
                     placeholder=${this.placeholder}
                     ?disabled=${this.disabled}

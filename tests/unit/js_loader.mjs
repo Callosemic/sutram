@@ -141,9 +141,46 @@ if (typeof globalThis.window === 'undefined') {
     globalThis.innerWidth = 1200;
     globalThis.innerHeight = 800;
     globalThis.Sutram = { stores: {} };
-    globalThis.addEventListener = et.addEventListener.bind(et);
-    globalThis.removeEventListener = et.removeEventListener.bind(et);
-    globalThis.dispatchEvent = et.dispatchEvent.bind(et);
+    const winListeners = new Map();
+    const isCaptureOpt = (opts) => Boolean(opts === true || (opts && typeof opts === 'object' && opts.capture));
+    globalThis.addEventListener = (type, listener, options = false) => {
+        if (typeof listener !== 'function') return;
+        const capture = isCaptureOpt(options);
+        if (!winListeners.has(type)) winListeners.set(type, []);
+        const list = winListeners.get(type);
+        if (!list.some(entry => entry.listener === listener && entry.capture === capture)) {
+            list.push({ listener, capture, once: Boolean(options && typeof options === 'object' && options.once) });
+        }
+    };
+    globalThis.removeEventListener = (type, listener, options = false) => {
+        const list = winListeners.get(type);
+        if (!list) return;
+        const capture = isCaptureOpt(options);
+        const idx = list.findIndex(entry => entry.listener === listener && entry.capture === capture);
+        if (idx !== -1) list.splice(idx, 1);
+    };
+    globalThis.dispatchEvent = (event) => {
+        const list = winListeners.get(event?.type);
+        if (!list || list.length === 0) return true;
+        let immediateStopped = false;
+        const origStopImmediate = event.stopImmediatePropagation?.bind(event);
+        event.stopImmediatePropagation = () => {
+            immediateStopped = true;
+            if (origStopImmediate) origStopImmediate();
+        };
+        const snapshot = [
+            ...list.filter(e => e.capture),
+            ...list.filter(e => !e.capture)
+        ];
+        for (const entry of snapshot) {
+            if (immediateStopped) break;
+            if (entry.once) {
+                globalThis.removeEventListener(event.type, entry.listener, entry.capture);
+            }
+            entry.listener.call(globalThis, event);
+        }
+        return !event.defaultPrevented;
+    };
 
     // Canonical Browser Identity Invariant: window and globalThis must be the exact same object reference
     globalThis.window = globalThis;
@@ -161,8 +198,8 @@ const VIRTUAL_MODULES = {
         '  firstUpdated() {}',
         '  requestUpdate() {}',
         '}',
-        'export const html = () => "";',
-        'export const css = () => "";',
+        'export const html = (strings, ...values) => ({ _$litType$: 1, strings, values });',
+        'export const css = (strings, ...values) => ({ strings, values });',
         'export const unsafeCSS = () => "";',
         'export const live = (v) => v;',
         'export const unsafeHTML = (v) => v;'

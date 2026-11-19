@@ -88,7 +88,7 @@ State-aware wrappers, IoC brokers and form controls delivered by `sutram`:
 
 | Primitive Tag | Description | Operational Purpose |
 | :--- | :--- | :--- |
-| **`<sutram-app-shell>`** | Top-level declarative tab layout shell | Queries `ExtensionRegistry` layout slots to construct primary and sub-tab hierarchies. |
+| **`<sutram-app-shell>`** | Top-level declarative spatial layout shell | Coordinates single-row column headers (view menu, searchable tab switcher/launcher, fitted inline open tabs, and globals rail) alongside a 4px top viewport position bar. |
 | **`<sutram-entity-actions>`** | Fit-then-overflow IoC action broker | Measures container width to render fitting surfaced actions and `<sutram-variant-btn>` split buttons inline while overflowing remaining actions into a sectioned `more-horizontal` dropdown. |
 | **`<sutram-variant-btn>`** | Variant-set split button primitive | Pairs a width-reserved primary `<sutram-async-btn>` with a sectioned variant `<sutram-dropdown>` and persists device-local last-used variant defaults per `(entityType, setId)`. |
 | **`<sutram-card>`** | IoC-bound card container | Binds `yenVUI` card selection state to `SelectionStore`, mounts `<sutram-entity-actions>` across 720px inline/drawer tiers, and closes narrow drawers after 900ms action confirmation holds. |
@@ -96,7 +96,7 @@ State-aware wrappers, IoC brokers and form controls delivered by `sutram`:
 | **`<sutram-modal>`** | IoC modal dialog wrapper | Binds `<yenvui-modal>` closing events to `SutramElement` dispatch. |
 | **`<sutram-async-btn>`** | Async button wrapper | Accepts `onClick` async handlers and manages feedback state machine execution. |
 | **`<sutram-field-card>`** | Standardized setting field card | Renders title, scope/security badges, header actions slot, and description caption. |
-| **`<sutram-subtab-menu>`** | Declarative sub-tab action & bulk menu | Aggregates scoped bulk selection actions and dynamic `menuActions` in column headers. |
+| **`<sutram-subtab-menu>`** | Left-pinned column view & bulk action menu | Aggregates scoped bulk selection actions, flattened variant sets, `extraContentNodes` view controls, and `menuActions` while staying rendered and disabled in place when empty. |
 | **`<sutram-generic-settings>`** | Dynamic extension settings modal | Generates form controls automatically from extension schema definitions. |
 | **`<sutram-selector-modal>`** | Fuzzy-searchable item picker modal | Fuzzy-filters object arrays for prompt/template pickers. |
 | **`<sutram-folder-browser>`** | Workspace directory tree browser | Interactive path navigation breadcrumbs. |

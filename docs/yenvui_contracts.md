@@ -53,8 +53,8 @@ Any replacement library must export the following Custom Elements.
     *   *Properties:* `.entityType` (String), `.entityData` (Object), `.actionsList` (Array), `.variant` (`'row'`|`'menu-bar'`|`'footer'`), `?compact` (Boolean).
 *   **`<sutram-variant-btn>`**: Split button primitive for collapsed variant sets with device-local last-used default resolution and width reservation (`--variant-min-width`).
     *   *Properties:* `.setEntry` (Object), `.entityType` (String), `.entityData` (Object), `?compact` (Boolean), `.executeAction` (Async Function).
-*   **`<sutram-subtab-menu>`**: Spatial column sub-tab header action and bulk selection menu.
-    *   *Properties:* `.slotConfig` (Object with `bulkActionGroup`, `bulkEntityTypes`, `menuActions`, `menuStores`).
+*   **`<sutram-subtab-menu>`**: Spatial column view menu (always first on the left of every column header row) aggregating group-scoped bulk selection actions, flattened variant sets, view `menuActions`, and `.extraContentNodes` under section headings. Renders disabled in place when the active view has no menu actions so column tab geometry never shifts.
+    *   *Properties:* `.slotConfig` (Object with `bulkActionGroup`, `bulkEntityTypes`, `menuActions`, `menuStores`), `.extraContentNodes` (Array of DOM nodes).
 *   **`<sutram-floating-hud>`**: Corner-pinned collapsible status and telemetry HUD drawer.
     *   *Properties:* `.position` (`'top-right'`|`'top-left'`|`'bottom-right'`|`'bottom-left'`), `.icon` (String), `.badgeText` (String), `.titleText` (String), `.intent` (`'primary'`|`'success'`|`'warning'`|`'danger'`|`'highlight'`|`'neutral'`), `.open` (Boolean).
     *   *Events:* `@sutram-hud-toggled`.
@@ -121,6 +121,8 @@ Any replacement library must export the following Custom Elements.
     *   *Properties:* `.count`, `?open`.
     *   *Events:* `@yenvui-clear-selection`.
     *   *Slots:* `batch-actions`.
+*   **`<sutram-selection-tray>`**: State-bound selection staging chip and modal tray with automatic `[empty]` host collapse and slot-piercing responsive chip labels (`>= 480px` full label vs `< 480px` compact badge).
+    *   *Properties:* `.selectedItems` (Map), `.modalOpen` (Boolean), `.trayTitle` (String), `.itemBadge` (String), `.bulkGroup` (String, default `'share'`), `?empty` (Boolean, reflected).
 *   **`<yenvui-empty-state>`**: Empty placeholder.
     *   *Properties:* `.icon`, `.text`.
 *   **`<yenvui-spinner>`**: Loading indicator.
@@ -133,7 +135,7 @@ Any replacement library must export the following Custom Elements.
     *   *Functions:* `startKineticThrow(scrollEl, samples, options)`, `acquireBodyScrollLock()`, `releaseBodyScrollLock()`, `getDeepElementFromPoint(x, y, selector)`, `anchorTopLayerPopover(triggerEl, popoverEl, options)`, `syncTopLayerPopover(triggerEl, popoverEl, isOpen, options)`.
 ### Inputs & Filtering
 *   **`<yenvui-input>`**: Single-line text input presentation primitive.
-    *   *Properties:* `.label`, `.value`, `.placeholder`, `.type`, `?disabled`, `?inline`, `?flush`, `?grow`.
+    *   *Properties:* `.label`, `.value`, `.placeholder`, `.type`, `.min`, `.max`, `?disabled`, `?inline`, `?flush`, `?grow`.
     *   *Events:* `@yenvui-input-changed`.
 *   **`<yenvui-select>`**: Dropdown select presentation primitive.
     *   *Properties:* `.label`, `.value`, `.options` (Array of `{value, label}`), `?disabled`, `?inline`, `?flush`, `?grow`.
@@ -163,10 +165,10 @@ Any replacement library must export the following Custom Elements.
 *   **`SutramCacheWarmer`**: Low-priority background asset pre-fetcher and warming engine.
     *   *Properties:* `.size` (Number, returns current queue count).
     *   *Methods:* `enqueue(scopeId, urls, fetcher)`, `removeByPrefix(scopeId, urlPrefix)`, `clear()`, `drain(delayMs)`.
-*   **`<yenvui-dropdown>`**: Floating action menu utilizing native `#top-layer` Popover API with section headings and 900ms confirmation holds.
-    *   *Properties:* `.items` (Array of `{id, label, icon, successLabel, confirmHoldMs, onClick, asyncAction, divider, sectionHeading}`), `?open`, `.align` (`'auto'`|`'left'`|`'right'`), `.direction` (`'auto'`|`'up'`|`'down'`).
+*   **`<yenvui-dropdown>`**: Floating action menu utilizing native `#top-layer` Popover API with section-preserving fuzzy search, checkable items, trailing item actions, and 900ms confirmation holds.
+    *   *Properties:* `.items` (Array of `{id, label, icon, checkable, checked, badge, description, section, successLabel, confirmHoldMs, onPointerDown, onClick, asyncAction, trailingButton: {icon, title, closeMenu, onClick}, divider, sectionHeading}`), `?open`, `?searchable`, `.searchPlaceholder`, `.confirmHoldMs` (Number, default `900`), `.filterFn` (Function), `.align` (`'auto'`|`'left'`|`'right'`), `.direction` (`'auto'`|`'up'`|`'down'`).
     *   *Events:* `@yenvui-action-confirmed`, `@yenvui-action-error` (dispatched on unhandled action exception).
-    *   *Slots:* `trigger`.
+    *   *Slots:* `trigger`, `header`, `content`.
 *   **`<yenvui-filter-dropdown>`**: Column-anchored filter panel utilizing native `#top-layer` Popover API.
     *   *Properties:* `.filterText`, `?open`, `?hasFilters`.
     *   *Slots:* default (filter panel content).

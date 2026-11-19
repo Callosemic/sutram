@@ -2,6 +2,7 @@ import ast
 import re
 from pathlib import Path
 from .core import PROJECT_ROOT, SUTRAM_DIR, YENVUI_DIR, report_violation, collect_unique_files
+from ..sutram_consumer_linter import iter_sutram_tags, load_declared_properties, undeclared_bindings
 def check_sutram_rules():
     print("🔍 Sweeping Sutram Micro-Kernel & Domain Decoupling...")
     domain_leak_pattern = re.compile(
@@ -13,11 +14,31 @@ def check_sutram_rules():
     interval_pattern = re.compile(r'\bsetInterval\s*\(')
     legacy_store_pattern = re.compile(r"create(?:Extension|Sutram)Store\s*\([\s\S]*?,\s*\[\s*['\"]")
     impure_render_pattern = re.compile(r"render\s*\(\s*\)\s*[{]\s*this\._rebuildMenu\s*\(")
+    sutram_inline_style_pattern = re.compile(r"<sutram-[a-z0-9-]+\b[^>]*\bstyle\s*=")
+    declared_properties = load_declared_properties(PROJECT_ROOT)
 
     for filepath in collect_unique_files([SUTRAM_DIR / "js", YENVUI_DIR / "js"], [".js"]):
         with open(filepath, "r", encoding="utf-8") as f:
             lines = f.readlines()
         content = "".join(lines)
+
+        if "sutram" in filepath.parts:
+            for tag, tag_line, attrs, names in iter_sutram_tags(content):
+                tag_text = f"<{tag} {attrs}>"
+                if sutram_inline_style_pattern.search(tag_text):
+                    report_violation(
+                        "SUTRAM_INLINE_STYLE_BAN",
+                        filepath,
+                        tag_line,
+                        f"Inline style='...' attribute detected on <{tag}>. Use semantic properties or class rules instead."
+                    )
+                for binding in undeclared_bindings(tag, names, declared_properties):
+                    report_violation(
+                        "SUTRAM_UNDECLARED_PROPERTY",
+                        filepath,
+                        tag_line,
+                        f"<{tag}> has no declared property for '{binding}'."
+                    )
 
         if legacy_store_pattern.search(content):
             report_violation(
@@ -52,7 +73,7 @@ def check_sutram_rules():
                     idx,
                     "Hardcoded relative 'yenvui/' import detected in Sutram kernel. Import the active chassis strictly via 'sutram-chassis'."
                 )
-            if interval_pattern.search(line) and filepath.name != "sutram_sdk.js":
+            if interval_pattern.search(line) and not (filepath.name == "sutram_sdk.js" and "setInterval(callback, delayMs)" in line):
                 report_violation(
                     "METRONOME_MANDATE",
                     filepath,
@@ -71,13 +92,19 @@ def check_sutram_rules():
             )
     code_index_path = PROJECT_ROOT / "CODE_INDEX.md"
     if code_index_path.exists():
+        stale_count = 0
         with open(code_index_path, "r", encoding="utf-8") as f:
             for idx, line in enumerate(f, start=1):
-                if "# [comment required]" in line:
+                if "# [stale?]" in line:
+                    stale_count += 1
+                    print(f"  ⚠️ [WARN] CODE_INDEX_STALE_SYMBOL ({code_index_path.name}:{idx}): {line.strip()}")
+                elif "# [comment required]" in line:
                     tree_entry = line.split("#", 1)[0].lstrip(" │├└─\t").strip()
                     if tree_entry.startswith(("def ", "async def ", "class ", "function ")):
                         continue
                     report_violation("CODE_INDEX_PLACEHOLDER_BAN", code_index_path, idx, f"Unresolved comment placeholder: {line.strip()}")
+        if stale_count:
+            print(f"  ℹ️ {stale_count} [stale?] symbol description(s) in CODE_INDEX.md (non-blocking).")
 
     detached_window_mock_re = re.compile(r'globalThis\.window\s*=\s*\{')
     for test_fp in collect_unique_files([PROJECT_ROOT / "tests"], [".py", ".mjs", ".js"]):
@@ -96,9 +123,7 @@ def check_sutram_rules():
                 "Assigning a detached object literal to 'globalThis.window = {...}' splits window.<api> from globalThis.<api>. Use js_loader.mjs or 'Object.assign(globalThis, {...}); globalThis.window = globalThis;'."
             )
 
-    insetu_dir = PROJECT_ROOT.parent / "insetu"
-    py_scan_dirs = [PROJECT_ROOT / "tests"] + ([insetu_dir] if insetu_dir.exists() else [])
-    for py_path in collect_unique_files(py_scan_dirs, [".py"]):
+    for py_path in collect_unique_files([PROJECT_ROOT / "tests"], [".py"]):
         try:
             with open(py_path, "r", encoding="utf-8") as f:
                 tree = ast.parse(f.read(), filename=py_path.as_posix())

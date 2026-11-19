@@ -1,6 +1,7 @@
 // sutram/js/app_shell.js (Compiled Vendor Artifact)
 import { html, css } from 'lit';
 import { SutramElement, ExtensionRegistry, LayoutStore, StoreRegistry, SUTRAM_COLUMN_UNIT_PX } from './sutram_sdk.js';
+import { computeFitActionCount } from './primitives.js';
 import { sharedStyles } from './shared_styles.js';
 import { debounce } from './utils.js';
 import { SutramProjectionCompiler, SutramProjectionPool } from './projection_engine.js';
@@ -87,49 +88,37 @@ export class SutramAppShell extends SutramElement {
             overflow: hidden;
             background: var(--bg);
         }
-        /* Primary Tab Buttons */
-        .tab-btn {
-            padding: 0 10px;
-            height: 100%;
+        /* Top 4px Viewport Position Bar */
+        .position-bar {
             display: flex;
-            align-items: center;
+            width: 100%;
+            height: 4px;
+            flex-shrink: 0;
+            background: var(--border-dim, rgba(255, 255, 255, 0.06));
+            z-index: 120;
             cursor: pointer;
-            font-weight: 500;
-            color: var(--text-muted);
+            touch-action: pan-y;
+            overflow: hidden;
+        }
+        .position-bar-segment {
+            height: 100%;
             background: transparent;
-            border-radius: 4px;
-            white-space: nowrap;
-            border: 2px solid transparent;
+            border-right: 1px solid var(--border);
             box-sizing: border-box;
-            font-size: 0.9rem;
-            transition: all 0.2s;
-            outline: none;
-            margin: 0;
+            transition: background 0.2s ease, opacity 0.2s ease;
         }
-        .tab-btn:hover {
-            background: var(--bg-hover);
-            color: var(--text);
+        .position-bar-segment:last-child {
+            border-right: none;
         }
-        .tab-btn.active {
-            color: var(--text);
-            background: transparent;
-            border-color: transparent transparent var(--tab-intent, var(--intent-primary)) transparent;
-            border-radius: 4px 4px 0 0;
+        .position-bar-segment.on-screen {
+            background: var(--intent-primary);
         }
-        :host-context([data-theme="e-ink"]) .tab-btn {
-            color: #000000 !important;
-            font-weight: 600 !important;
-            border: 2px solid transparent;
-            transition: none !important;
+        :host-context([data-theme="e-ink"]) .position-bar {
+            background: var(--bg, #ffffff);
+            border-bottom: 1px solid var(--border, #000000);
         }
-        :host-context([data-theme="e-ink"]) .tab-btn:hover {
-            background: transparent !important;
-        }
-        :host-context([data-theme="e-ink"]) .tab-btn.active {
-            background: var(--bg, #ffffff) !important;
-            color: var(--text, #000000) !important;
-            border: 2px solid var(--intent-neutral, #3b82f6) !important;
-            box-shadow: 3px -3px 0 var(--intent-success, #10b981) !important;
+        :host-context([data-theme="e-ink"]) .position-bar-segment.on-screen {
+            background: var(--text, #000000);
         }
         /* Viewport Layout */
         .spatial-viewport {
@@ -170,57 +159,6 @@ export class SutramAppShell extends SutramElement {
         .spatial-col:last-child {
             border-right: none !important;
         }
-        .masthead-action-rail-cell {
-            width: var(--yv-rail-cell-width, 44px);
-            height: 100%;
-            border-radius: 0;
-            border: none;
-            border-left: 1px solid var(--border);
-            background: var(--rail-bg, rgba(255,255,255,0.02));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: background 0.15s ease, color 0.15s ease;
-            box-sizing: border-box;
-            color: var(--text-muted);
-        }
-        .masthead-action-rail-cell:hover {
-            background: var(--rail-hover, rgba(99, 102, 241, 0.22));
-            color: var(--text);
-        }
-        /* Strip padding and force stretch alignment for full-bleed action rails */
-        .masthead {
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-            padding-right: 0 !important;
-            height: var(--yv-header-height, 44px);
-            align-items: stretch !important;
-        }
-        .masthead-right-rail, .col-header-actions {
-            display: flex;
-            align-items: stretch;
-            height: 100%;
-        }
-
-        /* Ensure tab contents stay vertically centered despite parent stretching */
-        .col-header > div:first-child, .masthead > div:first-child {
-            display: flex;
-            align-items: center;
-        }
-        .col-header > div:last-child {
-            align-items: stretch;
-        }
-        :host([data-viewport="mobile"]) .desktop-only-folders, [data-viewport="mobile"] .desktop-only-folders { display: none !important; }
-        :host([data-viewport="mobile"]) .mobile-only-tools, [data-viewport="mobile"] .mobile-only-tools { display: flex !important; }
-        :host([data-viewport="desktop"]) .desktop-only-folders, :host([data-viewport="tablet"]) .desktop-only-folders,
-        [data-viewport="desktop"] .desktop-only-folders, [data-viewport="tablet"] .desktop-only-folders { display: flex !important; }
-        :host([data-viewport="desktop"]) .mobile-only-tools, :host([data-viewport="tablet"]) .mobile-only-tools,
-        [data-viewport="desktop"] .mobile-only-tools, [data-viewport="tablet"] .mobile-only-tools { display: none !important; }
-        .pos-dot-target { padding: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-        .pos-dot { width: 6px; height: 6px; border-radius: 9999px; background: var(--text-muted); transition: all 0.2s ease; }
-        .pos-dot.active { width: 14px; background: var(--intent-primary); box-shadow: none; }
-        :host-context([data-theme="e-ink"]) .pos-dot.active { background: var(--text, #000000); box-shadow: none; }
         .spatial-col.is-focused {
             z-index: 10;
         }
@@ -231,41 +169,105 @@ export class SutramAppShell extends SutramElement {
             display: flex;
             align-items: stretch !important;
             height: var(--yv-header-height, 44px);
+            min-height: 44px;
             background: var(--bg-deep);
             border-bottom: 1px solid var(--border);
-            padding: 0 0 0 var(--yv-gutter-x, 12px);
+            padding: 0;
             flex-shrink: 0;
             position: relative;
             z-index: 100;
             overflow: visible !important;
+            box-sizing: border-box;
         }
-        /* Draggable Tab Enhancements */
-        .sub-tab {
-            touch-action: none; user-select: none; display: flex; align-items: center;
-            cursor: pointer; padding: 0; margin-right: 16px; font-size: 0.9rem; font-weight: 500; 
-            color: var(--text-muted); white-space: nowrap; transition: all 0.2s; height: 100%; 
-            border-bottom: 2px solid transparent; box-sizing: border-box; outline: none;
-        }
-        .sub-tab:last-child { margin-right: 0; }
-        .sub-tab:hover { color: var(--text); }
-        .sub-tab.active { color: var(--text); border-bottom: 2px solid var(--intent-primary); }
-
-        :host([data-theme="e-ink"]) .sub-tab { transition: none !important; }
-        :host([data-theme="e-ink"]) .sub-tab:hover { color: var(--text-muted); }
-        :host([data-theme="e-ink"]) .sub-tab.active { color: var(--text) !important; }
-
-        .sub-tab-icon-wrapper {
-            position: relative;
+        .col-tabs-area {
+            flex: 1 1 0%;
+            min-width: 0;
+            height: 100%;
             display: flex;
-            align-items: center;
-            justify-content: center;
-            width: var(--yv-icon-size, 14px);
-            height: var(--yv-icon-size, 14px);
-            margin-right: var(--yv-icon-gap, 8px);
-            border-radius: 4px;
-            transition: background 0.2s;
+            align-items: stretch;
+            overflow: hidden;
         }
-        .sub-tab-icon-wrapper .default-icon-container { display: flex !important; transition: opacity 0.2s; }
+        .active-tab-dropdown {
+            display: inline-flex;
+            align-items: stretch;
+            height: 100%;
+            min-width: 44px;
+            max-width: 100%;
+            flex: 0 1 auto;
+            overflow: hidden;
+        }
+        .active-tab-trigger {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            height: 100%;
+            min-height: 44px;
+            min-width: 44px;
+            max-width: 100%;
+            padding: 0 10px;
+            margin: 0;
+            border: none;
+            border-bottom: 2px solid var(--active-sub-intent, var(--intent-primary));
+            border-radius: 0;
+            background: transparent;
+            color: var(--text);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-sizing: border-box;
+            overflow: hidden;
+            transition: background 0.15s ease;
+        }
+        .active-tab-trigger:hover {
+            background: var(--bg-hover);
+        }
+        .active-tab-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0;
+        }
+        .inline-tab-btn {
+            touch-action: none;
+            user-select: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            height: 100%;
+            min-height: 44px;
+            min-width: 44px;
+            padding: 0 10px;
+            margin: 0;
+            border: none;
+            border-bottom: 2px solid transparent;
+            border-radius: 0;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            font-weight: 500;
+            white-space: nowrap;
+            cursor: pointer;
+            flex-shrink: 0;
+            box-sizing: border-box;
+            transition: color 0.15s ease, background 0.15s ease;
+        }
+        .inline-tab-btn:hover {
+            color: var(--text);
+            background: var(--bg-hover);
+        }
+        .active-tab-trigger sutram-icon,
+        .inline-tab-btn sutram-icon {
+            flex-shrink: 0;
+        }
+        .col-globals-rail {
+            display: flex;
+            align-items: stretch;
+            height: 100%;
+            flex-shrink: 0;
+            margin-left: auto;
+        }
+        /* A <slot> has no child nodes of its own, so :empty would hide what is assigned to it.
+           Left at its default display: contents, it takes no space when nothing is pinned. */
         .projection-mount-slot > * {
             flex: 1;
             min-height: 0;
@@ -284,10 +286,10 @@ export class SutramAppShell extends SutramElement {
         this._projectionPool = new SutramProjectionPool();
         this.variant = 'standard';
         this._spatialState = { capacity: 3, focusedColumn: 'center', mobileViewportIndex: 1, layoutRatios: null, columns: { left: { pinned: [] }, center: { pinned: [] }, right: { pinned: [] } } };
-        // PointerEvent Drag State
-
-        // Custom Overlay State for Launcher Folders
-        this._launcherDropdown = null;
+        this._colTabsWidths = { left: 0, center: 0, right: 0 };
+        this._inlineTabClampCounts = { left: null, center: null, right: null };
+        this._lastRenderedInlineCounts = { left: 0, center: 0, right: 0 };
+        this._lastInlineClampKeys = { left: '', center: '', right: '' };
     }
     _safeEvict(id, executeEvict) {
         const registry = window.ExtensionRegistry || ExtensionRegistry;
@@ -315,13 +317,18 @@ export class SutramAppShell extends SutramElement {
             }
         }
         this._dragState.active = true;
+        if (this.shadowRoot) {
+            this.shadowRoot.querySelectorAll('.active-tab-dropdown').forEach(dd => {
+                if (dd.open) dd.open = false;
+            });
+        }
         this.requestUpdate();
         if (navigator.vibrate) navigator.vibrate(50);
     }
     _handlePointerDown(e, entity, sourceCol, originType = 'subtab') {
         let sourceRect = null;
         const trackEl = this.shadowRoot.querySelector('.spatial-track');
-        const trackRect = trackEl ? trackEl.getBoundingClientRect() : { top: 38, height: window.innerHeight - 68 };
+        const trackRect = trackEl ? trackEl.getBoundingClientRect() : { top: 4, height: window.innerHeight - 34 };
 
         if (sourceCol === 'window') {
             const path = e.composedPath();
@@ -464,8 +471,12 @@ export class SutramAppShell extends SutramElement {
     disconnectedCallback() {
         super.disconnectedCallback();
         if (this._handleResize) window.removeEventListener('resize', this._handleResize);
+        if (this._tabsAreaObserver) {
+            this._tabsAreaObserver.disconnect();
+            this._tabsAreaObserver = null;
+        }
 
-        [this._dragController, this._folderDragController, this._dotDragController].forEach(ctrl => {
+        [this._dragController, this._dotDragController].forEach(ctrl => {
             if (ctrl && typeof ctrl.abort === 'function') ctrl.abort();
         });
     }
@@ -482,24 +493,63 @@ export class SutramAppShell extends SutramElement {
                 track.style.transform = `translateX(${metrics.getTrackOffset()})`;
             }
         }
-        // Auto-scroll active sub-tabs into view
-        const activeTabs = this.shadowRoot.querySelectorAll('.sub-tab.active');
-        activeTabs.forEach(tab => {
-            const track = tab.closest('sutram-scrub-track, yenvui-scrub-track');
-            if (track && track.shadowRoot) {
-                const container = track.shadowRoot.querySelector('.scrub-container');
-                if (container) {
-                    const tabRect = tab.getBoundingClientRect();
-                    if (tabRect.width > 0) {
-                        const contRect = container.getBoundingClientRect();
-                        container.scrollBy({
-                            left: tabRect.left - contRect.left - contRect.width / 2 + tabRect.width / 2,
-                            behavior: 'smooth'
-                        });
+        if (typeof ResizeObserver !== 'undefined') {
+            if (!this._tabsAreaObserver) {
+                this._tabsAreaObserver = new ResizeObserver((entries) => {
+                    let changed = false;
+                    const nextWidths = { ...this._colTabsWidths };
+                    const nextClamps = { ...this._inlineTabClampCounts };
+                    entries.forEach(entry => {
+                        const colId = entry.target?.dataset?.colTabs;
+                        const w = entry.contentRect ? entry.contentRect.width : entry.target.clientWidth;
+                        if (colId && w > 0 && Math.abs((nextWidths[colId] || 0) - w) > 2) {
+                            nextWidths[colId] = w;
+                            nextClamps[colId] = null;
+                            changed = true;
+                        }
+                    });
+                    if (changed) {
+                        this._colTabsWidths = nextWidths;
+                        this._inlineTabClampCounts = nextClamps;
+                        this.requestUpdate();
                     }
+                });
+            }
+            this.shadowRoot.querySelectorAll('.col-tabs-area').forEach(el => {
+                this._tabsAreaObserver.observe(el);
+                const colId = el.dataset?.colTabs;
+                if (colId && el.clientWidth > 0 && !this._colTabsWidths[colId]) {
+                    this._colTabsWidths = { ...this._colTabsWidths, [colId]: el.clientWidth };
                 }
+            });
+        }
+        this._checkInlineTabsOverflow();
+    }
+    _checkInlineTabsOverflow() {
+        if (!this.shadowRoot) return;
+        let clampedAny = false;
+        const nextClamps = { ...this._inlineTabClampCounts };
+        this.shadowRoot.querySelectorAll('.col-tabs-area').forEach(areaEl => {
+            const colId = areaEl.dataset?.colTabs;
+            if (!colId || areaEl.clientWidth <= 0) return;
+            const renderedCount = this._lastRenderedInlineCounts?.[colId] || 0;
+            if (renderedCount > 0 && areaEl.scrollWidth > areaEl.clientWidth + 1) {
+                nextClamps[colId] = renderedCount - 1;
+                clampedAny = true;
             }
         });
+        if (clampedAny) {
+            this._inlineTabClampCounts = nextClamps;
+            this.requestUpdate();
+        }
+    }
+    _isProjectionDirty(subId) {
+        const registry = window.ExtensionRegistry || ExtensionRegistry;
+        return Boolean(subId && registry?.executeUIHook && registry.executeUIHook('sutram:is-projection-dirty', subId));
+    }
+    _formatTabLabel(sub) {
+        if (!sub) return '';
+        return `${sub.label}${this._isProjectionDirty(sub.id) ? '*' : ''}`;
     }
     connectedCallback() {
         try {
@@ -507,13 +557,6 @@ export class SutramAppShell extends SutramElement {
         this.setAttribute('data-spatial-boundary', '');
         // Ensure Tier 0 viewport gesture & edge-swipe shield is active
         YenvuiViewportGuard.install();
-
-        this.registerGlobalListener('click', document, (e) => {
-            if (this._launcherDropdown && !e.composedPath().some(n => n.classList?.contains('global-launcher-menu') || n.classList?.contains('tab-btn'))) {
-                this._launcherDropdown = null;
-                this.requestUpdate();
-            }
-        });
         if (LayoutStore) {
             this.subscribe(LayoutStore, state => {
                 const safeState = state || {};
@@ -622,41 +665,6 @@ export class SutramAppShell extends SutramElement {
         this._compileLayout();
         } catch(err) { console.error("[Telemetry] AppShell connectedCallback error:", err); }
     }
-    _resolvePrimaryTabMeta(tab) {
-        const id = (typeof tab === 'string' ? tab : tab?.id)?.toLowerCase() || '';
-        const registry = window.ExtensionRegistry || ExtensionRegistry;
-        const hooked = registry?.executeUIHook ? registry.executeUIHook('sutram:resolve-primary-tab-meta', { id, tab }) : null;
-        const intentToColor = (intentName) => {
-            if (!intentName) return null;
-            if (intentName === 'neutral' || intentName === 'muted') return 'var(--text-muted)';
-            return `var(--intent-${intentName})`;
-        };
-        const defaultMap = {
-            'context': { intent: 'primary', icon: 'folder-code' },
-            'edit': { intent: 'highlight', icon: 'edit-3' },
-            'diagnostics': { intent: 'warning', icon: 'activity' },
-            'tasks': { intent: 'warning', icon: 'check-square' },
-            'ctrl': { intent: 'danger', icon: 'terminal' },
-            'dev': { intent: 'success', icon: 'code' },
-            'offline': { intent: 'neutral', icon: 'wifi-off' },
-            'library': { intent: 'highlight', icon: 'book-open' }
-        };
-        const resolvedIntent = (tab && tab.intent) || hooked?.intent || defaultMap[id]?.intent || 'primary';
-        return {
-            intent: resolvedIntent,
-            color: intentToColor(resolvedIntent) || hooked?.color || 'var(--intent-primary)',
-            icon: (tab && tab.icon) ? tab.icon : (hooked?.icon || defaultMap[id]?.icon || 'folder')
-        };
-    }
-
-    _getPrimaryTabColor(tab) {
-        return this._resolvePrimaryTabMeta(tab).color;
-    }
-
-    _getPrimaryTabIcon(tab) {
-        const { color, icon } = this._resolvePrimaryTabMeta(tab);
-        return html`<sutram-icon name="${icon}" size="sm" stroke-width="2.5" style="margin-right: 8px; vertical-align: text-bottom; color: ${color};"></sutram-icon>`;
-    }
     _compileLayout() {
         try {
             this._layoutConfig = SutramProjectionCompiler.getCompiledLayout();
@@ -763,67 +771,117 @@ export class SutramAppShell extends SutramElement {
             this.requestUpdate();
         } catch(err) { console.error("[Telemetry] AppShell _compileLayout error:", err); }
     }
-    _renderDropdownItem(child) {
-        let existingCol = null;
-        if (this._spatialState && this._spatialState.columns) {
-            for (const colId of ['left', 'center', 'right']) {
-                if (this._spatialState.columns[colId].pinned.some(p => pinMatchesSlot(p, child))) {
-                    existingCol = colId;
-                    break;
-                }
-            }
+    _buildColumnTabDropdownItems(col, colSubSlots, activeSubInCol, primarySlots, subSlots) {
+        const items = [];
+
+        if (colSubSlots.length > 0) {
+            items.push({ sectionHeading: 'Open in this column' });
+            colSubSlots.forEach(sub => {
+                const isActive = Boolean(activeSubInCol && pinMatchesSlot(sub, activeSubInCol.id));
+                const sourceCol = sub.actualSourceCol || col.id;
+                items.push({
+                    id: `open:${sub.id}`,
+                    label: this._formatTabLabel(sub),
+                    icon: sub.icon || 'component',
+                    checkable: true,
+                    checked: isActive,
+                    section: 'Open in this column',
+                    onPointerDown: (e) => {
+                        this._handlePointerDown(e, sub, sourceCol, 'dropdown');
+                    },
+                    onClick: () => {
+                        if (window.Sutram?.stores?.Layout) {
+                            window.Sutram.stores.Layout.getState().setFocusedColumn(sourceCol);
+                        }
+                        this._handleSubTabClick(sub.id);
+                    },
+                    trailingButton: {
+                        icon: 'x',
+                        title: `Close ${sub.label}`,
+                        closeMenu: false,
+                        onClick: () => {
+                            this._safeEvict(sub.id, () => {
+                                const layout = window.Sutram?.stores?.Layout?.getState();
+                                if (!layout) return;
+                                layout.unpinFromColumn(sourceCol, sub.id);
+                                layout.evictProjection(sub.id);
+                                const updated = window.Sutram.stores.Layout.getState();
+                                const nextCol = updated.focusedColumn || sourceCol || 'center';
+                                const nextActive = updated.columns[nextCol]?.active || '';
+                                this._updateUrlHash(nextCol, nextActive);
+                                this.requestUpdate();
+                            });
+                        }
+                    }
+                });
+            });
         }
-        return html`
-            <button class="yv-interactive-row" style="background: var(--input-bg); color: var(--text); text-align: left; padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-family: var(--font-mono, monospace); font-weight: normal; margin: 0 !important; display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; box-sizing: border-box; touch-action: none; user-select: none; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"
-                @pointerdown=${(e) => {
-                    const layoutState = window.Sutram?.stores?.Layout?.getState();
-                    let existingColDown = null;
-                    if (layoutState && layoutState.columns) {
-                        for (const colId of ['left', 'center', 'right']) {
-                            if (layoutState.columns[colId].pinned.some(p => pinMatchesSlot(p, child))) {
-                                existingColDown = colId;
-                                break;
-                            }
+
+        primarySlots.forEach(tab => {
+            const children = subSlots.filter(s => (s.targetParent || '').toLowerCase() === (tab.id || '').toLowerCase());
+            if (children.length === 0) return;
+            const sectionTitle = `Add a tab · ${tab.label}`;
+            items.push({ sectionHeading: sectionTitle });
+            children.forEach(child => {
+                let existingCol = null;
+                if (this._spatialState && this._spatialState.columns) {
+                    for (const colId of ['left', 'center', 'right']) {
+                        if (this._spatialState.columns[colId]?.pinned?.some(p => pinMatchesSlot(p, child))) {
+                            existingCol = colId;
+                            break;
                         }
                     }
-                    this._handlePointerDown(e, child, existingColDown, 'dropdown');
-                }}
-                @click=${() => {
-                    if (this._dragState.active) return;
-                    const layoutState = window.Sutram?.stores?.Layout?.getState();
-
-                    let existingColClick = null;
-                    let existingPin = null;
-                    if (layoutState && layoutState.columns) {
-                        for (const colId of ['left', 'center', 'right']) {
-                            existingPin = layoutState.columns[colId].pinned.find(p => pinMatchesSlot(p, child));
-                            if (existingPin) {
-                                existingColClick = colId;
-                                break;
+                }
+                items.push({
+                    id: `add:${child.id}`,
+                    label: child.label,
+                    icon: child.icon || 'puzzle',
+                    badge: existingCol ? existingCol.toUpperCase() : '',
+                    section: sectionTitle,
+                    onPointerDown: (e) => {
+                        const layoutState = window.Sutram?.stores?.Layout?.getState();
+                        let existingColDown = null;
+                        if (layoutState && layoutState.columns) {
+                            for (const colId of ['left', 'center', 'right']) {
+                                if (layoutState.columns[colId]?.pinned?.some(p => pinMatchesSlot(p, child))) {
+                                    existingColDown = colId;
+                                    break;
+                                }
                             }
                         }
+                        this._handlePointerDown(e, child, existingColDown, 'dropdown');
+                    },
+                    onClick: () => {
+                        const layoutState = window.Sutram?.stores?.Layout?.getState();
+                        let existingColClick = null;
+                        let existingPin = null;
+                        if (layoutState && layoutState.columns) {
+                            for (const colId of ['left', 'center', 'right']) {
+                                existingPin = layoutState.columns[colId]?.pinned?.find(p => pinMatchesSlot(p, child));
+                                if (existingPin) {
+                                    existingColClick = colId;
+                                    break;
+                                }
+                            }
+                        }
+                        let targetCol = existingColClick;
+                        const targetPinId = existingPin ? existingPin.id : child.id;
+                        if (!existingColClick) {
+                            targetCol = col.id || child.preferredColumn || 'center';
+                            if (layoutState) layoutState.pinToColumn(targetCol, child);
+                        }
+                        if (layoutState) {
+                            layoutState.setFocusedColumn(targetCol);
+                            layoutState.setActiveProjection(targetCol, targetPinId);
+                        }
+                        this._handleSubTabClick(targetPinId);
+                        this.requestUpdate();
                     }
+                });
+            });
+        });
 
-                    let targetCol = existingColClick;
-                    const targetPinId = existingPin ? existingPin.id : child.id;
-                    if (!existingColClick) {
-                        targetCol = child.preferredColumn || 'center';
-                        if (layoutState) layoutState.pinToColumn(targetCol, child);
-                    }
-                    if (layoutState) {
-                        layoutState.setFocusedColumn(targetCol);
-                        layoutState.setActiveProjection(targetCol, targetPinId);
-                    }
-                    this._handleSubTabClick(targetPinId);
-                    this._launcherDropdown = null;
-                    this.requestUpdate();
-                }}>
-                <div style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0;">
-                    <sutram-icon name="${child.icon || 'puzzle'}" size="sm" style="color: ${existingCol ? this._getPrimaryTabColor({id: child.targetParent, intent: child.intent}) : 'var(--text-muted)'};"></sutram-icon>
-                </div>
-                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;">${child.label}</span>
-            </button>
-        `;
+        return items;
     }
     _updateUrlHash(colId, subId) {
         const registry = window.ExtensionRegistry || ExtensionRegistry;
@@ -991,6 +1049,9 @@ export class SutramAppShell extends SutramElement {
 
         const layoutRatios = this._spatialState.layoutRatios || [1, 1, 1];
         const metrics = getSpatialMetrics(capacity, mobileViewportIndex, layoutRatios);
+        const safeViewport = Math.max(0, Math.min(mobileViewportIndex, layoutRatios.length - capacity));
+        const lastVisibleColIdx = Math.min(colDefinitions.length - 1, safeViewport + capacity - 1);
+        const showPositionBar = capacity < layoutRatios.length;
         // Apply viewport to the host to ensure child elements correctly execute :host-context CSS rules
         this.dataset.viewport = viewportMode;
 
@@ -1018,9 +1079,9 @@ export class SutramAppShell extends SutramElement {
                     singleNode = getDynamicNode(activeSlot.component, activeSlot.id);
                 } else {
                     singleNode = html`
-                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 40px; text-align: center; color: var(--text-muted); box-sizing: border-box; font-family: var(--font-mono, monospace);">
-                            <sutram-icon name="alert-triangle" size="xl" intent="warning" style="margin-bottom: 16px;"></sutram-icon>
-                            <h3 style="margin: 0 0 8px 0; color: var(--text); font-size: 1.1rem;">Unsupported Pop-Out View</h3>
+                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 100%; padding: 40px; text-align: center; color: var(--text-muted); box-sizing: border-box; font-family: var(--font-mono, monospace);">
+                            <sutram-icon name="alert-triangle" size="xl" intent="warning"></sutram-icon>
+                            <h3 style="margin: 8px 0 0 0; color: var(--text); font-size: 1.1rem;">Unsupported Pop-Out View</h3>
                             <p style="margin: 0; max-width: 440px; font-size: 0.85rem; line-height: 1.5;">The projection <strong>${activeSlot.label || activeSlot.id}</strong> is not permitted to run in an ephemeral pop-out window.</p>
                         </div>
                     `;
@@ -1053,162 +1114,29 @@ export class SutramAppShell extends SutramElement {
 
         const finalHtml = html`
             <div class="shell-container spatial-viewport" data-viewport="${viewportMode}">
-                ${!isPopout ? html`
-                    <!-- Persistent Global Launcher Row -->
-                    <div class="top-utility-row" style="position: relative; display: flex; justify-content: space-between; width: 100%; background: var(--bg-deep); flex-shrink: 0; height: 38px; border-bottom: 1px solid var(--border); z-index: 50; padding-left: 0; padding-right: 0; ${capacity < layoutRatios.length ? 'touch-action: pan-y; cursor: grab;' : ''}"
-                        @pointerdown=${(e) => { if (capacity < layoutRatios.length) this._handleDotDragStart(e); }}>
-                        ${viewportMode === 'mobile' ? html`
-                            <div class="mobile-only-tools flex items-center" style="display: flex; align-items: center; height: 100%;">
-                                <button class="tab-btn ${this._launcherDropdown?.isMobileTools ? 'active' : ''}" style="display: flex; align-items: center;" @click=${(e) => {
-                                    e.stopPropagation();
-                                    if (this._launcherDropdown?.isMobileTools) {
-                                        this._launcherDropdown = null;
-                                    } else {
-                                        const activeFolder = primarySlots[0] ? primarySlots[0].id : 'context';
-                                        this._launcherDropdown = { isMobileTools: true, selectedFolder: activeFolder };
-                                    }
-                                    this.requestUpdate();
-                                }}>
-                                    <sutram-icon name="wrench" size="sm" intent="primary" stroke-width="2.5" style="margin-right: 6px;"></sutram-icon>
-                                    <span>Tools</span>
-                                    <sutram-icon name="chevron-down" size="xs" intent="muted" stroke-width="2.5" style="margin-left: 4px;"></sutram-icon>
-                                </button>
-                            </div>
-                        ` : html`
-                            <sutram-scrub-track class="desktop-only-folders" @scroll=${() => { if (this._launcherDropdown) { this._launcherDropdown = null; this.requestUpdate(); } }} style="flex: 1; min-width: 0; height: 100%; background: transparent; --scrub-gap: 2px;">
-                                ${primarySlots.map(tab => {
-                                    const children = subSlots.filter(s => (s.targetParent || '').toLowerCase() === tab.id.toLowerCase());
-                                    return html`
-                                        <button class="tab-btn" style="--tab-intent: ${this._getPrimaryTabColor(tab)};" @click=${(e) => {
-                                            if (this._launcherDropdown?.tabId === tab.id) {
-                                                this._launcherDropdown = null;
-                                            } else {
-                                                const rect = e.currentTarget.getBoundingClientRect();
-                                                const alignRight = rect.right > window.innerWidth - 200;
-                                                this._launcherDropdown = { 
-                                                    tabId: tab.id, 
-                                                    items: children, 
-                                                    x: alignRight ? 'auto' : rect.left + 'px',
-                                                    right: alignRight ? (window.innerWidth - rect.right) + 'px' : 'auto',
-                                                    y: rect.bottom + 'px' 
-                                                };
-                                            }
-                                            this.requestUpdate();
-                                        }}>
-                                            ${this._getPrimaryTabIcon(tab)}${tab.label}
-                                        </button>
-                                    `;
-                                })}
-                            </sutram-scrub-track>
-                        `}
-                        <!-- Centered Dots (1-Column Mobile View) -->
-                        ${capacity === 1 && capacity < layoutRatios.length ? html`
-                            <div class="mobile-dots-wrapper" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 4px; background: var(--input-bg); border: 1px solid var(--border); padding: 2px 8px; border-radius: 9999px; z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
-                                ${Array.from({ length: Math.max(1, layoutRatios.length - capacity + 1) }).map((_, i) => html`
-                                    <div class="pos-dot-target" @click=${(e) => { e.stopPropagation(); e.preventDefault(); }} @pointerdown=${(e) => { e.stopPropagation(); this._setViewportIndex(i); }} title="Jump to View ${i+1}" style="padding: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-                                        <div class="pos-dot ${mobileViewportIndex === i ? 'active' : ''}" style="width: ${mobileViewportIndex === i ? '14px' : '6px'}; height: 6px; border-radius: 9999px; background: ${mobileViewportIndex === i ? 'var(--intent-primary)' : 'var(--text-muted)'}; opacity: ${mobileViewportIndex === i ? '1' : '0.5'}; transition: all 0.2s ease;"></div>
-                                    </div>
-                                `)}
-                            </div>
-                        ` : ''}
-                        <!-- Top Right Utility Rail -->
-                        <div style="position: absolute; right: 0; top: 0; bottom: 0; display: flex; align-items: stretch; gap: 0; height: 100%; flex-shrink: 0; background: var(--bg-deep); z-index: 105; padding-right: 0;">
-                            <slot name="header-quickpack"></slot>
-                            <slot name="header-actions-left"></slot>
-                            ${capacity > 1 && capacity < layoutRatios.length ? html`
-                                <div class="desktop-dots-wrapper" style="display: flex; align-items: center; gap: 4px; background: var(--input-bg); border: 1px solid var(--border); padding: 2px 8px; border-radius: 9999px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
-                                    ${Array.from({ length: Math.max(1, layoutRatios.length - capacity + 1) }).map((_, i) => html`
-                                        <div class="pos-dot-target" @click=${(e) => { e.stopPropagation(); e.preventDefault(); }} @pointerdown=${(e) => { e.stopPropagation(); this._setViewportIndex(i); }} title="Jump to View ${i+1}" style="padding: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-                                            <div class="pos-dot ${mobileViewportIndex === i ? 'active' : ''}" style="width: ${mobileViewportIndex === i ? '14px' : '6px'}; height: 6px; border-radius: 9999px; background: ${mobileViewportIndex === i ? 'var(--intent-primary)' : 'var(--text-muted)'}; opacity: ${mobileViewportIndex === i ? '1' : '0.5'}; transition: all 0.2s ease;"></div>
-                                        </div>
-                                    `)}
+                ${showPositionBar ? html`
+                    <div class="position-bar" @pointerdown=${(e) => this._handleDotDragStart(e)}>
+                        ${layoutRatios.map((ratio, segIdx) => {
+                            const isOnScreen = segIdx >= safeViewport && segIdx < safeViewport + capacity;
+                            const targetViewport = Math.max(0, Math.min(segIdx, layoutRatios.length - capacity));
+                            const colId = colDefinitions[segIdx]?.id || 'center';
+                            return html`
+                                <div
+                                    class="position-bar-segment ${isOnScreen ? 'on-screen' : ''}"
+                                    style="flex: ${Number(ratio) || 1} 1 0%;"
+                                    title="${colDefinitions[segIdx]?.label || `Column ${segIdx + 1}`}"
+                                    @click=${(e) => {
+                                        e.stopPropagation();
+                                        if (this._isPanningTrack) return;
+                                        this._setViewportIndex(targetViewport);
+                                        if (window.Sutram?.stores?.Layout) {
+                                            window.Sutram.stores.Layout.getState().setFocusedColumn(colId);
+                                        }
+                                    }}>
                                 </div>
-                            ` : ''}
-                            <slot name="header-actions"></slot>
-                        </div>
+                            `;
+                        })}
                     </div>
-                ` : ''}
-                <!-- Global Launcher Dropdown Overlay -->
-                ${this._launcherDropdown ? html`
-                    ${this._launcherDropdown.isMobileTools ? html`
-                        <div class="global-launcher-menu mobile-tools-panel" style="position: absolute; top: 38px; left: 0; right: 0; width: 100vw; max-height: calc(100dvh - 38px); overflow-y: auto; background: var(--pane-bg); background: color-mix(in srgb, var(--pane-bg) 95%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); box-shadow: var(--overlay-shadow); z-index: 9999; display: flex; flex-direction: column; padding: 12px 12px 20px 12px; box-sizing: border-box; gap: 18px;">
-                            ${primarySlots.map(tab => {
-                                const children = subSlots.filter(s => (s.targetParent || '').toLowerCase() === tab.id.toLowerCase());
-                                if (children.length === 0) return '';
-                                return html`
-                                    <div style="display: flex; flex-direction: column; gap: 6px;">
-                                        <div style="display: flex; align-items: center; font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: ${this._getPrimaryTabColor(tab)}; border-bottom: 1px solid color-mix(in srgb, ${this._getPrimaryTabColor(tab)} 30%, transparent); padding: 0 14px 4px 14px;">
-                                            ${tab.label}
-                                        </div>
-                                        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-                                            ${children.map(child => {
-                                                let existingCol = null;
-                                                if (this._spatialState && this._spatialState.columns) {
-                                                    for (const colId of ['left', 'center', 'right']) {
-                                                        if (this._spatialState.columns[colId].pinned.some(p => p.id === child.id)) {
-                                                            existingCol = colId;
-                                                            break;
-                                                        }
-                                                    }
-                                                }
-                                                return html`
-                                                <button class="yv-interactive-row" style="background: var(--input-bg); color: var(--text); padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-family: var(--font-mono, monospace); font-weight: normal; margin: 0 !important; display: inline-flex; align-items: center; gap: 8px; width: auto; box-sizing: border-box; touch-action: none; user-select: none; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"
-                                                    @pointerdown=${(e) => {
-                                                        const layoutState = window.Sutram?.stores?.Layout?.getState();
-                                                        let existingColDown = null;
-                                                        if (layoutState && layoutState.columns) {
-                                                            for (const colId of ['left', 'center', 'right']) {
-                                                                if (layoutState.columns[colId].pinned.some(p => p.id === child.id)) {
-                                                                    existingColDown = colId;
-                                                                    break;
-                                                                }
-                                                            }
-                                                        }
-                                                        this._handlePointerDown(e, child, existingColDown, 'dropdown');
-                                                    }}
-                                                    @click=${() => {
-                                                        if (this._dragState.active) return;
-                                                        const layoutState = window.Sutram?.stores?.Layout?.getState();
-                                                        const { capacity, focusedColumn, mobileViewportIndex } = this._spatialState || { capacity: 3, focusedColumn: 'center', mobileViewportIndex: 1 };
-
-                                                        let existingColClick = null;
-                                                        if (layoutState && layoutState.columns) {
-                                                            for (const colId of ['left', 'center', 'right']) {
-                                                                if (layoutState.columns[colId].pinned.some(p => p.id === child.id)) {
-                                                                    existingColClick = colId;
-                                                                    break;
-                                                                }
-                                                            }
-                                                        }
-
-                                                        let targetCol = existingColClick;
-                                                        if (!existingColClick) {
-                                                            targetCol = child.preferredColumn || 'center';
-                                                            if (layoutState) layoutState.pinToColumn(targetCol, child);
-                                                        }
-                                                        if (layoutState) {
-                                                            layoutState.setFocusedColumn(targetCol);
-                                                        }
-                                                        this._handleSubTabClick(child.id);
-                                                        this._launcherDropdown = null;
-                                                        this.requestUpdate();
-                                                    }}>
-                                                    <div style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0;">
-                                                        <sutram-icon name="${child.icon || 'puzzle'}" size="sm" style="color: ${existingCol ? this._getPrimaryTabColor({id: tab.id, intent: tab.intent}) : 'var(--text-muted)'};"></sutram-icon>
-                                                    </div>
-                                                    <span style="white-space: nowrap;">${child.label}</span>
-                                                </button>
-                                            `})}
-                                        </div>
-                                    </div>
-                                `;
-                            })}
-                        </div>
-                    ` : html`
-                        <div class="global-launcher-menu" style="position: fixed; top: ${this._launcherDropdown.y}; left: ${this._launcherDropdown.x}; right:${this._launcherDropdown.right}; background: var(--pane-bg); background: color-mix(in srgb, var(--pane-bg) 95%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; padding: 8px; box-shadow: var(--overlay-shadow); z-index: 9999; display: flex; flex-direction: column; gap: 6px; min-width: 220px; max-height: 80vh; overflow-y: auto;">
-                            ${this._launcherDropdown.items.map(child => this._renderDropdownItem(child))}
-                        </div>
-                    `}
                 ` : ''}
                 <!-- Adaptive Spatial Track -->
                 <div class="spatial-track capacity-${capacity}" style="${!this._isPanningTrack ? `transform: translateX(${metrics.getTrackOffset()});` : ''}">
@@ -1264,6 +1192,51 @@ export class SutramAppShell extends SutramElement {
                         if (!activeSubInCol) {
                             activeSubInCol = colSubSlots[0];
                         }
+                        const isLastVisibleCol = idx === lastVisibleColIdx;
+                        const activeIntent = activeSubInCol?.intent || 'primary';
+                        const activeIcon = activeSubInCol?.icon || 'plus';
+                        const activeDisplayLabel = activeSubInCol ? this._formatTabLabel(activeSubInCol) : 'Open tab';
+                        const tabDropdownItems = this._buildColumnTabDropdownItems(col, colSubSlots, activeSubInCol, primarySlots, subSlots);
+
+                        const otherTabs = activeSubInCol
+                            ? colSubSlots.filter(s => !pinMatchesSlot(s, activeSubInCol.id))
+                            : [];
+                        const tabsAreaWidth = this._colTabsWidths?.[col.id] || 0;
+                        const activeDropdownEstWidth = activeSubInCol
+                            ? Math.min(200, Math.max(88, activeDisplayLabel.length * 7.5 + 54))
+                            : 112;
+                        const availForInlineTabs = Math.max(0, tabsAreaWidth - activeDropdownEstWidth - 6);
+                        const inlineEstimatedWidths = otherTabs.map(t => Math.max(44, this._formatTabLabel(t).length * 7.5 + 42));
+                        const clampKey = `${tabsAreaWidth}:${activeDisplayLabel}:${otherTabs.map(t => `${t.id}:${this._formatTabLabel(t)}`).join(',')}`;
+                        if (this._lastInlineClampKeys[col.id] !== clampKey) {
+                            this._lastInlineClampKeys[col.id] = clampKey;
+                            this._inlineTabClampCounts[col.id] = null;
+                        }
+                        const estimatedInlineFit = tabsAreaWidth > 0
+                            ? computeFitActionCount(availForInlineTabs, inlineEstimatedWidths, 0, 0, false)
+                            : 0;
+                        const clampVal = this._inlineTabClampCounts?.[col.id];
+                        const fitInlineCount = (clampVal !== null && clampVal !== undefined)
+                            ? Math.min(estimatedInlineFit, clampVal)
+                            : estimatedInlineFit;
+                        this._lastRenderedInlineCounts[col.id] = fitInlineCount;
+                        const visibleInlineTabs = otherTabs.slice(0, fitInlineCount);
+
+                        const extraViewNodes = [];
+                        if (activeSubInCol && activeSubInCol.headerActionComponent) {
+                            extraViewNodes.push(getDynamicNode(activeSubInCol.headerActionComponent, activeSubInCol.id));
+                        }
+                        if (activeSubInCol) {
+                            this._layoutConfig
+                                .filter(s =>
+                                    s.slot === 'slots:sub-navigation-actions' &&
+                                    (s.targetSub === activeSubInCol.id || (s.extName === activeSubInCol.extName && (s.targetSub === activeSubInCol.rawId || s.targetSub === `${activeSubInCol.extName}:${activeSubInCol.rawId}`)))
+                                )
+                                .forEach(act => {
+                                    extraViewNodes.push(getDynamicNode(act.component, activeSubInCol.id));
+                                });
+                        }
+
                         return html`
                         <div class="spatial-col ${focusedColumn === col.id && capacity > 1 ? 'is-focused' : ''}" data-col-id="${col.id}" style="--col-width: ${metrics.getColWidth(idx)}; --col-left: ${metrics.getColLeft(idx)};" @click=${(e) => {
                             if (this._isPanningTrack) { e.preventDefault(); e.stopPropagation(); return; }
@@ -1272,16 +1245,54 @@ export class SutramAppShell extends SutramElement {
                             if (window.Sutram?.stores?.Layout) window.Sutram.stores.Layout.getState().setFocusedColumn(targetFocusCol);
                             if (activeId) this._updateUrlHash(targetFocusCol, activeId);
                         }}>
-                            <!-- Local Column Header (Projection Stack) -->
-                            <div class="col-header" style="justify-content: space-between; padding: 0 0 0 12px; --active-sub-intent: ${activeSubInCol && activeSubInCol.intent ? `var(--intent-${activeSubInCol.intent})` : 'var(--intent-primary)'};">
-                                <sutram-scrub-track class="sub-tabs" style="flex: 1; padding: 0; height: 100%;">
-                                    ${colSubSlots.map(sub => {
-                                        const isActive = activeSubInCol && pinMatchesSlot(sub, activeSubInCol.id);
-                                        const intentColor = sub.intent ? `var(--intent-${sub.intent})` : 'var(--intent-primary)';
-                                        const displayIcon = sub.icon || 'component';
+                            <!-- Unified Single Column Header Row -->
+                            <div class="col-header" style="--active-sub-intent: var(--intent-${activeIntent});"
+                                @pointerdown=${(e) => {
+                                    // The row's empty space pans between columns, as the old top row did; controls keep their own taps.
+                                    if (showPositionBar && (e.target === e.currentTarget || e.target?.classList?.contains('col-tabs-area'))) {
+                                        this._handleDotDragStart(e);
+                                    }
+                                }}>
+                                <!-- 1. View Menu (Always First) -->
+                                <sutram-subtab-menu
+                                    .slotConfig=${activeSubInCol}
+                                    .extraContentNodes=${extraViewNodes}>
+                                </sutram-subtab-menu>
+
+                                <!-- 2. Active Tab Dropdown + 3. Fitted Inline Open Tabs -->
+                                <div class="col-tabs-area" data-col-tabs="${col.id}">
+                                    <sutram-dropdown
+                                        class="active-tab-dropdown"
+                                        align="left"
+                                        searchable
+                                        searchPlaceholder="Filter tabs..."
+                                        .items=${tabDropdownItems}>
+                                        <button
+                                            slot="trigger"
+                                            type="button"
+                                            class="active-tab-trigger"
+                                            title=${activeDisplayLabel}
+                                            @click=${() => {
+                                                const targetFocusCol = activeSubInCol ? (activeSubInCol.actualSourceCol || col.id) : col.id;
+                                                if (window.Sutram?.stores?.Layout) {
+                                                    window.Sutram.stores.Layout.getState().setFocusedColumn(targetFocusCol);
+                                                }
+                                            }}>
+                                            <sutram-icon name="${activeIcon}" size="sm" intent="${activeIntent}"></sutram-icon>
+                                            <span class="active-tab-label">${activeDisplayLabel}</span>
+                                            <sutram-icon name="chevron-down" size="xs"></sutram-icon>
+                                        </button>
+                                    </sutram-dropdown>
+
+                                    ${visibleInlineTabs.map(sub => {
+                                        const subIntent = sub.intent || 'primary';
+                                        const subIcon = sub.icon || 'component';
+                                        const subLabel = this._formatTabLabel(sub);
                                         return html`
-                                        <div class="sub-tab ${isActive ? 'active' : ''}"
-                                                style="${isActive ? `border-bottom-color: ${intentColor}; color: var(--text);` : ''}"
+                                            <button
+                                                type="button"
+                                                class="inline-tab-btn"
+                                                title=${subLabel}
                                                 @pointerdown=${(e) => {
                                                     const now = Date.now();
                                                     if (this._lastTapId === sub.id && now - (this._lastTapTime || 0) < 300) {
@@ -1306,33 +1317,27 @@ export class SutramAppShell extends SutramElement {
                                                         layout.openWindow(sub, col.id, 1);
                                                     }
                                                 }}
-                                                @click=${() => {
-                                                    if (this._dragState.active) return; // Ignore click if it was a drag
+                                                @click=${(e) => {
+                                                    e.stopPropagation();
                                                     if (window.Sutram?.stores?.Layout) window.Sutram.stores.Layout.getState().setFocusedColumn(sub.actualSourceCol || col.id);
                                                     this._handleSubTabClick(sub.id);
                                                 }}>
-                                            <div class="sub-tab-icon-wrapper">
-                                                <div class="default-icon-container" style="color: ${intentColor}; opacity:${isActive ? '1' : '0.5'};">
-                                                    <sutram-icon name="${displayIcon}" size="sm" stroke-width="2.5"></sutram-icon>
-                                                </div>
-                                            </div>
-                                            ${sub.label}${registry?.executeUIHook && registry.executeUIHook('sutram:is-projection-dirty', sub.id) ? '*' : ''}
-                                        </div>
-                                    `})}
-                                </sutram-scrub-track>
-                                <!-- Projection Top Actions -->
-                                <div style="display: flex; align-items: stretch; height: 100%;">
-                                    ${activeSubInCol && activeSubInCol.headerActionComponent ? html`
-                                        <div style="display: flex; align-items: stretch; height: 100%;" data-ext="${activeSubInCol.extName}">${getDynamicNode(activeSubInCol.headerActionComponent, activeSubInCol.id)}</div>
-                                    ` : ''}
-                                    ${activeSubInCol ? this._layoutConfig.filter(s => 
-                                        s.slot === 'slots:sub-navigation-actions' && 
-                                        (s.targetSub === activeSubInCol.id || (s.extName === activeSubInCol.extName && (s.targetSub === activeSubInCol.rawId || s.targetSub === `${activeSubInCol.extName}:${activeSubInCol.rawId}`)))
-                                    ).map(act => html`<div style="display: contents;" data-ext="${act.extName}">${getDynamicNode(act.component, activeSubInCol.id)}</div>`) : ''}
-                                    ${activeSubInCol && (activeSubInCol.bulkActionGroup || activeSubInCol.menuActions) ? html`
-                                        <sutram-subtab-menu .slotConfig=${activeSubInCol}></sutram-subtab-menu>
-                                    ` : ''}
+                                                <sutram-icon name="${subIcon}" size="sm" intent="${subIntent}"></sutram-icon>
+                                                <span>${subLabel}</span>
+                                            </button>
+                                        `;
+                                    })}
                                 </div>
+
+                                <!-- 4. Globals on the Last Visible Column -->
+                                ${isLastVisibleCol ? html`
+                                    <div class="col-globals-rail" @click=${(e) => e.stopPropagation()}>
+                                        <slot name="header-quickpack"></slot>
+                                        <slot name="header-actions-left"></slot>
+                                        <slot name="gear-pinned"></slot>
+                                        <slot name="header-actions"></slot>
+                                    </div>
+                                ` : ''}
                             </div>
                             <!-- Pinned Tab Rendering Pool -->
                             <div style="flex: 1; position: relative; overflow: hidden; display: flex; flex-direction: column; background: var(--bg); min-height: 0;">

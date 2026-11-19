@@ -1426,6 +1426,328 @@ await execPromise;
 assert.equal(dd.open, false, 'Dropdown must close after confirmation hold completes');
 assert.deepEqual(confirmedPhases, ['start', 'settled'], 'Phase settled must fire when confirmation hold completes');
 
+// 5. Sprint U3: Registry manifest readers, getExtensionNames, pre-collapse setActionFilter, and same-type bulk variant keys
+ExtensionRegistry.registerExtension('u3_active_ext', {
+    name: 'U3 Active Ext',
+    corePrompts: ['ctx://prompts/a.md', 'ctx://prompts/b.md'],
+    customMeta: { priority: 1 }
+});
+ExtensionRegistry.registerExtension('u3_inactive_ext', {
+    name: 'U3 Inactive Ext',
+    corePrompts: ['ctx://prompts/inactive.md'],
+    customMeta: { priority: 2 }
+});
+const prevFilterPred = ExtensionRegistry._filterPredicate;
+ExtensionRegistry.setFilterPredicate((extName) => extName !== 'u3_inactive_ext');
+
+const activeEntries = ExtensionRegistry.getManifestEntries('corePrompts', { activeOnly: true });
+assert.equal(activeEntries.some(e => e.extName === 'u3_active_ext'), true);
+assert.equal(activeEntries.some(e => e.extName === 'u3_inactive_ext'), false, 'activeOnly: true must filter out inactive extensions');
+
+const allEntries = ExtensionRegistry.getManifestEntries('corePrompts', { activeOnly: false });
+assert.equal(allEntries.some(e => e.extName === 'u3_inactive_ext'), true, 'activeOnly: false must include inactive extensions');
+
+const flattenedActivePrompts = ExtensionRegistry.collectManifestField('corePrompts', { activeOnly: true });
+assert.equal(flattenedActivePrompts.includes('ctx://prompts/a.md'), true);
+assert.equal(flattenedActivePrompts.includes('ctx://prompts/inactive.md'), false);
+
+const flattenedAllPrompts = ExtensionRegistry.collectManifestField('corePrompts', { activeOnly: false });
+assert.equal(flattenedAllPrompts.includes('ctx://prompts/inactive.md'), true);
+
+const allExtNames = ExtensionRegistry.getExtensionNames({ activeOnly: false });
+assert.equal(allExtNames.includes('u3_inactive_ext'), true);
+const activeExtNames = ExtensionRegistry.getExtensionNames({ activeOnly: true });
+assert.equal(activeExtNames.includes('u3_inactive_ext'), false);
+
+// 5b. setActionFilter runs BEFORE variant collapse on both single and bulk paths (every item must pass in bulk)
+ExtensionRegistry.setActionFilter((act, itemData) => {
+    if (itemData?.readonly && act.id === 'file-copy') return false;
+    return true;
+});
+const rwActions = ExtensionRegistry.getEntityActions('file', { filepath: 'app://local/a.py', readonly: false });
+assert.equal(rwActions.find(a => a.setId === 'send').variants.some(v => v.id === 'file-copy'), true);
+
+const roActions = ExtensionRegistry.getEntityActions('file', { filepath: 'ws://shared/a.py', readonly: true });
+const roSend = roActions.find(a => a.setId === 'send');
+assert.equal(roSend.variants.some(v => v.id === 'file-copy'), false, 'setActionFilter must hide file-copy before variant set collapse');
+assert.equal(roSend.defaultVariant.id, 'file-share', 'Default variant must advance to next available variant when filter hides preferred one');
+
+// Bulk selection: mixed RW + RO items must fail every-item filter for file-copy
+const mixedBulk = ExtensionRegistry.getAggregatableActions([
+    { entityType: 'file', data: { filepath: 'app://local/a.py', readonly: false } },
+    { entityType: 'file', data: { filepath: 'ws://shared/b.py', readonly: true } }
+]);
+const mixedSend = mixedBulk.find(a => a.setId === 'send');
+assert.equal(mixedSend.variants.some(v => v.id === 'file-copy'), false, 'Bulk action must survive only if every selected item passes setActionFilter');
+
+// Replacing setActionFilter overwrites the previous filter
+ExtensionRegistry.setActionFilter(() => true);
+const restoredRoActions = ExtensionRegistry.getEntityActions('file', { filepath: 'ws://shared/a.py', readonly: true });
+assert.equal(restoredRoActions.find(a => a.setId === 'send').variants.some(v => v.id === 'file-copy'), true);
+ExtensionRegistry.setActionFilter(null);
+ExtensionRegistry.setFilterPredicate(prevFilterPred);
+
+// 5c. Same-type bulk selection remembers last-used variant under that entity type; mixed selection uses 'bulk'
+const { resolveSelectionEntityType } = await import('sutram/sutram_sdk.js');
+assert.equal(resolveSelectionEntityType([
+    { entityType: 'file:note', data: {} },
+    { entityType: 'file:note', data: {} }
+]), 'file:note');
+assert.equal(resolveSelectionEntityType([
+    { entityType: 'file', data: {} },
+    { entityType: 'folder', data: {} }
+]), 'bulk');
+
+// 5d. SutramEntityActions post-render overflow clamping steps down when rendered row overflows container, and resets when variant-set width changes
+const actionsRow = new SutramEntityActions();
+actionsRow.entityType = 'file';
+actionsRow.entityData = { filepath: 'app://a/test.py' };
+actionsRow._containerWidth = 220;
+actionsRow.render();
+actionsRow._lastRenderedFitCount = 2;
+actionsRow.shadowRoot = {
+    querySelector: (sel) => sel === '.action-row' ? { clientWidth: 200, scrollWidth: 245 } : null
+};
+actionsRow.updated(new Map());
+assert.equal(actionsRow._overflowClampCount, 1, 'Post-render overflow must decrement fit count so clipped button moves to 3-dot menu');
+assert.ok(actionsRow._lastClampContextKey.includes('send:'), 'clampContextKey must track variant-set setId and estimated width');
+actionsRow.entityData = { filepath: 'app://a/test.md' }; // Publish Document becomes available -> maxLabelChars increases
+actionsRow.render();
+assert.equal(actionsRow._overflowClampCount, null, 'Changing variant-set estimated width must reset _overflowClampCount');
+
+// 5e. SutramSubtabMenu stays rendered in place and disabled when view has no actions
+const emptySubMenu = new SutramSubtabMenu();
+emptySubMenu.slotConfig = { id: 'plain_view', label: 'Plain View' };
+emptySubMenu._rebuildMenu();
+const emptyMenuTpl = emptySubMenu.render();
+const emptyMarkup = emptyMenuTpl?.strings ? emptyMenuTpl.strings.join('') : '';
+assert.ok(emptyMarkup.includes('subtab-menu-trigger'), 'SutramSubtabMenu must stay rendered when empty');
+assert.ok(emptyMarkup.includes('disabled'), 'SutramSubtabMenu trigger must be disabled when empty');
+
+// 5f. SutramAppShell single-row top bar and position bar rendering
+const { SutramAppShell } = await import('sutram/app_shell.js');
+const { LayoutStore } = await import('sutram/sutram_sdk.js');
+ExtensionRegistry.registerExtension('u3_shell_ext', {
+    name: 'U3 Shell Ext',
+    layoutSlots: [
+        { slot: 'slots:primary-navigation', id: 'context', label: 'Context', icon: 'folder-code', order: 1 },
+        { slot: 'slots:sub-navigation', targetParent: 'context', id: 'prompts', label: 'Prompts', icon: 'file-text', order: 1 },
+        { slot: 'slots:sub-navigation', targetParent: 'context', id: 'files', label: 'Files', icon: 'folder', order: 2 }
+    ]
+});
+LayoutStore.setState({
+    capacity: 1,
+    userCapacity: 1,
+    mobileViewportIndex: 1,
+    focusedColumn: 'center',
+    layoutRatios: [1, 2, 1],
+    columns: {
+        left: { active: 'u3_shell_ext:prompts', pinned: [{ id: 'u3_shell_ext:prompts', label: 'Prompts' }, { id: 'u3_shell_ext:files', label: 'Files' }], history: [] },
+        center: { active: 'u3_shell_ext:files', pinned: [{ id: 'u3_shell_ext:files', label: 'Files' }], history: [] },
+        right: { active: null, pinned: [], history: [] }
+    },
+    windows: []
+});
+const shell = new SutramAppShell();
+shell._layoutConfig = ExtensionRegistry.getLayoutSlots();
+shell._spatialState = LayoutStore.getState();
+const dropdownItems = shell._buildColumnTabDropdownItems(
+    { id: 'left', label: 'Left' },
+    [
+        { id: 'u3_shell_ext:prompts', rawId: 'prompts', label: 'Prompts', icon: 'file-text', actualSourceCol: 'left' },
+        { id: 'u3_shell_ext:files', rawId: 'files', label: 'Files', icon: 'folder', actualSourceCol: 'left' }
+    ],
+    { id: 'u3_shell_ext:prompts', rawId: 'prompts', label: 'Prompts', icon: 'file-text', actualSourceCol: 'left' },
+    shell._layoutConfig.filter(s => s.slot === 'slots:primary-navigation'),
+    shell._layoutConfig.filter(s => s.slot === 'slots:sub-navigation')
+);
+assert.equal(dropdownItems[0].sectionHeading, 'Open in this column');
+assert.equal(dropdownItems[1].checked, true, 'Active tab must be ticked in Open in this column');
+assert.equal(dropdownItems[2].checked, false);
+assert.equal(typeof dropdownItems[1].trailingButton?.onClick, 'function', 'Open tabs must expose close trailing button');
+assert.equal(dropdownItems.some(i => i.sectionHeading === 'Add a tab · Context'), true, 'Launcher categories must appear under Add a tab sections');
+
+// 5g. SutramAppShell inline tab post-render overflow clamping & dirty label shrink reset
+let dirtyTabId = 'u3_shell_ext:files';
+ExtensionRegistry.registerExtension('u3_dirty_hook_ext', {
+    name: 'U3 Dirty Hook Ext',
+    uiHooks: {
+        'sutram:is-projection-dirty': (id) => id === dirtyTabId
+    }
+});
+shell._colTabsWidths = { left: 260, center: 0, right: 0 };
+shell.render();
+shell._lastRenderedInlineCounts = { left: 1, center: 0, right: 0 };
+shell._inlineTabClampCounts = { left: null, center: null, right: null };
+shell.shadowRoot = {
+    querySelectorAll: (sel) => sel === '.col-tabs-area'
+        ? [{ dataset: { colTabs: 'left' }, clientWidth: 180, scrollWidth: 240 }]
+        : []
+};
+shell._checkInlineTabsOverflow();
+assert.equal(shell._inlineTabClampCounts.left, 0, 'Post-render overflow on .col-tabs-area must decrement inline tab count');
+dirtyTabId = null; // File saved -> loses '*' suffix -> clampKey changes
+shell.render();
+assert.equal(shell._inlineTabClampCounts.left, null, 'Saving a dirty inline tab (losing *) must reset _inlineTabClampCounts for that column');
+
+// 5h. SutramSelectionTray empty collapse & Shadow-boundary assignedSlot width resolution
+const { SutramSelectionTray } = await import('sutram/primitives.js');
+SelectionStore.getState().clearSelection();
+const tray = new SutramSelectionTray();
+const mockSpatialCol = {
+    clientWidth: 820,
+    matches: (sel) => sel.includes('.spatial-col')
+};
+const mockSlot = {
+    parentElement: mockSpatialCol,
+    matches: () => false
+};
+tray.assignedSlot = mockSlot;
+tray.parentElement = { clientWidth: 44, matches: () => false }; // Shrink-wrapped Light-DOM wrapper
+tray.connectedCallback();
+assert.equal(tray.empty, true, 'Selection tray must reflect empty=true when nothing is selected');
+assert.equal(tray._compactChip, false, 'Selection tray must pierce assignedSlot to read .spatial-col width (820px >= 480px -> full "N selected" label)');
+
+mockSpatialCol.clientWidth = 360;
+tray._syncChipMode();
+assert.equal(tray._compactChip, true, 'Selection tray in 360px column must switch to compact icon + count badge');
+
+SelectionStore.getState().toggleSelection('app://a/1.py', 'file', { filepath: 'app://a/1.py' });
+SelectionStore.getState().toggleSelection('app://a/2.py', 'file', { filepath: 'app://a/2.py' });
+assert.equal(tray.empty, false, 'Selection tray must reflect empty=false while items are selected');
+SelectionStore.getState().clearSelection();
+tray.disconnectedCallback();
+
+// 5i. SutramSubtabMenu store subscription cleanup across slotConfig changes, same-store deduplication, & synchronous lazy store resolution
+const { createSutramStore, SutramElement } = await import('sutram/sutram_sdk.js');
+const MenuWatchStore = createSutramStore('MenuWatch', { tick: 0 });
+const leakTestMenu = new SutramSubtabMenu();
+leakTestMenu.connectedCallback();
+let firstUnsubRef = null;
+for (let i = 0; i < 5; i++) {
+    leakTestMenu.slotConfig = {
+        id: `tab_${i}`,
+        bulkActionGroup: 'share',
+        bulkEntityTypes: ['file'],
+        menuStores: ['MenuWatch'],
+        menuActions: [{ label: 'Refresh View', icon: 'refresh-cw', onClick: () => {} }]
+    };
+    leakTestMenu._bindSlotMenuStores();
+    if (i === 0) firstUnsubRef = leakTestMenu._slotStoreUnsubs[0];
+}
+assert.equal(
+    leakTestMenu._slotStoreUnsubs.length,
+    1,
+    'Switching slotConfig repeatedly must never accumulate duplicate menuStores listeners'
+);
+assert.equal(
+    leakTestMenu._slotStoreUnsubs[0],
+    firstUnsubRef,
+    'Re-rendering with an identical menuStores list must preserve the existing store subscription without churn'
+);
+
+// Event-driven lazy store subscription fires synchronously upon StoreRegistry.register without timers
+class LazySubProbe extends SutramElement {}
+if (!customElements.get('lazy-sub-probe')) customElements.define('lazy-sub-probe', LazySubProbe);
+const lazyProbe = new LazySubProbe();
+let lazyHydratedVal = null;
+lazyProbe.subscribe('LateRegisteredU3Store', (state) => { lazyHydratedVal = state?.ready; });
+createSutramStore('LateRegisteredU3Store', { ready: 'instant-no-timer' });
+assert.equal(lazyHydratedVal, 'instant-no-timer', 'Lazy store subscription must bind and fire synchronously upon store registration');
+lazyProbe.disconnectedCallback();
+SelectionStore.getState().toggleSelection('app://a/1.py', 'file', { filepath: 'app://a/1.py' });
+leakTestMenu._selectedItems = SelectionStore.getState().selectedItems;
+leakTestMenu._rebuildMenu();
+const clearIdx = leakTestMenu._menuItems.findIndex(i => (i.label || '').startsWith('Clear Selection'));
+assert.ok(clearIdx > 0, 'Clear Selection item must be present when items are selected');
+let precedingHeading = null;
+for (let i = clearIdx - 1; i >= 0; i--) {
+    if (leakTestMenu._menuItems[i].sectionHeading) {
+        precedingHeading = leakTestMenu._menuItems[i].sectionHeading;
+        break;
+    }
+}
+assert.equal(precedingHeading, 'Selection', 'Clear Selection must sit under its own Selection section heading, never under a variant-set section');
+SelectionStore.getState().clearSelection();
+leakTestMenu.disconnectedCallback();
+
+// 5j. YenvuiDropdown section-preserving search filter and trailingButton click isolation
+const tabDd = new YenvuiDropdown();
+let rowClicked = 0;
+let trailingClicked = 0;
+tabDd.items = [
+    { sectionHeading: 'Open in this column' },
+    {
+        id: 'open:prompts',
+        label: 'Prompts',
+        checked: true,
+        onClick: () => { rowClicked++; },
+        trailingButton: {
+            icon: 'x',
+            title: 'Close Prompts',
+            closeMenu: false,
+            onClick: () => { trailingClicked++; }
+        }
+    },
+    { sectionHeading: 'Add a tab · Context' },
+    { id: 'add:gather', label: 'Gather', onClick: () => {} },
+    { sectionHeading: 'Add a tab · Tasks' },
+    { id: 'add:tracker', label: 'Tracker', onClick: () => {} }
+];
+tabDd.open = true;
+const openRowItem = tabDd.items[1];
+let trailingStopped = false;
+openRowItem.trailingButton.onClick({
+    stopPropagation() { trailingStopped = true; },
+    preventDefault() {}
+});
+assert.equal(trailingClicked, 1, 'Trailing button handler must execute');
+assert.equal(rowClicked, 0, 'Trailing button click must not invoke parent row onClick');
+assert.equal(tabDd.open, true, 'Trailing button with closeMenu: false must keep dropdown open');
+
+tabDd._searchQuery = 'gather';
+const filteredDdItems = tabDd._getFilteredItems();
+assert.deepEqual(
+    filteredDdItems.map(i => i.sectionHeading || i.id),
+    ['Add a tab · Context', 'add:gather'],
+    'Dropdown search must keep matching section headings and omit non-matching sections'
+);
+
+// 5k. YenvuiGestureController suppresses synthetic click after pan/drag but allows click on stationary tap
+const { YenvuiGestureController } = await import('yenvui/physics.js');
+const dummyHost = {
+    addEventListener() {},
+    removeEventListener() {},
+    setPointerCapture() {},
+    releasePointerCapture() {}
+};
+const gesture = new YenvuiGestureController(dummyHost, {});
+gesture.start({ button: 0, pointerType: 'mouse', pointerId: 1, clientX: 100, clientY: 100 });
+gesture._handlePointerMove({ clientX: 130, clientY: 100 }); // pan > 5px
+gesture._handlePointerUp({ clientX: 130, clientY: 100 });
+
+let postDragClickReachedChild = false;
+const childClickMonitor = () => { postDragClickReachedChild = true; };
+window.addEventListener('click', childClickMonitor);
+window.dispatchEvent(new Event('click', { bubbles: true, cancelable: true }));
+window.removeEventListener('click', childClickMonitor);
+assert.equal(postDragClickReachedChild, false, 'Capture-phase click interceptor must suppress the synthetic click immediately following a drag');
+
+// Stationary tap (< 5px) on a second controller instance immediately after a drag on the first must NOT be swallowed
+gesture.start({ button: 0, pointerType: 'mouse', pointerId: 2, clientX: 100, clientY: 100 });
+gesture._handlePointerMove({ clientX: 140, clientY: 100 });
+gesture._handlePointerUp({ clientX: 140, clientY: 100 }); // Arms click suppressor on gesture 1 without firing click
+
+const gesture2 = new YenvuiGestureController(dummyHost, {});
+gesture2.start({ button: 0, pointerType: 'mouse', pointerId: 3, clientX: 50, clientY: 50 });
+gesture2._handlePointerUp({ clientX: 51, clientY: 50 }); // Stationary tap on gesture 2 clears gesture 1's lingering suppressor
+let postTapClickReachedChild = false;
+const tapClickMonitor = () => { postTapClickReachedChild = true; };
+window.addEventListener('click', tapClickMonitor);
+window.dispatchEvent(new Event('click', { bubbles: true, cancelable: true }));
+window.removeEventListener('click', tapClickMonitor);
+assert.equal(postTapClickReachedChild, true, 'Stationary tap on any controller instance must clear prior suppressors and allow normal click propagation');
+
 console.log('SPRINT_U1_TESTS_PASSED');
 """
         res = self._run_node_script(test_mjs)

@@ -1,7 +1,7 @@
 // sutram/js/primitives.js
 // Pure Agnostic Presentation Primitives
 import { LitElement, html, css } from 'lit';
-import { SutramElement, SutramContextMixin, SelectionStore, ToastStore, EnvironmentStore, VariantDefaultStore, ExtensionRegistry } from './sutram_sdk.js';
+import { SutramElement, SutramContextMixin, SelectionStore, ToastStore, EnvironmentStore, VariantDefaultStore, ExtensionRegistry, resolveSelectionEntityType } from './sutram_sdk.js';
 import * as Chassis from 'sutram-chassis';
 import { sharedStyles } from './shared_styles.js';
 import { buildFileTree, resolveDirectoryState, fuzzyFilterObjects, SutramWorker } from './utils.js';
@@ -239,6 +239,15 @@ export class SutramVirtualList extends LitElement {
     }
 }
 customElements.define('sutram-virtual-list', SutramVirtualList);
+
+// 0.4 Width-Dependent Adaptive Label Helper
+export function renderAdaptiveLabel({ icon = '', label = '', badge = null, showLabel = true, iconSize = 'sm', intent = null } = {}) {
+    return html`
+        ${icon ? html`<sutram-icon name=${icon} size=${iconSize} intent=${intent || 'current'}></sutram-icon>` : ''}
+        ${showLabel && label ? html`<span class="adaptive-label-text">${label}</span>` : ''}
+        ${!showLabel && badge !== null && badge !== undefined && badge !== '' ? html`<span class="adaptive-label-badge">${badge}</span>` : ''}
+    `;
+}
 
 // 0.5 Semantic Icon & Layout Bricks
 export class SutramIcon extends YenvuiIcon {}
@@ -535,45 +544,57 @@ export class SutramSelectionTray extends SutramElement {
         selectedItems: { type: Object },
         modalOpen: { type: Boolean },
         trayTitle: { type: String },
-        itemBadge: { type: String }
+        itemBadge: { type: String },
+        bulkGroup: { type: String },
+        empty: { type: Boolean, reflect: true },
+        _compactChip: { type: Boolean, state: true }
     };
 
     static styles = [sharedStyles, css`
+        :host {
+            display: inline-flex;
+            align-items: center;
+            height: 100%;
+            flex-shrink: 0;
+        }
+        :host([empty]) {
+            display: none !important;
+        }
         .cart-btn {
             background: color-mix(in srgb, var(--intent-warning) 15%, transparent);
             color: var(--intent-warning);
             border: 1px solid color-mix(in srgb, var(--intent-warning) 40%, transparent);
             border-radius: 20px;
-            height: 32px;
+            min-height: 44px;
+            min-width: 44px;
             padding: 0 12px;
             font-size: 0.85rem;
             font-weight: bold;
             cursor: pointer;
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 8px;
+            justify-content: center;
+            gap: 6px;
             transition: all 0.2s;
-            margin-right: 12px;
+            margin: 0 6px;
+            box-sizing: border-box;
+            white-space: nowrap;
         }
         .cart-btn:hover {
             background: color-mix(in srgb, var(--intent-warning) 25%, transparent);
         }
-        .cart-badge.mobile-only { display: none; }
+        .adaptive-label-badge,
         .cart-badge {
             background: var(--intent-warning);
             color: var(--bg-deep, #000000);
             border-radius: 50%;
             width: 20px;
             height: 20px;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
             font-size: 0.75rem;
-        }
-        @container (max-width: 480px) {
-            .cart-text { display: none; }
-            .cart-badge.mobile-only { display: flex; }
-            .cart-btn { padding: 0 8px; }
+            font-weight: bold;
         }
 
         .tray-overlay {
@@ -612,6 +633,18 @@ export class SutramSelectionTray extends SutramElement {
         this.modalOpen = false;
         this.trayTitle = 'Selection Tray';
         this.itemBadge = 'ITEM';
+        this.bulkGroup = 'share';
+        this.empty = true;
+        this._compactChip = false;
+    }
+
+    _syncChipMode(explicitWidth = null) {
+        let colW = explicitWidth;
+        if (colW === null || colW === undefined) {
+            const hostCol = this.resolveAssignedSpatialContainer('.spatial-col, [data-spatial-boundary]');
+            colW = hostCol?.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1024);
+        }
+        this._compactChip = colW > 0 && colW < 480;
     }
 
     connectedCallback() {
@@ -619,12 +652,26 @@ export class SutramSelectionTray extends SutramElement {
         this.subscribe(SelectionStore, state => {
             this.selectedItems = state.selectedItems;
             if (this.selectedItems.size === 0) this.modalOpen = false;
+            this.empty = this.selectedItems.size === 0 && !this.modalOpen;
         });
         this.selectedItems = SelectionStore.getState().selectedItems;
+        this.empty = this.selectedItems.size === 0 && !this.modalOpen;
+        this.observeAssignedContainer((width) => this._syncChipMode(width), '.spatial-col, [data-spatial-boundary]');
     }
+
+    willUpdate(changedProperties) {
+        super.willUpdate(changedProperties);
+        if (changedProperties.has('selectedItems') || changedProperties.has('modalOpen')) {
+            const sz = this.selectedItems?.size || 0;
+            this.empty = sz === 0 && !this.modalOpen;
+        }
+    }
+
     render() {
         const count = this.selectedItems.size;
+        if (count === 0 && !this.modalOpen) return html``;
         const itemsArray = Array.from(this.selectedItems.values());
+        const bulkEntityType = resolveSelectionEntityType(itemsArray);
         let totalSize = 0;
         let hasUnknown = false;
         const registry = window.ExtensionRegistry;
@@ -645,15 +692,19 @@ export class SutramSelectionTray extends SutramElement {
         }
         let batchActions = [];
         if (registry && typeof registry.getAggregatableActions === 'function') {
-            batchActions = registry.getAggregatableActions(itemsArray, { group: 'share' });
+            batchActions = registry.getAggregatableActions(itemsArray, { group: this.bulkGroup || 'share' });
         }
 
         return html`
             ${count > 0 ? html`
-                <button class="cart-btn" @click=${() => this.modalOpen = true}>
-                    <sutram-icon name="zap" size="sm"></sutram-icon>
-                    <span class="cart-text">${count} items</span>
-                    <span class="cart-badge mobile-only">${count}</span>
+                <button class="cart-btn" title="${count} selected" @click=${() => { this.modalOpen = true; this.empty = false; }}>
+                    ${renderAdaptiveLabel({
+                        icon: 'layers',
+                        label: `${count} selected`,
+                        badge: String(count),
+                        showLabel: !this._compactChip,
+                        iconSize: 'sm'
+                    })}
                 </button>
             ` : ''}
 
@@ -691,7 +742,7 @@ export class SutramSelectionTray extends SutramElement {
                     <div style="flex: 1 1 0%; min-width: 0; display: flex; justify-content: flex-end;">
                         <sutram-entity-actions
                             .actionsList=${batchActions}
-                            .entityType=${itemsArray.length === 1 ? (itemsArray[0]?.entityType || 'bulk') : 'bulk'}
+                            .entityType=${bulkEntityType}
                             .entityData=${itemsArray}>
                         </sutram-entity-actions>
                     </div>
@@ -1613,7 +1664,8 @@ export class SutramEntityActions extends SutramElement {
         actionsList: { type: Array },
         variant: { type: String },
         compact: { type: Boolean, reflect: true },
-        _containerWidth: { type: Number, state: true }
+        _containerWidth: { type: Number, state: true },
+        _overflowClampCount: { type: Number, state: true }
     };
     static styles = [sharedStyles, css`
         :host {
@@ -1661,6 +1713,7 @@ export class SutramEntityActions extends SutramElement {
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            gap: 4px;
             margin: 0;
             padding: var(--btn-padding, 6px 12px);
             font-size: var(--btn-font-size, 0.82rem);
@@ -1686,11 +1739,15 @@ export class SutramEntityActions extends SutramElement {
         this.variant = 'row';
         this.compact = false;
         this._containerWidth = 0;
+        this._overflowClampCount = null;
+        this._lastRenderedFitCount = 0;
+        this._lastClampContextKey = '';
     }
 
     connectedCallback() {
         super.connectedCallback();
         this.subscribe(VariantDefaultStore, state => state.lastUsed, () => {
+            this._overflowClampCount = null;
             this.requestUpdate();
         });
         if (typeof ResizeObserver !== 'undefined') {
@@ -1699,6 +1756,7 @@ export class SutramEntityActions extends SutramElement {
                     const w = entry.contentRect ? entry.contentRect.width : this.clientWidth;
                     if (w > 0 && Math.abs(w - this._containerWidth) > 2) {
                         this._containerWidth = w;
+                        this._overflowClampCount = null;
                     }
                 }
             });
@@ -1706,6 +1764,17 @@ export class SutramEntityActions extends SutramElement {
         }
         if (this.clientWidth > 0) {
             this._containerWidth = this.clientWidth;
+        }
+    }
+
+    updated(changedProperties) {
+        super.updated(changedProperties);
+        if (this.variant === 'footer' || this.variant === 'menu-bar') return;
+        const rowEl = this.shadowRoot?.querySelector('.action-row');
+        if (!rowEl || rowEl.clientWidth <= 0) return;
+        const isOverflowing = rowEl.scrollWidth > rowEl.clientWidth + 1;
+        if (isOverflowing && this._lastRenderedFitCount > 0) {
+            this._overflowClampCount = this._lastRenderedFitCount - 1;
         }
     }
 
@@ -1876,7 +1945,7 @@ export class SutramEntityActions extends SutramElement {
                         return html`
                             <sutram-dropdown .items=${groups[g]} align="left">
                                 <button slot="trigger" class="sync-btn">
-                                    <sutram-icon name="${groupIcons[g]}" size="sm" style="margin-right: 4px;"></sutram-icon>
+                                    <sutram-icon name="${groupIcons[g]}" size="sm"></sutram-icon>
                                     <span>${GROUP_LABELS[g]}</span>
                                 </button>
                             </sutram-dropdown>
@@ -1911,11 +1980,20 @@ export class SutramEntityActions extends SutramElement {
         const estimatedWidths = rowCandidates.map(e => this._estimateEntryWidth(e));
         const effectiveWidth = this._containerWidth || this.clientWidth || 0;
         const hasGuaranteedOverflow = menuOnlyEntries.length > 0;
-        const fitCount = isFooterBar
+        const clampContextKey = `${effectiveWidth}:${rowCandidates.map((e, i) => `${e.id || e.setId || i}:${estimatedWidths[i]}`).join(',')}`;
+        if (clampContextKey !== this._lastClampContextKey) {
+            this._lastClampContextKey = clampContextKey;
+            this._overflowClampCount = null;
+        }
+        const estimatedFitCount = isFooterBar
             ? rowCandidates.length
             : (effectiveWidth > 0
                 ? computeFitActionCount(effectiveWidth, estimatedWidths, 38, 6, hasGuaranteedOverflow)
                 : rowCandidates.length);
+        const fitCount = (!isFooterBar && this._overflowClampCount !== null)
+            ? Math.min(estimatedFitCount, this._overflowClampCount)
+            : estimatedFitCount;
+        this._lastRenderedFitCount = fitCount;
 
         const visibleRowEntries = rowCandidates.slice(0, fitCount);
         const overflowEntries = [...rowCandidates.slice(fitCount), ...menuOnlyEntries];
@@ -2548,20 +2626,23 @@ customElements.define('sutram-diff-viewer', SutramDiffViewer);
 export class SutramSubtabMenu extends SutramElement {
     static properties = {
         slotConfig: { type: Object },
+        extraContentNodes: { type: Array },
         _menuItems: { type: Array, state: true },
         _selectedCount: { type: Number, state: true }
     };
     static styles = [sharedStyles, css`
-        :host { display: flex; align-items: stretch; height: 100%; }
+        :host { display: flex; align-items: stretch; height: 100%; flex-shrink: 0; }
         .subtab-menu-trigger {
             background: transparent;
             color: var(--text);
             border: none;
-            border-left: 1px solid var(--border);
+            border-right: 1px solid var(--border);
             border-radius: 0;
             cursor: pointer;
             font-weight: bold;
             height: 100%;
+            min-height: 44px;
+            min-width: 44px;
             width: 44px;
             display: flex;
             align-items: center;
@@ -2570,10 +2651,30 @@ export class SutramSubtabMenu extends SutramElement {
             position: relative;
             padding: 0;
             margin: 0;
-            transition: background 0.15s ease;
+            transition: background 0.15s ease, opacity 0.15s ease;
         }
-        .subtab-menu-trigger:hover {
+        .subtab-menu-trigger:hover:not(:disabled) {
             background: var(--input-bg);
+        }
+        .subtab-menu-trigger:disabled {
+            opacity: 0.35;
+            cursor: default;
+        }
+        .extra-view-section {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 4px 6px 6px 6px;
+        }
+        .extra-view-heading {
+            font-size: 0.7rem;
+            font-weight: 800;
+            font-family: var(--font-mono, monospace);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--intent-primary, #8b5cf6);
+            padding: 4px 6px 3px 6px;
+            border-bottom: 1px solid color-mix(in srgb, var(--intent-primary, #8b5cf6) 28%, transparent);
         }
         .subtab-badge {
             position: absolute;
@@ -2596,9 +2697,11 @@ export class SutramSubtabMenu extends SutramElement {
     constructor() {
         super();
         this.slotConfig = null;
+        this.extraContentNodes = [];
         this._menuItems = [];
         this._selectedCount = 0;
         this._selectedItems = new Map();
+        this._boundMenuStoresKey = '';
     }
     connectedCallback() {
         super.connectedCallback();
@@ -2623,12 +2726,17 @@ export class SutramSubtabMenu extends SutramElement {
         this._selectedItems = SelectionStore.getState()?.selectedItems || new Map();
         this._rebuildMenu();
     }
-    _bindSlotMenuStores() {
+    _bindSlotMenuStores(force = false) {
+        const stores = Array.isArray(this.slotConfig?.menuStores) ? this.slotConfig.menuStores : [];
+        const nextKey = stores.join(',');
+        if (!force && nextKey === this._boundMenuStoresKey && this._slotStoreUnsubs && this._slotStoreUnsubs.length === stores.length) {
+            return;
+        }
         if (this._slotStoreUnsubs) {
-            this._slotStoreUnsubs.forEach(u => u());
+            this._slotStoreUnsubs.forEach(u => this.unsubscribe(u));
         }
         this._slotStoreUnsubs = [];
-        const stores = this.slotConfig?.menuStores || [];
+        this._boundMenuStoresKey = nextKey;
         stores.forEach(storeName => {
             const unsub = this.subscribe(storeName, () => {
                 this._rebuildMenu();
@@ -2639,13 +2747,26 @@ export class SutramSubtabMenu extends SutramElement {
     disconnectedCallback() {
         super.disconnectedCallback();
         this._slotStoreUnsubs = [];
+        this._boundMenuStoresKey = '';
     }
 
     willUpdate(changedProperties) {
         super.willUpdate(changedProperties);
         if (changedProperties.has('slotConfig')) {
+            const prevCfg = changedProperties.get('slotConfig');
             this._bindSlotMenuStores();
-            this._rebuildMenu();
+            const sameStaticSlot = Boolean(
+                prevCfg &&
+                this.slotConfig &&
+                prevCfg.id === this.slotConfig.id &&
+                prevCfg.bulkActionGroup === this.slotConfig.bulkActionGroup &&
+                prevCfg.bulkEntityTypes === this.slotConfig.bulkEntityTypes &&
+                prevCfg.menuActions === this.slotConfig.menuActions &&
+                typeof this.slotConfig.menuActions !== 'function'
+            );
+            if (!sameStaticSlot) {
+                this._rebuildMenu();
+            }
         }
     }
 
@@ -2666,6 +2787,7 @@ export class SutramSubtabMenu extends SutramElement {
 
         this._selectedCount = cfg.bulkActionGroup ? scopedSelected.length : 0;
         const items = [];
+        const scopedEntityType = resolveSelectionEntityType(scopedSelected);
 
         if (cfg.bulkActionGroup && scopedSelected.length > 0) {
             const registry = window.ExtensionRegistry || ExtensionRegistry;
@@ -2673,6 +2795,7 @@ export class SutramSubtabMenu extends SutramElement {
                 ? registry.getAggregatableActions(scopedSelected, { group: cfg.bulkActionGroup })
                 : [];
             if (bulkActions.length > 0) {
+                let currentBulkHeading = null;
                 bulkActions.forEach(act => {
                     if (act.kind === 'variant-set' && Array.isArray(act.variants)) {
                         const setLabel = act.label || 'Options';
@@ -2683,6 +2806,7 @@ export class SutramSubtabMenu extends SutramElement {
                             const members = act.variants.filter(v => (v.section || 'Actions') === sec);
                             if (members.length === 0) return;
                             const secTitle = sections.length > 1 ? `${setLabel} · ${sec}` : setLabel;
+                            currentBulkHeading = secTitle;
                             items.push({ sectionHeading: secTitle });
                             members.forEach(v => {
                                 items.push({
@@ -2691,7 +2815,7 @@ export class SutramSubtabMenu extends SutramElement {
                                     confirmHoldMs: ACTION_CONFIRM_HOLD_MS,
                                     asyncAction: async (e) => {
                                         if (typeof registry?.setLastUsedVariant === 'function') {
-                                            registry.setLastUsedVariant(act.entityType || 'bulk', act.setId, v.variantId || v.id);
+                                            registry.setLastUsedVariant(act.entityType || scopedEntityType, act.setId, v.variantId || v.id);
                                         }
                                         if (v.asyncAction) await v.asyncAction(e);
                                         else if (v.onClick) await v.onClick(e);
@@ -2701,28 +2825,47 @@ export class SutramSubtabMenu extends SutramElement {
                             });
                         });
                     } else {
+                        if (currentBulkHeading !== 'Selection') {
+                            currentBulkHeading = 'Selection';
+                            items.push({ sectionHeading: 'Selection' });
+                        }
                         items.push(act);
                     }
                 });
-                items.push({ divider: true });
+                if (currentBulkHeading !== 'Selection') {
+                    items.push({ sectionHeading: 'Selection' });
+                }
+            } else {
+                items.push({ sectionHeading: 'Selection' });
             }
             items.push({
                 label: `Clear Selection (${scopedSelected.length})`,
                 icon: 'x',
+                section: 'Selection',
                 onClick: () => SelectionStore.getState().clearSelection()
             });
-            items.push({ divider: true });
         }
 
         const customMenu = typeof cfg.menuActions === 'function'
             ? cfg.menuActions(cfg)
             : (Array.isArray(cfg.menuActions) ? cfg.menuActions : []);
 
+        let activeSectionHeading = null;
         customMenu.forEach(entry => {
             if (!entry) return;
             if (entry.divider) {
-                items.push({ divider: true });
+                activeSectionHeading = null;
                 return;
+            }
+            if (entry.sectionHeading) {
+                activeSectionHeading = entry.sectionHeading;
+                items.push(entry);
+                return;
+            }
+            const desiredSection = entry.section || 'View';
+            if (activeSectionHeading !== desiredSection) {
+                activeSectionHeading = desiredSection;
+                items.push({ sectionHeading: desiredSection });
             }
             items.push({
                 ...entry,
@@ -2743,18 +2886,40 @@ export class SutramSubtabMenu extends SutramElement {
         this._menuItems = items;
     }
     render() {
-        if (!this._menuItems || this._menuItems.length === 0) return html``;
+        const extraNodes = Array.isArray(this.extraContentNodes) ? this.extraContentNodes.filter(Boolean) : [];
+        const hasAnyItems = Boolean((this._menuItems && this._menuItems.length > 0) || extraNodes.length > 0);
         const count = this._selectedCount || 0;
+        if (!hasAnyItems) {
+            return html`
+                <button type="button" class="subtab-menu-trigger" disabled title="No view actions">
+                    <sutram-icon name="more-vertical" size="sm"></sutram-icon>
+                </button>
+            `;
+        }
         return html`
-            <sutram-dropdown align="right" .items=${this._menuItems}>
-                <button slot="trigger" class="subtab-menu-trigger" @pointerdown=${() => this._rebuildMenu()} title="${count > 0 ? `Bulk Actions (${count} selected)` : 'Actions'}">
+            <sutram-dropdown align="left" .items=${this._menuItems}>
+                <button slot="trigger" type="button" class="subtab-menu-trigger" @pointerdown=${() => this._rebuildMenu()} title="${count > 0 ? `View & Bulk Actions (${count} selected)` : 'View Menu'}">
                     ${count > 0 ? html`
-                        <sutram-icon name="layers" size="sm" intent="warning"></sutram-icon>
+                        <sutram-icon name="more-vertical" size="sm" intent="warning"></sutram-icon>
                         <span class="subtab-badge">${count > 9 ? '9+' : count}</span>
                     ` : html`
-                        <sutram-icon name="menu" size="sm"></sutram-icon>
+                        <sutram-icon name="more-vertical" size="sm"></sutram-icon>
                     `}
                 </button>
+                ${extraNodes.length > 0 ? html`
+                    <div
+                        slot="content"
+                        class="extra-view-section"
+                        @yenvui-action-confirmed=${(e) => {
+                            if (e.detail?.phase === 'settled' && !e.detail?.keepDrawerOpen) {
+                                const dd = this.shadowRoot?.querySelector('sutram-dropdown');
+                                if (dd) dd.open = false;
+                            }
+                        }}>
+                        <div class="extra-view-heading">View Controls</div>
+                        ${extraNodes}
+                    </div>
+                ` : ''}
             </sutram-dropdown>
         `;
     }

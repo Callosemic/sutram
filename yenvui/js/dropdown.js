@@ -107,6 +107,34 @@ export class YenvuiDropdown extends YenvuiBase {
             border-radius: 4px;
             flex-shrink: 0;
         }
+        .menu-item-check {
+            width: 14px;
+            height: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--intent-primary, #8b5cf6);
+            flex-shrink: 0;
+        }
+        .menu-item-trailing {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 28px;
+            min-height: 28px;
+            padding: 2px 6px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            background: transparent;
+            color: var(--text-muted, #888);
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .menu-item-trailing:hover {
+            color: var(--intent-danger, #f43f5e);
+            background: var(--bg);
+            border-color: var(--border, #444);
+        }
         .icon { font-size: 1.1rem; line-height: 1; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
         .menu-spinner {
@@ -183,15 +211,44 @@ export class YenvuiDropdown extends YenvuiBase {
         const rawItems = this.items || [];
         const q = (this._searchQuery || '').trim();
         if (!q) return rawItems;
-        const actionable = rawItems.filter(i => i && !i.divider && !i.sectionHeading);
-        if (typeof this.filterFn === 'function') {
-            return this.filterFn(actionable, q);
-        }
-        const lowerQ = q.toLowerCase();
-        return actionable.filter(item => {
-            const hay = `${item.label || ''} ${item.id || ''} ${item.token || ''} ${item.badge || ''} ${item.description || ''} ${item.section || ''}`.toLowerCase();
-            return hay.includes(lowerQ);
+
+        const matchEntries = (entries) => {
+            if (typeof this.filterFn === 'function') {
+                return this.filterFn(entries, q);
+            }
+            const lowerQ = q.toLowerCase();
+            return entries.filter(item => {
+                const hay = `${item.label || ''} ${item.id || ''} ${item.token || ''} ${item.badge || ''} ${item.description || ''} ${item.section || ''}`.toLowerCase();
+                return hay.includes(lowerQ);
+            });
+        };
+
+        const sections = [];
+        let currentSection = { heading: null, entries: [] };
+        rawItems.forEach(item => {
+            if (!item || item.divider) return;
+            if (item.sectionHeading) {
+                if (currentSection.heading || currentSection.entries.length > 0) {
+                    sections.push(currentSection);
+                }
+                currentSection = { heading: item, entries: [] };
+            } else {
+                currentSection.entries.push(item);
+            }
         });
+        if (currentSection.heading || currentSection.entries.length > 0) {
+            sections.push(currentSection);
+        }
+
+        const result = [];
+        sections.forEach(sec => {
+            const matched = matchEntries(sec.entries);
+            if (matched.length > 0) {
+                if (sec.heading) result.push(sec.heading);
+                result.push(...matched);
+            }
+        });
+        return result;
     }
     _notifyError(err) {
         console.error(err);
@@ -293,9 +350,19 @@ export class YenvuiDropdown extends YenvuiBase {
                         const displayLabel = isConfirmed
                             ? (this._confirmedLabel || item.successLabel || 'Done')
                             : (isLoading ? 'Processing...' : (item.label || item.id || 'Unknown Action'));
+                        const showCheckSlot = Boolean(item.checked || item.checkable);
                         return html`
-                            <button class="menu-item ${isConfirmed ? 'confirmed' : ''}" ?disabled=${Boolean(this._loadingItemId || this._confirmedItemId)} @click=${(e) => this._executeItem(item, e)}>
+                            <button
+                                class="menu-item ${isConfirmed ? 'confirmed' : ''}"
+                                ?disabled=${Boolean(this._loadingItemId || this._confirmedItemId)}
+                                @pointerdown=${(e) => { if (typeof item.onPointerDown === 'function') item.onPointerDown(e); }}
+                                @click=${(e) => this._executeItem(item, e)}>
                                 <span class="menu-item-main">
+                                    ${showCheckSlot ? html`
+                                        <span class="menu-item-check">
+                                            ${item.checked ? html`<yenvui-icon name="check" size="xs"></yenvui-icon>` : ''}
+                                        </span>
+                                    ` : ''}
                                     <span class="icon">${isLoading ? html`<div class="menu-spinner"></div>` : (displayIcon ? (/^[a-zA-Z0-9-]+$/.test(displayIcon) ? html`<yenvui-icon name="${displayIcon}" size="sm"></yenvui-icon>` : displayIcon) : '')}</span>
                                     <span class="menu-item-text">
                                         <span>${displayLabel}</span>
@@ -303,6 +370,26 @@ export class YenvuiDropdown extends YenvuiBase {
                                     </span>
                                 </span>
                                 ${item.badge ? html`<span class="menu-item-badge">${item.badge}</span>` : ''}
+                                ${item.trailingButton ? html`
+                                    <span
+                                        role="button"
+                                        tabindex="0"
+                                        class="menu-item-trailing"
+                                        title=${item.trailingButton.title || ''}
+                                        @pointerdown=${(e) => e.stopPropagation()}
+                                        @click=${(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            if (typeof item.trailingButton.onClick === 'function') {
+                                                item.trailingButton.onClick(e);
+                                            }
+                                            if (item.trailingButton.closeMenu !== false) {
+                                                this.open = false;
+                                            }
+                                        }}>
+                                        <yenvui-icon name=${item.trailingButton.icon || 'x'} size="xs"></yenvui-icon>
+                                    </span>
+                                ` : ''}
                             </button>
                         `;
                     })}

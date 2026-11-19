@@ -21,6 +21,15 @@ export const PHYSICS = Object.freeze({
 
 let _bodyOverflowLockCount = 0;
 let _savedBodyOverflow = '';
+let _activeClickSuppressorCleanup = null;
+
+function _clearActiveClickSuppressor() {
+    if (typeof _activeClickSuppressorCleanup === 'function') {
+        const fn = _activeClickSuppressorCleanup;
+        _activeClickSuppressorCleanup = null;
+        fn();
+    }
+}
 
 export function acquireBodyScrollLock() {
     if (typeof document === 'undefined' || !document.body) return;
@@ -458,6 +467,8 @@ export class YenvuiGestureController {
         this.longPressDelay = options.longPressDelay || 0;
         this.onLongPress = options.onLongPress || (() => {});
         this._dragTimer = null;
+        this._gestureCaptured = false;
+        this._cleanupClickSuppressor = null;
 
         this._boundPointerMove = this._handlePointerMove.bind(this);
         this._boundPointerUp = this._handlePointerUp.bind(this);
@@ -465,6 +476,8 @@ export class YenvuiGestureController {
     }
     start(e, overrides = {}) {
         if (e.button !== 0 && e.pointerType === 'mouse') return;
+        _clearActiveClickSuppressor();
+        this._cleanupClickSuppressor = null;
         this._currentLockAxis = overrides.lockAxis || this.lockAxis;
         if (this.active) {
             this._handlePointerUp(e);
@@ -484,6 +497,7 @@ export class YenvuiGestureController {
         this.currentX = this.startX;
         this.currentY = this.startY;
         this.swipeAxis = null;
+        this._gestureCaptured = false;
 
         // Bind via the capture phase so shadow-DOM children (like CodeMirror) cannot swallow pointermove
         window.addEventListener('pointermove', this._boundPointerMove, { capture: true });
@@ -496,6 +510,7 @@ export class YenvuiGestureController {
         this.onPanStart(this.startX, this.startY, e);
         if (this.longPressDelay > 0) {
             this._dragTimer = setTimeout(() => {
+                this._gestureCaptured = true;
                 this.onLongPress(this.currentX, this.currentY, e);
             }, this.longPressDelay);
         }
@@ -503,6 +518,10 @@ export class YenvuiGestureController {
 
     abort() {
         if (this.active) this._handlePointerUp(new Event('pointercancel'));
+        if (typeof this._cleanupClickSuppressor === 'function') {
+            this._cleanupClickSuppressor();
+            this._cleanupClickSuppressor = null;
+        }
     }
 
     _handlePointerMove(e) {
@@ -520,6 +539,7 @@ export class YenvuiGestureController {
                     this._handlePointerUp(e);
                     return;
                 }
+                this._gestureCaptured = true;
                 if (this._dragTimer) {
                     clearTimeout(this._dragTimer);
                     this._dragTimer = null;
@@ -535,7 +555,9 @@ export class YenvuiGestureController {
     }
     _handlePointerUp(e) {
         if (!this.active) return;
+        const shouldSuppressClick = Boolean(this._gestureCaptured);
         this.active = false;
+        this._gestureCaptured = false;
 
         if (this._pointerId && this.host && typeof this.host.releasePointerCapture === 'function') {
             try { this.host.releasePointerCapture(this._pointerId); } catch(err) {}
@@ -560,6 +582,40 @@ export class YenvuiGestureController {
         window.removeEventListener('pointerup', this._boundPointerUp, { capture: true });
         window.removeEventListener('pointercancel', this._boundPointerUp, { capture: true });
         this.host.removeEventListener('touchmove', this._boundTouchMove, { capture: true });
+
+        if (shouldSuppressClick && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+            _clearActiveClickSuppressor();
+            let cancelSuppressTimer = null;
+            const cleanup = () => {
+                if (cancelSuppressTimer) {
+                    clearTimeout(cancelSuppressTimer);
+                    cancelSuppressTimer = null;
+                }
+                window.removeEventListener('click', suppressNextClick, true);
+                if (this._cleanupClickSuppressor === cleanup) {
+                    this._cleanupClickSuppressor = null;
+                }
+                if (_activeClickSuppressorCleanup === cleanup) {
+                    _activeClickSuppressorCleanup = null;
+                }
+            };
+            const suppressNextClick = (clickEv) => {
+                cleanup();
+                if (clickEv && typeof clickEv.stopImmediatePropagation === 'function') {
+                    clickEv.stopImmediatePropagation();
+                }
+                if (clickEv && typeof clickEv.stopPropagation === 'function') {
+                    clickEv.stopPropagation();
+                }
+                if (clickEv && typeof clickEv.preventDefault === 'function') {
+                    clickEv.preventDefault();
+                }
+            };
+            this._cleanupClickSuppressor = cleanup;
+            _activeClickSuppressorCleanup = cleanup;
+            window.addEventListener('click', suppressNextClick, true);
+            cancelSuppressTimer = setTimeout(cleanup, 80);
+        }
 
         this.onPanEnd(this.currentX, this.currentY, this.swipeAxis, e);
     }
