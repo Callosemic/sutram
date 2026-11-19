@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v2.10.0 (2026-11-19)
+
+### Chores
+
+- Sweep remaining state
+  ([`cd4d2b9`](https://github.com/Callosemic/sutram/commit/cd4d2b98ca17032e7c97d31dc0fd411bf69b2c68))
+
+### Features
+
+- **cards**: Add fit-then-overflow action rows, 720px card width tiers, variant-set split buttons,
+  and 900ms action confirmations
+  ([`7e975d1`](https://github.com/Callosemic/sutram/commit/7e975d136366d737aca7980fde4d7f4a8420ac63))
+
+
 ## v2.9.0 (2026-11-18)
 
 ### Chores
