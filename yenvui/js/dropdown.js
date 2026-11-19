@@ -10,10 +10,13 @@ export class YenvuiDropdown extends YenvuiBase {
         direction: { type: String },
         searchable: { type: Boolean },
         searchPlaceholder: { type: String },
+        confirmHoldMs: { type: Number },
         filterFn: { attribute: false },
         _searchQuery: { type: String, state: true },
         _hasSlottedContent: { type: Boolean, state: true },
-        _loadingItemId: { type: String, state: true }
+        _loadingItemId: { type: String, state: true },
+        _confirmedItemId: { type: String, state: true },
+        _confirmedLabel: { type: String, state: true }
     };
     static styles = css`
         :host { display: inline-flex; align-items: stretch; height: 100%; }
@@ -59,6 +62,22 @@ export class YenvuiDropdown extends YenvuiBase {
             z-index: 2;
         }
         .divider { height: 1px; background: var(--border, #444); margin: 4px 0; }
+        .section-heading {
+            font-size: 0.7rem;
+            font-weight: 800;
+            font-family: var(--font-mono, monospace);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--intent-primary, #8b5cf6);
+            padding: 6px 10px 3px 10px;
+            margin-top: 2px;
+            border-bottom: 1px solid color-mix(in srgb, var(--intent-primary, #8b5cf6) 28%, transparent);
+            user-select: none;
+        }
+        .menu-item.confirmed {
+            color: var(--intent-success, #10b981);
+            background: color-mix(in srgb, var(--intent-success, #10b981) 14%, transparent);
+        }
         .menu-item {
             background: transparent; color: var(--text, #e0e0e0); text-align: left; 
             padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; 
@@ -111,6 +130,9 @@ export class YenvuiDropdown extends YenvuiBase {
         this._searchQuery = '';
         this._hasSlottedContent = false;
         this._loadingItemId = null;
+        this._confirmedItemId = null;
+        this._confirmedLabel = '';
+        this.confirmHoldMs = 900;
     }
 
     connectedCallback() {
@@ -161,13 +183,13 @@ export class YenvuiDropdown extends YenvuiBase {
         const rawItems = this.items || [];
         const q = (this._searchQuery || '').trim();
         if (!q) return rawItems;
+        const actionable = rawItems.filter(i => i && !i.divider && !i.sectionHeading);
         if (typeof this.filterFn === 'function') {
-            return this.filterFn(rawItems.filter(i => !i.divider), q);
+            return this.filterFn(actionable, q);
         }
         const lowerQ = q.toLowerCase();
-        return rawItems.filter(item => {
-            if (!item || item.divider) return false;
-            const hay = `${item.label || ''} ${item.id || ''} ${item.token || ''} ${item.badge || ''} ${item.description || ''}`.toLowerCase();
+        return actionable.filter(item => {
+            const hay = `${item.label || ''} ${item.id || ''} ${item.token || ''} ${item.badge || ''} ${item.description || ''} ${item.section || ''}`.toLowerCase();
             return hay.includes(lowerQ);
         });
     }
@@ -180,29 +202,63 @@ export class YenvuiDropdown extends YenvuiBase {
         }));
     }
     async _executeItem(item, e) {
-        if (this._loadingItemId) return;
+        if (this._loadingItemId || this._confirmedItemId) return;
+        const itemKey = item.id || item.label;
+        const holdMs = Number(item.confirmHoldMs ?? this.confirmHoldMs) >= 0
+            ? Number(item.confirmHoldMs ?? this.confirmHoldMs)
+            : 900;
+
+        const finishWithConfirmation = async () => {
+            if (item.successLabel && holdMs > 0) {
+                this._confirmedItemId = itemKey;
+                this._confirmedLabel = item.successLabel;
+                this.dispatchEvent(new CustomEvent('yenvui-action-confirmed', {
+                    bubbles: true,
+                    composed: true,
+                    detail: { item, status: 'success', phase: 'start', label: item.successLabel, holdMs, keepDrawerOpen: Boolean(item.keepDrawerOpen) }
+                }));
+                await new Promise(r => this.registerTimeout(r, holdMs));
+                this._confirmedItemId = null;
+                this._confirmedLabel = '';
+            }
+            if (!item.keepDrawerOpen) {
+                this.open = false;
+            }
+            this.dispatchEvent(new CustomEvent('yenvui-action-confirmed', {
+                bubbles: true,
+                composed: true,
+                detail: { item, status: 'success', phase: 'settled', label: item.successLabel || 'Done', holdMs, keepDrawerOpen: Boolean(item.keepDrawerOpen) }
+            }));
+        };
 
         if (item.asyncAction) {
-            this._loadingItemId = item.id || item.label;
+            this._loadingItemId = itemKey;
             try {
                 await item.asyncAction(e);
-            } catch (err) {
-                this._notifyError(err);
-            } finally {
                 this._loadingItemId = null;
+                await finishWithConfirmation();
+            } catch (err) {
+                this._loadingItemId = null;
+                this._notifyError(err);
                 this.open = false;
             }
         } else {
-            this.open = false;
             if (item.onClick) {
                 try {
                     const result = item.onClick(e);
-                    if (result && typeof result.catch === 'function') {
-                        result.catch(err => this._notifyError(err));
+                    if (result && typeof result.then === 'function') {
+                        this._loadingItemId = itemKey;
+                        await result;
+                        this._loadingItemId = null;
                     }
+                    await finishWithConfirmation();
                 } catch (err) {
+                    this._loadingItemId = null;
                     this._notifyError(err);
+                    this.open = false;
                 }
+            } else {
+                this.open = false;
             }
         }
     }
@@ -225,14 +281,24 @@ export class YenvuiDropdown extends YenvuiBase {
                         </div>
                     ` : ''}
                     ${visibleItems.map(item => {
+                        if (!item) return '';
                         if (item.divider) return html`<div class="divider"></div>`;
-                        const isLoading = this._loadingItemId === (item.id || item.label);
+                        if (item.sectionHeading) {
+                            return html`<div class="section-heading">${item.sectionHeading}</div>`;
+                        }
+                        const itemKey = item.id || item.label;
+                        const isLoading = this._loadingItemId === itemKey;
+                        const isConfirmed = this._confirmedItemId === itemKey;
+                        const displayIcon = isConfirmed ? 'check' : item.icon;
+                        const displayLabel = isConfirmed
+                            ? (this._confirmedLabel || item.successLabel || 'Done')
+                            : (isLoading ? 'Processing...' : (item.label || item.id || 'Unknown Action'));
                         return html`
-                            <button class="menu-item" ?disabled=${!!this._loadingItemId} @click=${(e) => this._executeItem(item, e)}>
+                            <button class="menu-item ${isConfirmed ? 'confirmed' : ''}" ?disabled=${Boolean(this._loadingItemId || this._confirmedItemId)} @click=${(e) => this._executeItem(item, e)}>
                                 <span class="menu-item-main">
-                                    <span class="icon">${isLoading ? html`<div class="menu-spinner"></div>` : (item.icon ? (/^[a-zA-Z0-9-]+$/.test(item.icon) ? html`<yenvui-icon name="${item.icon}" size="sm"></yenvui-icon>` : item.icon) : '')}</span>
+                                    <span class="icon">${isLoading ? html`<div class="menu-spinner"></div>` : (displayIcon ? (/^[a-zA-Z0-9-]+$/.test(displayIcon) ? html`<yenvui-icon name="${displayIcon}" size="sm"></yenvui-icon>` : displayIcon) : '')}</span>
                                     <span class="menu-item-text">
-                                        <span>${isLoading ? 'Processing...' : (item.label || item.id || 'Unknown Action')}</span>
+                                        <span>${displayLabel}</span>
                                         ${item.description ? html`<span class="menu-item-desc">${item.description}</span>` : ''}
                                     </span>
                                 </span>

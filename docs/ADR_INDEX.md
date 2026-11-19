@@ -20,6 +20,7 @@
 * [ADR-0031: Offline App Shell Vault, Atomic Read-Your-Writes Cache Overlays, Functional Store Initializers, User Column Capacity, and Editor Markdown Link Widgets](./adrs/0031_offline_app_shell_vault_atomic_cache_overlays_and_markdown_link_widgets.md)
 * [ADR-0032: Versioned Build Staging, Navigation-Gated Cutover, Captive-Portal Defense, and Zero-Dependency ESM Test Loader](./adrs/0032_versioned_build_staging_navigation_cutover_and_esm_loader.md)
 * [ADR-0033: Pluggable Backend Adapter Contract, Akasa Reference Adapter, and Adapter-Routed Offline Transport](./adrs/0033_pluggable_backend_adapter_and_authenticated_offline_transport.md)
+* [ADR-0034: Fit-Then-Overflow Entity Action Rows, Self-Measured 720px Card Width Tiers, Variant-Set Split Buttons, and 900ms Confirmation Holds](./adrs/0034_fit_then_overflow_entity_actions_card_width_tiers_and_variant_sets.md)
 ### yenVUI Presentation Chassis
 * [ADR-0005: Native Popover API Toast Container Elevation](./adrs/0005_yenvui_popover_toasts_gesture_selection.md)
 * [ADR-0006: Gesture Swipe Axis Locking](./adrs/0006_yenvui_gesture_swipe_axis_locking.md)

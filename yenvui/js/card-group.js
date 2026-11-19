@@ -92,7 +92,6 @@ export class YenvuiCardGroup extends LitElement {
         this._handleStackClick = this._handleStackClick.bind(this);
 
         this._gestureController = new YenvuiGestureController(this, {
-            scrollableContainerSelector: 'actions-wrapper',
             onPanEnd: (endX, endY, axis) => {
                 if (axis === 'horizontal' && this.enableEdgeSelection && this._gestureController.startX < 30) {
                     const deltaX = endX - this._gestureController.startX;

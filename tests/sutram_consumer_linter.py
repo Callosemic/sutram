@@ -36,6 +36,76 @@ GLOBAL_ATTRIBUTES = frozenset({
     "slot", "id", "class", "part", "title", "role", "tabindex", "hidden", "style", "key", "name", "draggable", "lang", "dir",
 })
 
+ALLOWED_ENTITY_ACTION_KEYS = frozenset({
+    "targetEntity", "targetEntities", "id", "bulkGroupKey", "label", "bulkLabel",
+    "icon", "intent", "variant", "emphasis", "group", "order", "surfaced",
+    "successLabel", "set", "section", "bulkable", "bulkOnly", "vfsBound",
+    "keepDrawerOpen", "isActive", "match", "onClick", "asyncAction",
+    "bulkAction", "bulkOnClick", "emitEvent", "component", "extName",
+})
+
+
+def iter_entity_action_objects(text):
+    """Yields (line_number, key_name) for top-level keys inside entityActions: [ { ... } ] object literals."""
+    for arr_match in re.finditer(r"\bentityActions\s*:\s*\[", text):
+        i = arr_match.end()
+        n = len(text)
+        arr_depth = 1
+        brace_depth = 0
+        paren_depth = 0
+        expecting_key = False
+        while i < n and arr_depth > 0:
+            ch = text[i]
+            if ch in "\"'`":
+                quote = ch
+                i += 1
+                while i < n and text[i] != quote:
+                    if text[i] == "\\":
+                        i += 1
+                    i += 1
+            elif text.startswith("//", i):
+                nl = text.find("\n", i)
+                i = nl if nl != -1 else n
+                continue
+            elif text.startswith("/*", i):
+                end_c = text.find("*/", i + 2)
+                i = (end_c + 2) if end_c != -1 else n
+                continue
+            elif ch == "(":
+                paren_depth += 1
+            elif ch == ")":
+                paren_depth = max(0, paren_depth - 1)
+            elif ch == "[":
+                if brace_depth == 0:
+                    arr_depth += 1
+                else:
+                    brace_depth += 1
+            elif ch == "]":
+                if brace_depth == 0:
+                    arr_depth -= 1
+                else:
+                    brace_depth -= 1
+            elif ch == "{":
+                brace_depth += 1
+                if brace_depth == 1 and paren_depth == 0:
+                    expecting_key = True
+            elif ch == "}":
+                if brace_depth == 1:
+                    expecting_key = False
+                brace_depth = max(0, brace_depth - 1)
+            elif brace_depth == 1 and paren_depth == 0:
+                if ch == ",":
+                    expecting_key = True
+                elif expecting_key and not ch.isspace():
+                    m_key = re.match(r"([A-Za-z_]\w*)\s*:", text[i:])
+                    if m_key:
+                        key_name = m_key.group(1)
+                        line_no = text.count("\n", 0, i + m_key.start(1)) + 1
+                        yield line_no, key_name
+                        i += m_key.end() - 1
+                    expecting_key = False
+            i += 1
+
 
 def iter_sutram_tags(text):
     """
@@ -228,6 +298,13 @@ def run_consumer_lint(target_dir, allow_host_globals=False):
                     report_tag("UNIFIED_SCALE_TOKEN_MANDATE", "Legacy T-shirt scale token (xs/sm/md/lg/xl or ?small) detected. Migrate to 'none | compact | normal | wide | full' or '?compact=${true}'.")
                 for binding in undeclared_bindings(tag, names, declared_properties):
                     report_tag("SUTRAM_UNDECLARED_PROPERTY", f"<{tag}> has no property for '{binding}', so the binding does nothing. Use a property the component declares (see docs/yenvui_contracts.md).")
+            for act_line, key_name in iter_entity_action_objects(full_text):
+                if key_name not in ALLOWED_ENTITY_ACTION_KEYS:
+                    violations_found += 1
+                    print(
+                        f"❌ [VIOLATION: ENTITY_ACTION_UNKNOWN_KEY] {filepath.as_posix()}:{act_line}\n"
+                        f"   ↳ Unknown key '{key_name}' in entityActions declaration. Allowed keys: {', '.join(sorted(ALLOWED_ENTITY_ACTION_KEYS))}.\n"
+                    )
             for vlist_match in re.finditer(r'<sutram-virtual-list\b[\s\S]*?</sutram-virtual-list>', full_text):
                 vlist_block = vlist_match.group(0)
                 card_tags = re.findall(r'<sutram-card\b', vlist_block)

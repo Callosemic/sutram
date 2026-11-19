@@ -4,7 +4,12 @@
 * Centralized event path resolution helper. Handles shadow DOM piercing,
 * composedPath fallbacks, and synthetic events safely.
 */
+export const COLUMN_UNIT_PX = 360;
+export const WIDE_CARD_MIN_PX = COLUMN_UNIT_PX * 2;
+
 export const PHYSICS = Object.freeze({
+    COLUMN_UNIT_PX,
+    WIDE_CARD_MIN_PX,
     EDGE_START_BEZEL_PX: 20,
     EDGE_MOVE_BEZEL_PX: 28,
     AXIS_LOCK_THRESHOLD_PX: 5,

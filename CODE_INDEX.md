@@ -49,6 +49,7 @@ sutram/
 │   │   ├── 0031_offline_app_shell_vault_atomic_cache_overlays_and_markdown_link_widgets.md # ADR-0031: Offline App Shell Vault, Atomic Read-Your-Writes Cache Overlays, Functional Store Initializers, User Column Capacity, and Editor Markdown Link Widgets
 │   │   ├── 0032_versioned_build_staging_navigation_cutover_and_esm_loader.md # ADR-0032: Versioned Build Staging, Navigation-Gated Cutover, Captive-Portal Defense, and Zero-Dependency ESM Test Loader
 │   │   ├── 0033_pluggable_backend_adapter_and_authenticated_offline_transport.md # ADR-0033: Pluggable Backend Adapter Contract, Akasa Reference Adapter, and Adapter-Routed Offline Transport
+│   │   ├── 0034_fit_then_overflow_entity_actions_card_width_tiers_and_variant_sets.md # ADR-0034: Fit-Then-Overflow Entity Action Rows, Self-Measured 720px Card Width Tiers, Variant-Set Split Buttons, and 900ms Confirmation Holds
 │   │   └── archived/               # Deeply embedded baseline architectural records preserved for historical reference
 │   │       ├── 0001_sutram_ioc_microkernel_architecture.md # ADR-0001: IoC microkernel and slot layout architecture
 │   │       ├── 0002_sutram_bootloader_and_resilience_patterns.md # ADR-0002: Stage 1 bootloader and error boundary standards
@@ -113,19 +114,21 @@ sutram/
 │       │   ├── class SutramSidebarLayout # Responsive split-pane sidebar and stage layout with mobile drawer collapse.
 │       │   ├── class SutramBtn     # Synchronous action button primitive.
 │       │   ├── class SutramProjectionWindowControls # Multi-window pop-out and dock-in toolbar control with pre-action save hooks.
-│       │   ├── class SutramAsyncBtn # 1.5 Async Action Button
+│       │   ├── class SutramAsyncBtn # State-aware asynchronous action button with offline read-only degradation, jobRoute execution, and 900ms confirmation holds.
 │       │   ├── class SutramStatusBar # 2.
 │       │   ├── class SutramToastContainer # 3.
-│       │   ├── class SutramSelectionTray # [stale?] 4.
-│       │   ├── class SutramCategorizedList # [stale?] 5.
-│       │   ├── class SutramFolderBrowser # [stale?] 6.
+│       │   ├── class SutramSelectionTray # Multi-item selection staging tray rendering fit-then-overflow bulk entity actions.
+│       │   ├── class SutramCategorizedList # Categorized list container grouping items into SutramCategorySection and SutramCardGroup blocks.
+│       │   ├── class SutramFolderBrowser # Interactive directory tree browser with breadcrumb navigation and off-main-thread tree building.
 │       │   ├── class SutramModal   # 7.
 │       │   ├── class SutramWindow  # Grid-constrained floating window surface supporting column spanning, focus elevation, and tab docking.
 │       │   ├── class SutramFieldCard # Labeled form field card primitive with validation feedback and reset controls.
 │       │   ├── class SutramSettingsForm # Schema-driven settings form renderer supporting hierarchical scopes, repeaters, and action triggers.
 │       │   ├── class SutramGenericSettingsModal # Modal wrapper hosting SutramSettingsForm for extension and system configuration.
-│       │   ├── class SutramEntityActions # [stale?] 8.5.
-│       │   ├── class SutramCard    # [stale?] 9.
+│       │   ├── class SutramVariantBtn # Split button primitive for variant sets with last-used default resolution and width reservation.
+│       │   ├── function computeFitActionCount(containerWidth, buttonWidths = [...) # Calculates how many action buttons fit within a container width before reserving space for the 3-dot overflow trigger.
+│       │   ├── class SutramEntityActions # Fit-then-overflow entity action row and menu-bar broker supporting variant-set split buttons and sectioned overflow dropdowns.
+│       │   ├── class SutramCard    # State-aware polymorphic card primitive with SelectionStore binding, 720px inline/drawer action tiers, and confirmation-gated drawer closure.
 │       │   ├── class SutramCardGroup # 10.
 │       │   ├── class SutramSearchBar # 11.
 │       │   ├── class SutramSpinner # [comment required]
@@ -137,7 +140,7 @@ sutram/
 │       │   ├── class SutramScrubTrack # [comment required]
 │       │   ├── class SutramScrollView # [comment required]
 │       │   ├── class SutramToolbar # [comment required]
-│       │   ├── class SutramDropdown # [stale?] 12.
+│       │   ├── class SutramDropdown # Context popover menu with fuzzy search filtering and status-bar error event bridging.
 │       │   ├── class SutramTabs    # [comment required]
 │       │   ├── class SutramFilterDropdown # [comment required]
 │       │   ├── class SutramCollapsible # [comment required]
@@ -145,10 +148,10 @@ sutram/
 │       │   ├── class SutramPill    # 13.
 │       │   ├── class SutramFilterGroup # Pill filter group wrapper bridging yenvui-filter-changed to filter-changed.
 │       │   ├── class SutramEditor  # CodeMirror 6 editor wrapper bridging change, selection, scroll, and link-clicked events with word-count plugin support.
-│       │   ├── class SutramSelectorModal # [stale?] 15.
-│       │   ├── class SutramReportProjection # [stale?] 16.
+│       │   ├── class SutramSelectorModal # Fuzzy-searchable modal item picker powered by SutramWorkerBroker.
+│       │   ├── class SutramReportProjection # Multi-tab spatial report and log output viewer with text_blob entity actions.
 │       │   ├── class SutramDiffViewer # 17.
-│       │   └── class SutramSubtabMenu # [stale?] 18.
+│       │   └── class SutramSubtabMenu # Column sub-tab header menu aggregating group-scoped bulk selection actions, flattened variant sets, and view menu actions.
 │       ├── projection_engine.js    # Declarative layout projection compiler (SutramProjectionCompiler)
 │       │   ├── class SutramProjectionCompiler # [comment required]
 │       │   └── class SutramProjectionPool # [comment required]
@@ -209,6 +212,7 @@ sutram/
 │   ├── run_unit_tests.py           # CLI test runner for platform behavioral unit tests
 │   ├── sutram_consumer_linter.py   # Reusable static analysis script for consumer UDF compliance
 │   │   ├── def strip_lit_expressions(line) # Replaces every Lit ${...} expression on a line with an empty '${}' (brace-balanced, so arrow functions and object literals inside bindings a...
+│   │   ├── def iter_entity_action_objects(text) # Yields (line_number, key_name) for top-level keys inside entityActions array declarations.
 │   │   ├── def iter_sutram_tags(text) # Yields every <sutram-*> opening tag with its line, attribute text, and names-only text; multi-line and ${...}-safe.
 │   │   ├── def load_declared_properties(sutram_root) # Maps each sutram-* tag to its declared properties and reflected attributes, through inheritance, mixins, chassis aliases and passthrough tags.
 │   │   ├── def undeclared_bindings(tag, attrs, declared) # Bindings on a sutram tag that name no declared property or attribute, so they would do nothing.
@@ -226,7 +230,7 @@ sutram/
 │       │   └── class MemoryStorage # [comment required]
 │       ├── test_consumer_linter.py # Tests the consumer linter: Lit bindings in button labels, whole-tag rules across lines, and undeclared property bindings
 │       │   ├── class TestConsumerLinterButtonLabels(unittest.TestCase) # SUTRAM_BUTTON_DECLARATIVE_LABEL_MANDATE must ignore '=>' and '>' inside Lit ${...} bindings.
-│       │   └── class TestConsumerLinterWholeTags(unittest.TestCase) # Tag-level rules read whole tags; undeclared and attribute-mismatched bindings are flagged.
+│       │   └── class TestConsumerLinterWholeTags(unittest.TestCase) # Tag-level rules read whole tags; undeclared bindings and unknown entityActions schema keys are flagged.
 │       └── test_sutram_registry.py # Node.js and Python behavioral tests for StoreRegistry, ExtensionRegistry, and utilities
 │           └── class TestSutramRegistry(unittest.TestCase) # [comment required]
 └── yenvui/                         # Edge-Native presentation chassis and Web Component UI library
@@ -265,7 +269,7 @@ sutram/
         │   └── class YenvuiFilterDropdown # [comment required]
         ├── editor.js               # CodeMirror 6 code editor wrapper with descriptor-based language loading, StreamLanguage wrapping, and per-language caching
         │   ├── function loadLanguageExtension(lang, customResolver = null) # Resolves a CodeMirror language extension from core built-ins or a host descriptor ({url, kind, export, options}), falling back to plain text.
-        │   └── class YenvuiEditor  # [stale?] Encapsulated CodeMirror 6 editor with minimal diff updates, prose helpers, and interactive Markdown link widgets.
+        │   └── class YenvuiEditor  # Encapsulated CodeMirror 6 editor with minimal diff updates, prose helpers, and interactive Markdown link widgets.
         ├── empty-state.js          # Centered empty state feedback container with icon and text slot
         │   └── class YenvuiEmptyState # [comment required]
         ├── filter-group.js         # Interactive pill array for multi-attribute filtering
@@ -297,7 +301,7 @@ sutram/
         │   ├── function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) # Computes and applies true viewport coordinates for a #top-layer popover element.
         │   ├── function syncTopLayerPopover(triggerEl, popoverEl, isOpen, op...) # Promotes or dismisses a popover element in the browser's #top-layer and synchronizes its anchor coordinates.
         │   ├── function startKineticThrow(scrollEl, samples, { axis = 'y',...) # 60fps Inertial Momentum Throw Engine Applies exponential decay (0.94 friction) to a scroll container's scrollLeft/scrollTop based on recent...
-        │   ├── class YenvuiViewportGuard # [stale?] Singleton Root Viewport Physics Guard (Tier 0 Chassis) Centralizes iOS Safari edge-swipe history navigation prevention across the entire doc...
+        │   ├── class YenvuiViewportGuard # Singleton Root Viewport Physics Guard (Tier 0 Chassis) Centralizes iOS Safari edge-swipe history navigation prevention across the entire doc...
         │   ├── function getDeepElementFromPoint(x, y, selector = null) # [comment required]
         │   └── class YenvuiGestureController # Universal Gesture Controller Normalizes PointerEvents for unified desktop/mobile dragging while maintaining an invisible TouchEvent listener...
         ├── pill.js                 # Toggleable tag/badge primitive supporting standard and text variants

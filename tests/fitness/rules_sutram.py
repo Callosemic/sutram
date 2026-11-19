@@ -4,7 +4,11 @@ from pathlib import Path
 from .core import PROJECT_ROOT, SUTRAM_DIR, YENVUI_DIR, report_violation, collect_unique_files
 def check_sutram_rules():
     print("🔍 Sweeping Sutram Micro-Kernel & Domain Decoupling...")
-    domain_leak_pattern = re.compile(r'\b(?:inSetu|insetu|Quickpack|cleanCodeArtifacts|cite_start|include_prompt|plan_uri)\b|[\'"]insetu-[a-z0-9-]+[\'"]|yomama://|vfs:(?:diff|pairdiff):|/fs/save\b')
+    domain_leak_pattern = re.compile(
+        r'\b(?:inSetu|insetu|Quickpack|cleanCodeArtifacts|cite_start|include_prompt|plan_uri|freshdesk_ticket)\b'
+        r'|[\'"](?:insetu-[a-z0-9-]+|file:(?:prompt|note|task|context|diff)|config-repo|yomama-turn)[\'"]'
+        r'|yomama://|vfs:(?:diff|pairdiff):|/fs/save\b'
+    )
     relative_yenvui_import_pattern = re.compile(r'(?:from|import)\s+[\'"][^\'"]*yenvui/[^\'"]*[\'"]')
     interval_pattern = re.compile(r'\bsetInterval\s*\(')
     legacy_store_pattern = re.compile(r"create(?:Extension|Sutram)Store\s*\([\s\S]*?,\s*\[\s*['\"]")

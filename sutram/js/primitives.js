@@ -1,7 +1,7 @@
 // sutram/js/primitives.js
 // Pure Agnostic Presentation Primitives
 import { LitElement, html, css } from 'lit';
-import { SutramElement, SutramContextMixin, SelectionStore, ToastStore, EnvironmentStore } from './sutram_sdk.js';
+import { SutramElement, SutramContextMixin, SelectionStore, ToastStore, EnvironmentStore, VariantDefaultStore, ExtensionRegistry } from './sutram_sdk.js';
 import * as Chassis from 'sutram-chassis';
 import { sharedStyles } from './shared_styles.js';
 import { buildFileTree, resolveDirectoryState, fuzzyFilterObjects, SutramWorker } from './utils.js';
@@ -438,14 +438,13 @@ export class SutramAsyncBtn extends SutramContextMixin(YenvuiAsyncBtn) {
                         if (this.onJobProgress) this.onJobProgress(msg, jobObj);
                     },
                     onComplete: (data) => {
-                        this.status = 'success';
                         if (this.onJobComplete) this.onJobComplete(data);
-                        setTimeout(() => { this.status = 'idle'; }, 2000);
+                        this._completeWithConfirmation();
                     },
                     onError: (err) => {
                         this.status = 'error';
                         if (this.onJobError) this.onJobError(err);
-                        setTimeout(() => { this.status = 'idle'; }, 2000);
+                        this.registerTimeout(() => { this.status = 'idle'; }, 2000);
                     }
                 });
                 await jobRunner(e);
@@ -456,7 +455,7 @@ export class SutramAsyncBtn extends SutramContextMixin(YenvuiAsyncBtn) {
                     try { this.onJobError(err); } catch (_) {}
                 }
                 console.error('[SutramAsyncBtn] Job dispatch error:', err);
-                setTimeout(() => { this.status = 'idle'; }, 2000);
+                this.registerTimeout(() => { this.status = 'idle'; }, 2000);
                 return;
             }
         }
@@ -591,26 +590,6 @@ export class SutramSelectionTray extends SutramElement {
         }
         .tray-panel.open { transform: translateY(0); opacity: 1; pointer-events: auto; }
 
-        .sync-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0;
-            padding: var(--btn-padding, 8px 14px);
-            font-size: var(--btn-font-size, 0.85rem);
-            font-family: inherit;
-            font-weight: var(--btn-font-weight, normal);
-            border-radius: var(--btn-border-radius, 4px);
-            border: none;
-            cursor: pointer;
-            white-space: nowrap;
-            box-sizing: border-box;
-            transition: filter 0.2s ease, transform 0.1s ease;
-            color: #ffffff;
-        }
-        .sync-btn:hover { filter: brightness(1.1); }
-        .sync-btn:active { transform: scale(0.98); }
-
         .tray-items {
             flex: 1; overflow-y: auto; padding: 15px 20px; display: flex; flex-direction: column; gap: 10px;
         }
@@ -665,28 +644,9 @@ export class SutramSelectionTray extends SutramElement {
             sizeDisplay = 'Calculated on compile';
         }
         let batchActions = [];
-        if (registry) {
-            if (typeof registry.getAggregatableActions === 'function') {
-                batchActions = registry.getAggregatableActions(itemsArray, { group: 'share' });
-            }
-            // Backward-compatibility fallback for extensions still using legacy batchActions
-            if (registry._manifests) {
-                registry._manifests.forEach(config => {
-                    if (config.batchActions) {
-                        config.batchActions.forEach(act => {
-                            if (!batchActions.some(b => b.id === act.id) && act.match(itemsArray)) {
-                                batchActions.push({
-                                    ...act,
-                                    onClick: act.onClick ? (e) => act.onClick(itemsArray, e) : null,
-                                    asyncAction: act.asyncAction ? (e) => act.asyncAction(itemsArray, e) : null
-                                });
-                            }
-                        });
-                    }
-                });
-            }
+        if (registry && typeof registry.getAggregatableActions === 'function') {
+            batchActions = registry.getAggregatableActions(itemsArray, { group: 'share' });
         }
-        batchActions.sort((a, b) => (a.order || 99) - (b.order || 99));
 
         return html`
             ${count > 0 ? html`
@@ -704,7 +664,7 @@ export class SutramSelectionTray extends SutramElement {
                         <span style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase; font-weight: bold;">SELECTION STAGING</span>
                         <span style="font-weight: bold; font-size: 1.15rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center;">${this.trayTitle || 'Selection Tray'} <span class="cart-badge" style="display: inline-flex; margin-left: 8px;">${count}</span></span>${sizeDisplay ? html`<span style="font-size: 0.8rem; color: var(--intent-highlight); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${sizeDisplay}</span>` : ''}
                     </div>
-                    <button class="sync-btn" @click=${() => this.modalOpen = false} style="background: var(--input-bg); color: var(--text-muted); border: 1px solid var(--border); padding: 4px; font-size: 1.2rem; line-height: 1;">✕</button>
+                    <button type="button" @click=${() => this.modalOpen = false} style="background: var(--input-bg); color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; padding: 4px 8px; font-size: 1.1rem; line-height: 1;">✕</button>
                 </div>
                 <div class="tray-items">
                     ${itemsArray.map(item => {
@@ -728,23 +688,13 @@ export class SutramSelectionTray extends SutramElement {
                 </div>
                 <div class="tray-footer">
                     <sutram-async-btn label="Clear" intent="danger" .onClick=${() => { SelectionStore.getState().clearSelection(); this.modalOpen = false; }}></sutram-async-btn>
-                    <sutram-scrub-track ?grow=${true}>
-                        <div style="display: flex; gap: 8px; align-items: center; width: max-content; margin-left: auto;">
-                            ${batchActions.map(act => html`
-                                <sutram-async-btn  
-                                    .label=${act.label}
-                                    .icon=${act.icon}
-                                    intent="${act.intent || 'primary'}" 
-                                    variant="${act.variant || 'tinted'}"
-                                    ?emphasis=${act.emphasis}
-                                    .onClick=${async (e) => {
-                                        if (act.asyncAction) await act.asyncAction(e);
-                                        else if (act.onClick) act.onClick(e);
-                                    }}>
-                                </sutram-async-btn>
-                            `)}
-                        </div>
-                    </sutram-scrub-track>
+                    <div style="flex: 1 1 0%; min-width: 0; display: flex; justify-content: flex-end;">
+                        <sutram-entity-actions
+                            .actionsList=${batchActions}
+                            .entityType=${itemsArray.length === 1 ? (itemsArray[0]?.entityType || 'bulk') : 'bulk'}
+                            .entityData=${itemsArray}>
+                        </sutram-entity-actions>
+                    </div>
                 </div>
             </div>
         `;
@@ -1447,191 +1397,487 @@ export class SutramGenericSettingsModal extends SutramElement {
     }
 }
 customElements.define('sutram-generic-settings', SutramGenericSettingsModal);
-// 8.5. Standalone IoC Action Broker
+// 8.4. Variant-Set Split Button (<sutram-variant-btn>)
+export const ACTION_CONFIRM_HOLD_MS = 900;
+
+export class SutramVariantBtn extends SutramElement {
+    static properties = {
+        setEntry: { type: Object },
+        entityType: { type: String },
+        entityData: { type: Object },
+        compact: { type: Boolean, reflect: true },
+        executeAction: { attribute: false },
+        _lastUsedMap: { type: Object, state: true }
+    };
+    static styles = [sharedStyles, css`
+        :host {
+            display: inline-flex;
+            align-items: stretch;
+            vertical-align: middle;
+            flex-shrink: 0;
+        }
+        .split-group {
+            display: inline-flex;
+            align-items: stretch;
+            border-radius: 8px;
+        }
+        .split-main {
+            display: inline-flex;
+            min-width: var(--variant-min-width, max-content);
+            --btn-border-radius: 8px 0 0 8px;
+        }
+        .split-main sutram-async-btn {
+            width: 100%;
+            min-width: var(--variant-min-width, max-content);
+        }
+        .split-arrow-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 7px;
+            margin: 0;
+            border-radius: 0 8px 8px 0;
+            border: 1px solid color-mix(in srgb, var(--btn-color, var(--intent-primary)) 40%, transparent);
+            border-left: none;
+            background: color-mix(in srgb, var(--btn-color, var(--intent-primary)) 15%, transparent);
+            color: var(--btn-color, var(--intent-primary));
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .split-arrow-trigger:hover {
+            background: color-mix(in srgb, var(--btn-color, var(--intent-primary)) 26%, transparent);
+        }
+        .split-arrow-trigger--primary { --btn-color: var(--intent-primary); }
+        .split-arrow-trigger--success { --btn-color: var(--intent-success); }
+        .split-arrow-trigger--warning { --btn-color: var(--intent-warning); }
+        .split-arrow-trigger--danger { --btn-color: var(--intent-danger); }
+        .split-arrow-trigger--highlight { --btn-color: var(--intent-highlight); }
+        .split-arrow-trigger--neutral { --btn-color: var(--intent-neutral); }
+    `];
+
+    constructor() {
+        super();
+        this.setEntry = null;
+        this.entityType = '';
+        this.entityData = null;
+        this.compact = false;
+        this.executeAction = null;
+        this._lastUsedMap = {};
+    }
+
+    connectedCallback() {
+        super.connectedCallback();
+        this.subscribe(VariantDefaultStore, state => state.lastUsed, (lastUsed) => {
+            this._lastUsedMap = lastUsed || {};
+        });
+        this._lastUsedMap = VariantDefaultStore.getState()?.lastUsed || {};
+    }
+
+    _resolveCurrentDefault() {
+        const entry = this.setEntry;
+        if (!entry || !Array.isArray(entry.variants) || entry.variants.length === 0) return null;
+        const registry = window.ExtensionRegistry || ExtensionRegistry;
+        const et = this.entityType || entry.entityType || 'file';
+        return registry.resolveDefaultVariant(et, entry.setId, entry.variants) || entry.variants[0];
+    }
+
+    async _runVariant(variant, e) {
+        if (!variant) return;
+        const registry = window.ExtensionRegistry || ExtensionRegistry;
+        const et = this.entityType || this.setEntry?.entityType || 'file';
+        const setId = this.setEntry?.setId || variant.set;
+        const recordId = variant.variantId || variant.id;
+        if (setId && recordId && typeof registry.setLastUsedVariant === 'function') {
+            registry.setLastUsedVariant(et, setId, recordId);
+        }
+        if (typeof this.executeAction === 'function') {
+            return await this.executeAction(variant, e);
+        }
+        if (typeof registry.executeEntityAction === 'function') {
+            return await registry.executeEntityAction(variant, this.entityData, e);
+        }
+        if (variant.asyncAction) return await variant.asyncAction(this.entityData, e);
+        if (variant.onClick) return variant.onClick(this.entityData, e);
+    }
+
+    _buildDropdownItems() {
+        const entry = this.setEntry;
+        if (!entry || !Array.isArray(entry.variants)) return [];
+        const items = [];
+        const sections = Array.isArray(entry.sections) && entry.sections.length > 0
+            ? entry.sections
+            : Array.from(new Set(entry.variants.map(v => v.section || 'Actions')));
+
+        sections.forEach(sec => {
+            const members = entry.variants.filter(v => (v.section || 'Actions') === sec);
+            if (members.length === 0) return;
+            items.push({ sectionHeading: sec });
+            members.forEach(v => {
+                const lbl = typeof v.label === 'function' ? v.label(this.entityData) : v.label;
+                const ic = typeof v.icon === 'function' ? v.icon(this.entityData) : (v.icon || '');
+                items.push({
+                    id: v.id,
+                    label: lbl,
+                    icon: ic,
+                    section: sec,
+                    successLabel: v.successLabel || 'Done',
+                    confirmHoldMs: ACTION_CONFIRM_HOLD_MS,
+                    keepDrawerOpen: Boolean(v.keepDrawerOpen),
+                    asyncAction: (e) => this._runVariant(v, e)
+                });
+            });
+        });
+        return items;
+    }
+
+    render() {
+        const entry = this.setEntry;
+        const activeVariant = this._resolveCurrentDefault();
+        if (!entry || !activeVariant) return html``;
+
+        const label = typeof activeVariant.label === 'function' ? activeVariant.label(this.entityData) : activeVariant.label;
+        const icon = typeof activeVariant.icon === 'function' ? activeVariant.icon(this.entityData) : (activeVariant.icon || entry.icon || '');
+        const intent = typeof activeVariant.intent === 'function' ? activeVariant.intent(this.entityData) : (activeVariant.intent || entry.intent || 'primary');
+        const successLabel = activeVariant.successLabel || 'Done';
+        const maxChars = Math.max(Number(entry.maxLabelChars) || 0, String(label || '').length);
+        const minWidthStyle = maxChars > 0 ? `--variant-min-width: calc(${maxChars}ch + 38px);` : '';
+        const dropdownItems = this._buildDropdownItems();
+
+        return html`
+            <div class="split-group" style="${minWidthStyle}" @click=${(e) => e.stopPropagation()}>
+                <div class="split-main">
+                    <sutram-async-btn
+                        ?compact=${this.compact}
+                        .label=${label}
+                        .icon=${icon}
+                        .successLabel=${successLabel}
+                        intent="${intent}"
+                        .onClick=${(e) => this._runVariant(activeVariant, e)}>
+                    </sutram-async-btn>
+                </div>
+                <sutram-dropdown .items=${dropdownItems} align="right">
+                    <button
+                        slot="trigger"
+                        type="button"
+                        class="split-arrow-trigger split-arrow-trigger--${intent}"
+                        title="More ${entry.label || 'options'}">
+                        <sutram-icon name="chevron-down" size="xs"></sutram-icon>
+                    </button>
+                </sutram-dropdown>
+            </div>
+        `;
+    }
+}
+if (!customElements.get('sutram-variant-btn')) {
+    customElements.define('sutram-variant-btn', SutramVariantBtn);
+}
+
+// 8.5. Standalone IoC Action Broker ("Fit, then Three-Dot Menu")
+const GROUP_LABELS = Object.freeze({
+    file: 'File',
+    edit: 'Edit',
+    share: 'Share',
+    vcs: 'Source Control',
+    tools: 'Tools'
+});
+
+export function computeFitActionCount(containerWidth, buttonWidths = [], moreTriggerWidth = 38, gapPx = 6, hasGuaranteedOverflow = false) {
+    if (!Array.isArray(buttonWidths) || buttonWidths.length === 0) return 0;
+    const avail = Number(containerWidth) || 0;
+    if (avail <= 0) return buttonWidths.length;
+
+    if (!hasGuaranteedOverflow) {
+        const totalAll = buttonWidths.reduce((sum, w, idx) => sum + w + (idx > 0 ? gapPx : 0), 0);
+        if (totalAll <= avail) return buttonWidths.length;
+    }
+
+    const budgetWithMore = Math.max(0, avail - moreTriggerWidth - gapPx);
+    let used = 0;
+    let fit = 0;
+    for (let i = 0; i < buttonWidths.length; i++) {
+        const w = buttonWidths[i] + (fit > 0 ? gapPx : 0);
+        if (used + w <= budgetWithMore) {
+            used += w;
+            fit++;
+        } else {
+            break;
+        }
+    }
+    return fit;
+}
+
 export class SutramEntityActions extends SutramElement {
     static properties = {
         entityType: { type: String },
         entityData: { type: Object },
-        scrollable: { type: Boolean, reflect: true },
+        actionsList: { type: Array },
         variant: { type: String },
-        _trayOpen: { type: Boolean, state: true }
+        compact: { type: Boolean, reflect: true },
+        _containerWidth: { type: Number, state: true }
     };
     static styles = [sharedStyles, css`
-        :host { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-        :host([scrollable]) {
+        :host {
+            display: flex;
             flex-wrap: nowrap;
+            gap: 6px;
+            align-items: center;
+            justify-content: flex-end;
             width: 100%;
-            display: block;
-        }
-        .action-tray-dialog {
-            background: transparent;
-            border: none;
-            padding: 0;
-            margin: 0;
-            max-width: 100vw;
-            width: 100%;
-            max-height: 100dvh;
-            height: 100%;
+            min-width: 0;
             overflow: hidden;
-            pointer-events: auto !important;
+            box-sizing: border-box;
         }
-        .action-tray-dialog::backdrop {
-            background: var(--modal-backdrop, rgba(0,0,0,0.6));
-            backdrop-filter: var(--modal-backdrop-filter, blur(3px));
-            pointer-events: auto !important;
-        }
-        .action-tray-dialog[open] {
+        .action-row {
             display: flex;
-            align-items: flex-start;
+            flex-wrap: nowrap;
+            gap: 6px;
+            align-items: center;
+            justify-content: flex-end;
+            width: 100%;
+            min-width: 0;
+            overflow: hidden;
+        }
+        .more-trigger-btn {
+            display: inline-flex;
+            align-items: center;
             justify-content: center;
+            height: 30px;
+            min-width: 34px;
+            padding: 0 8px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--input-bg);
+            color: var(--text);
+            cursor: pointer;
+            font-weight: bold;
+            flex-shrink: 0;
+            transition: background 0.15s ease, border-color 0.15s ease;
         }
-        .action-tray-panel {
-            background: var(--pane-bg);
-            border-bottom: 1px solid var(--border);
-            border-bottom-left-radius: 12px;
-            border-bottom-right-radius: 12px;
-            box-shadow: 0 12px 40px rgba(0,0,0,0.5);
-            display: flex;
-            flex-direction: column;
-            width: 100%;
-            max-width: 800px;
-            max-height: 85dvh;
-            overflow: hidden;
-            margin: 0 auto;
-            animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-        @keyframes slideDown {
-            from { transform: translateY(-100%); }
-            to { transform: translateY(0); }
-        }
-        :host([data-theme="e-ink"]) .action-tray-panel {
-            border: 2px solid var(--border, #000000);
-            border-top: none;
-            box-shadow: 4px 4px 0 var(--intent-primary, #8b5cf6);
-        }
-        .tray-group-header {
-            font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
-            color: var(--intent-primary); border-bottom: 1px solid color-mix(in srgb, var(--intent-primary) 30%, transparent);
-            padding: 0 4px 4px 4px; margin: 15px 15px 10px 15px;
-        }
-        .tray-group-grid {
-            display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; padding: 0 15px;
+        .more-trigger-btn:hover {
+            background: var(--bg-hover);
+            border-color: var(--intent-primary);
         }
         .sync-btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
             margin: 0;
-            padding: var(--btn-padding, 8px 14px);
-            font-size: var(--btn-font-size, 0.85rem);
+            padding: var(--btn-padding, 6px 12px);
+            font-size: var(--btn-font-size, 0.82rem);
             font-family: inherit;
             font-weight: var(--btn-font-weight, normal);
-            border-radius: var(--btn-border-radius, 4px);
-            border: none;
+            border-radius: var(--btn-border-radius, 6px);
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text);
             cursor: pointer;
             white-space: nowrap;
             box-sizing: border-box;
             transition: filter 0.2s ease, transform 0.1s ease;
-            color: #ffffff;
         }
-        .sync-btn:hover { filter: brightness(1.1); }
-        .sync-btn:active { transform: scale(0.98); }
-        .sync-btn.active {
-            box-shadow: inset 0 0 0 2px var(--text, #ffffff);
-            filter: brightness(1.15);
-        }
-        :host([data-theme="e-ink"]) .sync-btn {
-            background: var(--bg, #ffffff) !important;
-            color: var(--text, #000000) !important;
-            font-weight: 900 !important;
-            border: 2px solid var(--intent-danger, #ec4899) !important;
-            box-shadow: 3px 3px 0 var(--intent-warning, #eab308) !important;
-        }
-        :host([data-theme="e-ink"]) .sync-btn:hover { background: var(--bg-hover, #f1f5f9) !important; }
-        :host([data-theme="e-ink"]) .sync-btn.active { background: var(--text, #000000) !important; color: var(--bg, #ffffff) !important; }
+        .sync-btn:hover { background: var(--bg-hover); }
     `];
-    updated(changedProperties) {
-        super.updated(changedProperties);
-        if (changedProperties.has('_trayOpen')) {
-            const dialog = this.shadowRoot.querySelector('.action-tray-dialog');
-            if (dialog) {
-                if (this._trayOpen && !dialog.open) {
-                    dialog.showModal();
-                } else if (!this._trayOpen && dialog.open) {
-                    dialog.close();
-                }
-            }
-        }
+
+    constructor() {
+        super();
+        this.entityType = '';
+        this.entityData = {};
+        this.actionsList = null;
+        this.variant = 'row';
+        this.compact = false;
+        this._containerWidth = 0;
     }
+
     connectedCallback() {
         super.connectedCallback();
-    }
-    disconnectedCallback() {
-        super.disconnectedCallback();
-        const dialog = this.shadowRoot?.querySelector('.action-tray-dialog');
-        if (dialog && dialog.open) {
-            document.body.appendChild(dialog);
-            dialog.close();
-            dialog.remove();
+        this.subscribe(VariantDefaultStore, state => state.lastUsed, () => {
+            this.requestUpdate();
+        });
+        if (typeof ResizeObserver !== 'undefined') {
+            this._rowResizeObserver = new ResizeObserver((entries) => {
+                for (const entry of entries) {
+                    const w = entry.contentRect ? entry.contentRect.width : this.clientWidth;
+                    if (w > 0 && Math.abs(w - this._containerWidth) > 2) {
+                        this._containerWidth = w;
+                    }
+                }
+            });
+            this._rowResizeObserver.observe(this);
+        }
+        if (this.clientWidth > 0) {
+            this._containerWidth = this.clientWidth;
         }
     }
-    render() {
-        if (!this.entityType || !window.ExtensionRegistry?.getEntityActions) return '';
-        const actions = window.ExtensionRegistry.getEntityActions(this.entityType, this.entityData || {});
 
-        if (actions.length === 0) return '';
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        if (this._rowResizeObserver) {
+            this._rowResizeObserver.disconnect();
+            this._rowResizeObserver = null;
+        }
+    }
 
-        const executeAction = async (act, e) => {
-            if (window.ExtensionRegistry.executeEntityAction) {
-                return await window.ExtensionRegistry.executeEntityAction(act, this.entityData, e);
-            }
-            if (act.asyncAction) return await act.asyncAction(this.entityData, e);
-            if (act.onClick) return act.onClick(this.entityData, e);
+    _resolveActions() {
+        if (Array.isArray(this.actionsList)) {
+            return this.actionsList;
+        }
+        const registry = window.ExtensionRegistry || ExtensionRegistry;
+        if (!this.entityType || typeof registry?.getEntityActions !== 'function') return [];
+        return registry.getEntityActions(this.entityType, this.entityData || {});
+    }
+
+    _estimateEntryWidth(entry) {
+        if (entry.kind === 'variant-set') {
+            const chars = Math.max(Number(entry.maxLabelChars) || 10, 8);
+            return chars * 7.5 + 68;
+        }
+        const lbl = typeof entry.label === 'function' ? entry.label(this.entityData) : (entry.label || '');
+        return String(lbl).length * 7.5 + 38;
+    }
+
+    _buildOverflowMenuItems(overflowEntries, executeAction) {
+        const items = [];
+        const bySection = new Map();
+
+        const addToSection = (secTitle, itemObj) => {
+            if (!bySection.has(secTitle)) bySection.set(secTitle, []);
+            bySection.get(secTitle).push(itemObj);
         };
+
+        overflowEntries.forEach(entry => {
+            if (entry.kind === 'variant-set' && Array.isArray(entry.variants)) {
+                const setLabel = entry.label || 'Options';
+                const sections = Array.isArray(entry.sections) && entry.sections.length > 0
+                    ? entry.sections
+                    : ['Actions'];
+                sections.forEach(sec => {
+                    const secTitle = sections.length > 1 ? `${setLabel} · ${sec}` : setLabel;
+                    entry.variants
+                        .filter(v => (v.section || 'Actions') === sec)
+                        .forEach(v => {
+                            const lbl = typeof v.label === 'function' ? v.label(this.entityData) : v.label;
+                            const ic = typeof v.icon === 'function' ? v.icon(this.entityData) : (v.icon || '');
+                            addToSection(secTitle, {
+                                id: v.id,
+                                label: lbl,
+                                icon: ic,
+                                successLabel: v.successLabel || 'Done',
+                                confirmHoldMs: ACTION_CONFIRM_HOLD_MS,
+                                keepDrawerOpen: Boolean(v.keepDrawerOpen),
+                                asyncAction: async (e) => {
+                                    const registry = window.ExtensionRegistry || ExtensionRegistry;
+                                    if (typeof registry?.setLastUsedVariant === 'function') {
+                                        registry.setLastUsedVariant(this.entityType || entry.entityType || 'file', entry.setId, v.variantId || v.id);
+                                    }
+                                    await executeAction(v, e);
+                                }
+                            });
+                        });
+                });
+            } else {
+                const gKey = entry.group || 'tools';
+                const secTitle = GROUP_LABELS[gKey] || (gKey.charAt(0).toUpperCase() + gKey.slice(1));
+                const lbl = typeof entry.label === 'function' ? entry.label(this.entityData) : entry.label;
+                const ic = typeof entry.icon === 'function' ? entry.icon(this.entityData) : (entry.icon || '');
+                addToSection(secTitle, {
+                    id: entry.id,
+                    label: lbl,
+                    icon: ic,
+                    intent: entry.intent,
+                    successLabel: entry.successLabel || 'Done',
+                    confirmHoldMs: ACTION_CONFIRM_HOLD_MS,
+                    keepDrawerOpen: Boolean(entry.keepDrawerOpen),
+                    asyncAction: (e) => executeAction(entry, e)
+                });
+            }
+        });
+
+        bySection.forEach((secItems, secTitle) => {
+            if (secItems.length === 0) return;
+            items.push({ sectionHeading: secTitle });
+            const nonDestructive = secItems.filter(i => i.intent !== 'danger');
+            const destructive = secItems.filter(i => i.intent === 'danger');
+            [...nonDestructive, ...destructive].forEach(i => items.push(i));
+        });
+
+        return items;
+    }
+
+    render() {
+        const actions = this._resolveActions();
+        if (!actions || actions.length === 0) return '';
+
+        const registry = window.ExtensionRegistry || ExtensionRegistry;
+        const executeAction = async (act, e) => {
+            const isBulkList = Array.isArray(this.actionsList);
+            if (!isBulkList && registry?.executeEntityAction) {
+                return await registry.executeEntityAction(act, this.entityData, e);
+            }
+            if (act.asyncAction) {
+                return isBulkList ? await act.asyncAction(e) : await act.asyncAction(this.entityData, e);
+            }
+            if (act.onClick) {
+                const res = isBulkList ? act.onClick(e) : act.onClick(this.entityData, e);
+                if (res && typeof res.then === 'function') await res;
+                return res;
+            }
+        };
+
         if (this.variant === 'menu-bar') {
-            const groups = { file: [], edit: [], share: [], tools: [] };
+            const groups = { file: [], edit: [], share: [], vcs: [], tools: [] };
             actions.forEach(act => {
                 const g = act.group && groups[act.group] ? act.group : 'tools';
-                groups[g].push({
-                    ...act,
-                    label: typeof act.label === 'function' ? act.label(this.entityData) : act.label,
-                    icon: typeof act.icon === 'function' ? act.icon(this.entityData) : (act.icon || ''),
-                    asyncAction: act.asyncAction ? (e) => executeAction(act, e) : null,
-                    onClick: (!act.asyncAction && act.onClick) ? (e) => executeAction(act, e) : null
-                });
-            });
-            const groupLabels = { file: 'File', edit: 'Edit', share: 'Share', tools: 'Tools' };
-            const groupIcons = { file: 'file-text', edit: 'edit-3', share: 'share-2', tools: 'wrench' };
-
-            const checkDropdownAlign = (e) => {
-                const dd = e.currentTarget;
-                if (!dd) return;
-                const rect = dd.getBoundingClientRect();
-                const container = dd.closest('.spatial-col, sutram-app-shell, .editor-header') || document.body;
-                const containerRight = container.getBoundingClientRect ? container.getBoundingClientRect().right : window.innerWidth;
-                const maxRight = Math.min(window.innerWidth, containerRight);
-                const estimatedWidth = 220;
-                if (rect.left + estimatedWidth > maxRight - 10) {
-                    dd.setAttribute('align', 'right');
-                    dd.align = 'right';
+                if (act.kind === 'variant-set' && Array.isArray(act.variants)) {
+                    const setLabel = act.label || 'Options';
+                    const sections = Array.isArray(act.sections) && act.sections.length > 0 ? act.sections : ['Actions'];
+                    sections.forEach(sec => {
+                        const members = act.variants.filter(v => (v.section || 'Actions') === sec);
+                        if (members.length > 0) {
+                            const secTitle = sections.length > 1 ? `${setLabel} · ${sec}` : setLabel;
+                            groups[g].push({ sectionHeading: secTitle });
+                            members.forEach(v => {
+                                groups[g].push({
+                                    ...v,
+                                    label: typeof v.label === 'function' ? v.label(this.entityData) : v.label,
+                                    icon: typeof v.icon === 'function' ? v.icon(this.entityData) : (v.icon || ''),
+                                    successLabel: v.successLabel || 'Done',
+                                    confirmHoldMs: ACTION_CONFIRM_HOLD_MS,
+                                    asyncAction: async (e) => {
+                                        if (typeof registry?.setLastUsedVariant === 'function') {
+                                            registry.setLastUsedVariant(this.entityType || act.entityType || 'file', act.setId, v.variantId || v.id);
+                                        }
+                                        await executeAction(v, e);
+                                    }
+                                });
+                            });
+                        }
+                    });
                 } else {
-                    dd.setAttribute('align', 'left');
-                    dd.align = 'left';
+                    if (groups[g].length === 0 || groups[g].every(item => item.sectionHeading)) {
+                        groups[g].push({ sectionHeading: GROUP_LABELS[g] });
+                    }
+                    groups[g].push({
+                        ...act,
+                        label: typeof act.label === 'function' ? act.label(this.entityData) : act.label,
+                        icon: typeof act.icon === 'function' ? act.icon(this.entityData) : (act.icon || ''),
+                        successLabel: act.successLabel || 'Done',
+                        confirmHoldMs: ACTION_CONFIRM_HOLD_MS,
+                        asyncAction: act.asyncAction ? (e) => executeAction(act, e) : null,
+                        onClick: (!act.asyncAction && act.onClick) ? (e) => executeAction(act, e) : null
+                    });
                 }
-            };
+            });
+            const groupIcons = { file: 'file-text', edit: 'edit-3', share: 'share-2', vcs: 'git-branch', tools: 'wrench' };
 
             return html`
-                <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+                <div class="action-row" style="justify-content: flex-start;">
                     ${Object.keys(groups).map(g => {
                         if (groups[g].length === 0) return '';
                         return html`
-                            <sutram-dropdown 
-                                .items=${groups[g]} 
-                                align="left"
-                                @pointerdown=${checkDropdownAlign}
-                                @click=${checkDropdownAlign}>
-                                <button slot="trigger" class="sync-btn" style="background: transparent; color: var(--text); border: 1px solid var(--border); padding: 6px 10px;">
-                                    <sutram-icon name="${groupIcons[g]}" size="sm" style="margin-right: 4px;"></sutram-icon> <span>${groupLabels[g]}</span>
+                            <sutram-dropdown .items=${groups[g]} align="left">
+                                <button slot="trigger" class="sync-btn">
+                                    <sutram-icon name="${groupIcons[g]}" size="sm" style="margin-right: 4px;"></sutram-icon>
+                                    <span>${GROUP_LABELS[g]}</span>
                                 </button>
                             </sutram-dropdown>
                         `;
@@ -1639,49 +1885,97 @@ export class SutramEntityActions extends SutramElement {
                 </div>
             `;
         }
+
         const isFooterBar = this.variant === 'footer';
-        const primaryActions = [];
-        const secondaryActions = [];
+        const isBulkRow = Array.isArray(this.actionsList);
 
-        actions.forEach(act => {
-            if (isFooterBar || (act.order || 99) < 20) primaryActions.push(act);
-            else secondaryActions.push(act);
+        // Destructive actions are never surfaced into a row unless explicitly in a footer bar.
+        // Once an entity type uses `surfaced` ranks, only actions with a `surfaced` rank are row candidates;
+        // legacy entity types with no `surfaced` actions fall back to `order < 20`.
+        const usesSurfacedModel = actions.some(a => a.surfaced !== undefined && a.surfaced !== null);
+        const rowCandidates = [];
+        const menuOnlyEntries = [];
+
+        actions.forEach(entry => {
+            const isDestructive = entry.intent === 'danger';
+            const hasSurfacedRank = entry.surfaced !== undefined && entry.surfaced !== null;
+            const allowInRow = isFooterBar || (!isDestructive && (
+                usesSurfacedModel
+                    ? hasSurfacedRank
+                    : (isBulkRow || (entry.order ?? 99) < 20)
+            ));
+            if (allowInRow) rowCandidates.push(entry);
+            else menuOnlyEntries.push(entry);
         });
-        const renderDirectAction = (act) => {
-            if (act.component) {
-                return html`<div style="display: contents;">${act.component(this.entityData)}</div>`;
-            }
-            const label = typeof act.label === 'function' ? act.label(this.entityData) : act.label;
-            const rawIcon = typeof act.icon === 'function' ? act.icon(this.entityData) : (act.icon || '');
-            const intent = typeof act.intent === 'function' ? act.intent(this.entityData) : (act.intent || 'primary');
-            const isActive = typeof act.isActive === 'function' ? act.isActive(this.entityData) : !!act.isActive;
 
-            if (act.asyncAction || (window.ExtensionRegistry.executeEntityAction && act.vfsBound)) {
+        const estimatedWidths = rowCandidates.map(e => this._estimateEntryWidth(e));
+        const effectiveWidth = this._containerWidth || this.clientWidth || 0;
+        const hasGuaranteedOverflow = menuOnlyEntries.length > 0;
+        const fitCount = isFooterBar
+            ? rowCandidates.length
+            : (effectiveWidth > 0
+                ? computeFitActionCount(effectiveWidth, estimatedWidths, 38, 6, hasGuaranteedOverflow)
+                : rowCandidates.length);
+
+        const visibleRowEntries = rowCandidates.slice(0, fitCount);
+        const overflowEntries = [...rowCandidates.slice(fitCount), ...menuOnlyEntries];
+
+        const renderRowEntry = (entry) => {
+            if (entry.kind === 'variant-set') {
                 return html`
-                    <sutram-async-btn 
+                    <sutram-variant-btn
+                        ?compact=${!isFooterBar}
+                        .setEntry=${entry}
+                        .entityType=${this.entityType || entry.entityType}
+                        .entityData=${this.entityData}
+                        .executeAction=${executeAction}>
+                    </sutram-variant-btn>
+                `;
+            }
+            if (entry.component) {
+                return html`<div style="display: contents;">${entry.component(this.entityData)}</div>`;
+            }
+            const label = typeof entry.label === 'function' ? entry.label(this.entityData) : entry.label;
+            const rawIcon = typeof entry.icon === 'function' ? entry.icon(this.entityData) : (entry.icon || '');
+            const intent = typeof entry.intent === 'function' ? entry.intent(this.entityData) : (entry.intent || 'primary');
+            const isActive = typeof entry.isActive === 'function' ? entry.isActive(this.entityData) : !!entry.isActive;
+            const successLabel = entry.successLabel || 'Done';
+
+            if (entry.asyncAction || entry.successLabel || (registry?.executeEntityAction && entry.vfsBound)) {
+                return html`
+                    <sutram-async-btn
+                        ?compact=${!isFooterBar}
                         .label=${label}
                         .icon=${rawIcon}
-                        intent="${intent}" 
+                        .successLabel=${successLabel}
+                        intent="${intent}"
                         ?active=${isActive}
                         ?grow=${isFooterBar}
                         ?fullWidth=${isFooterBar}
-                        .onClick=${(e) => executeAction(act, e)}>
+                        .onClick=${(e) => executeAction(entry, e)}>
                     </sutram-async-btn>
                 `;
             }
-            const clickHandler = (e) => {
+            const clickHandler = async (e) => {
                 if (e) e.stopPropagation();
-                if (act.emitEvent) {
-                    const payload = act.emitEvent(this.entityData);
+                if (entry.emitEvent) {
+                    const payload = entry.emitEvent(this.entityData);
                     window.dispatchEvent(new CustomEvent(payload.name, { detail: payload.detail, bubbles: true, composed: true }));
                 } else {
-                    executeAction(act, e);
+                    await executeAction(entry, e);
+                }
+                if (!entry.keepDrawerOpen) {
+                    this.dispatchEvent(new CustomEvent('yenvui-action-confirmed', {
+                        bubbles: true,
+                        composed: true,
+                        detail: { action: entry, status: 'success', phase: 'settled', holdMs: 0, keepDrawerOpen: false }
+                    }));
                 }
             };
-
             return html`
-                <sutram-btn 
-                    intent=${intent} 
+                <sutram-btn
+                    ?compact=${!isFooterBar}
+                    intent=${intent}
                     ?active=${isActive}
                     ?grow=${isFooterBar}
                     ?fullWidth=${isFooterBar}
@@ -1691,105 +1985,22 @@ export class SutramEntityActions extends SutramElement {
                 </sutram-btn>
             `;
         };
-        const renderTray = () => {
-            const groups = { file: [], edit: [], share: [], tools: [] };
-            actions.forEach(act => {
-                const g = act.group && groups[act.group] ? act.group : 'tools';
-                groups[g].push(act);
-            });
-            const groupLabels = { file: 'File', edit: 'Edit', share: 'Share', tools: 'Tools' };
-            const groupIcons = { file: 'file-text', edit: 'edit-3', share: 'share-2', tools: 'wrench' };
-            const handleTrayAction = async (act, e) => {
-                await executeAction(act, e);
-                if (!act.keepDrawerOpen) {
-                    this._trayOpen = false;
-                }
-            };
 
-            const title = this.entityData?.titleText || this.entityData?.filepath?.split('/').pop() || this.entityData?.id || 'Actions';
-            const subtitle = this.entityData?.filepath || this.entityData?.folderpath || this.entityData?.repoDir || '';
+        const overflowItems = overflowEntries.length > 0
+            ? this._buildOverflowMenuItems(overflowEntries, executeAction)
+            : [];
 
-            return html`
-                <dialog class="action-tray-dialog" @cancel=${(e) => { e.preventDefault(); this._trayOpen = false; }} @click=${(e) => { if (e.target.tagName === 'DIALOG') this._trayOpen = false; }}>
-                    <div class="action-tray-panel">
-                        <div style="padding: 15px 20px; border-bottom: 1px solid var(--border); background: var(--bg-deep); display: flex; justify-content: space-between; align-items: flex-start;">
-                            <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; padding-right: 15px;">
-                                <span style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase; font-weight: bold;">${this.entityType.replace(':', ' / ')}</span>
-                                <span style="font-weight: bold; font-size: 1.15rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${title}</span>
-                                ${subtitle ? html`<span style="font-size: 0.8rem; color: var(--intent-highlight); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${subtitle}</span>` : ''}
-                            </div>
-                            <button class="sync-btn" @click=${() => this._trayOpen = false} style="background: var(--input-bg); color: var(--text-muted); border: 1px solid var(--border); padding: 4px; font-size: 1.2rem; line-height: 1;">✕</button>
-                        </div>
-                        <div style="flex: 1; overflow-y: auto; padding-bottom: 20px;">
-                            ${Object.keys(groups).map(g => {
-                                if (groups[g].length === 0) return '';
-                                return html`
-                                    <div class="tray-group-header">
-                                        <sutram-icon name="${groupIcons[g]}" size="sm" style="margin-right: 6px;"></sutram-icon>${groupLabels[g]}
-                                    </div>
-                                    <div class="tray-group-grid">
-                                        ${groups[g].map(act => {
-                                            const label = typeof act.label === 'function' ? act.label(this.entityData) : act.label;
-                                            const rawIcon = typeof act.icon === 'function' ? act.icon(this.entityData) : (act.icon || '');
-                                            const intent = typeof act.intent === 'function' ? act.intent(this.entityData) : (act.intent || 'primary');
-                                            const isActive = typeof act.isActive === 'function' ? act.isActive(this.entityData) : !!act.isActive;
-
-                                            const renderIcon = (iconStr) => {
-                                                if (!iconStr) return '';
-                                                if (typeof iconStr === 'object') return iconStr;
-                                                if (iconStr.includes('<')) return html`<span style="display: inline-flex; align-items: center; margin-right: 6px;">${iconStr}</span>`;
-                                                if (/^[a-zA-Z0-9-]+$/.test(iconStr)) {
-                                                    return html`<sutram-icon name="${iconStr}" size="sm" style="margin-right: 6px;"></sutram-icon>`;
-                                                }
-                                                return html`<span style="margin-right: 6px;">${iconStr}</span>`;
-                                            };
-                                            if (act.asyncAction || (window.ExtensionRegistry.executeEntityAction && act.vfsBound)) {
-                                                return html`
-                                                    <sutram-async-btn 
-                                                        ?fullWidth=${true}
-                                                        .label=${label}
-                                                        .icon=${rawIcon}
-                                                        intent="${intent}" 
-                                                        ?active=${isActive}
-                                                        .onClick=${(e) => handleTrayAction(act, e)}>
-                                                    </sutram-async-btn>
-                                                `;
-                                            }
-                                            return html`
-                                                <button 
-                                                    class="sync-btn ${isActive ? 'active' : ''}" 
-                                                    style="width: 100%; justify-content: flex-start; padding: 10px 12px; font-size: 0.9rem; background: color-mix(in srgb, var(--intent-${intent}) 15%, transparent); color: var(--intent-${intent}); border: 1px solid color-mix(in srgb, var(--intent-${intent}) 40%, transparent);" 
-                                                    @click=${(e) => handleTrayAction(act, e)}>
-                                                    ${renderIcon(rawIcon)}${label}
-                                                </button>
-                                            `;
-                                        })}
-                                    </div>
-                                `;
-                            })}
-                        </div>
-                    </div>
-                </dialog>
-            `;
-        };
-        const content = html`
-            ${actions.length > 0 && !isFooterBar ? html`
-                <sutram-btn intent="neutral"
-                    label="⋮"
-                    @click=${(e) => { e.stopPropagation(); this._trayOpen = true; }}>
-                </sutram-btn>
-            ` : ''}
-            ${primaryActions.map(renderDirectAction)}
-        `;
         return html`
-            ${this.scrollable ? html`
-                <sutram-scrub-track>
-                    <div style="display: flex; gap: 8px; align-items: center; width: max-content;">
-                        ${content}
-                    </div>
-                </sutram-scrub-track>
-            ` : content}
-            ${this._trayOpen ? renderTray() : ''}
+            <div class="action-row" @click=${(e) => e.stopPropagation()}>
+                ${visibleRowEntries.map(renderRowEntry)}
+                ${overflowItems.length > 0 ? html`
+                    <sutram-dropdown .items=${overflowItems} align="right">
+                        <button slot="trigger" type="button" class="more-trigger-btn" title="More actions">
+                            <sutram-icon name="more-horizontal" size="sm"></sutram-icon>
+                        </button>
+                    </sutram-dropdown>
+                ` : ''}
+            </div>
         `;
     }
 }
@@ -1855,6 +2066,18 @@ export class SutramCard extends SutramContextMixin(YenvuiCard) {
                 composed: true
             }));
         });
+
+        this.addEventListener('yenvui-card-tier-changed', () => {
+            this._injectEntityActions();
+        });
+
+        this.addEventListener('yenvui-action-confirmed', (e) => {
+            if (!this._overlayActive || this._wideCard) return;
+            if (e.detail?.keepDrawerOpen || e.detail?.action?.keepDrawerOpen || e.detail?.item?.keepDrawerOpen) return;
+            if (e.detail?.phase === 'settled') {
+                this._overlayActive = false;
+            }
+        });
     }
     updated(changedProperties) {
         if (changedProperties.has('icon') || changedProperties.has('entityData')) {
@@ -1879,7 +2102,7 @@ export class SutramCard extends SutramContextMixin(YenvuiCard) {
         }
 
         // Keep the dynamic actions injection in sync
-        if (changedProperties.has('entityType') || changedProperties.has('entityData') || changedProperties.has('_overlayActive')) {
+        if (changedProperties.has('entityType') || changedProperties.has('entityData') || changedProperties.has('_overlayActive') || changedProperties.has('_wideCard')) {
             this._injectEntityActions();
         }
     }
@@ -1894,8 +2117,8 @@ export class SutramCard extends SutramContextMixin(YenvuiCard) {
         if (actions.length > 0) {
             if (!this.hasActions) this.hasActions = true;
 
-            // LAZY-LOAD: Only physically build and inject the DOM nodes when the user opens the tray
-            if (!this.actionsOpen) return;
+            // Inject DOM nodes when either the drawer is opened OR the card is in the wide (>= 720px) inline tier
+            if (!this.actionsOpen && !this._wideCard) return;
 
             let actionsContainer = this.querySelector('.sutram-injected-actions');
             if (!actionsContainer) {
@@ -1904,18 +2127,19 @@ export class SutramCard extends SutramContextMixin(YenvuiCard) {
                 actionsContainer.slot = 'actions';
                 actionsContainer.style.display = 'flex';
                 actionsContainer.style.flexWrap = 'nowrap';
-                actionsContainer.style.gap = '8px';
+                actionsContainer.style.gap = '6px';
                 actionsContainer.style.alignItems = 'center';
-                actionsContainer.style.width = 'max-content';
+                actionsContainer.style.justifyContent = 'flex-end';
+                actionsContainer.style.width = '100%';
+                actionsContainer.style.minWidth = '0';
 
-                // We must stop propagation so clicking actions doesn't trigger card click
+                // Stop propagation so clicking actions doesn't trigger card click
                 actionsContainer.addEventListener('click', e => e.stopPropagation());
                 const actionsNode = document.createElement('sutram-entity-actions');
-                actionsNode.style.flexWrap = 'nowrap';
-                actionsNode.style.width = 'max-content';
+                actionsNode.style.width = '100%';
+                actionsNode.style.minWidth = '0';
                 actionsNode.entityType = this.entityType;
                 actionsNode.entityData = this.entityData;
-                actionsNode.scrollable = false;
                 actionsContainer.appendChild(actionsNode);
                 this.appendChild(actionsContainer);
                 this.hasActions = true;
@@ -1926,6 +2150,10 @@ export class SutramCard extends SutramContextMixin(YenvuiCard) {
                     actionsNode.entityData = this.entityData;
                 }
             }
+        } else {
+            const staleContainer = this.querySelector('.sutram-injected-actions');
+            if (staleContainer) staleContainer.remove();
+            if (this.hasActions) this.hasActions = false;
         }
     }
 
@@ -1993,7 +2221,7 @@ export class SutramDropdown extends YenvuiDropdown {
         this.filterFn = (items, query) => fuzzyFilterObjects(
             items,
             query,
-            item => `${item.label || ''} ${item.id || ''} ${item.token || ''} ${item.badge || ''} ${item.description || ''}`
+            item => `${item.label || ''} ${item.id || ''} ${item.token || ''} ${item.badge || ''} ${item.description || ''} ${item.section || ''}`
         );
     }
 
@@ -2270,7 +2498,6 @@ export class SutramReportProjection extends SutramElement {
                 ${this.extraContent ? html`<div style="flex-shrink: 0;">${this.extraContent}</div>` : ''}
                 <sutram-surface variant="panel" padding="xs" align="end">
                     <sutram-entity-actions
-                        ?scrollable=${true}
                         .entityType=${'text_blob'}
                         .entityData=${{
                             textContent: activeContent,
@@ -2441,11 +2668,42 @@ export class SutramSubtabMenu extends SutramElement {
         const items = [];
 
         if (cfg.bulkActionGroup && scopedSelected.length > 0) {
-            const bulkActions = window.ExtensionRegistry?.getAggregatableActions
-                ? window.ExtensionRegistry.getAggregatableActions(scopedSelected, { group: cfg.bulkActionGroup })
+            const registry = window.ExtensionRegistry || ExtensionRegistry;
+            const bulkActions = registry?.getAggregatableActions
+                ? registry.getAggregatableActions(scopedSelected, { group: cfg.bulkActionGroup })
                 : [];
             if (bulkActions.length > 0) {
-                bulkActions.forEach(act => items.push(act));
+                bulkActions.forEach(act => {
+                    if (act.kind === 'variant-set' && Array.isArray(act.variants)) {
+                        const setLabel = act.label || 'Options';
+                        const sections = Array.isArray(act.sections) && act.sections.length > 0
+                            ? act.sections
+                            : ['Actions'];
+                        sections.forEach(sec => {
+                            const members = act.variants.filter(v => (v.section || 'Actions') === sec);
+                            if (members.length === 0) return;
+                            const secTitle = sections.length > 1 ? `${setLabel} · ${sec}` : setLabel;
+                            items.push({ sectionHeading: secTitle });
+                            members.forEach(v => {
+                                items.push({
+                                    ...v,
+                                    successLabel: v.successLabel || 'Done',
+                                    confirmHoldMs: ACTION_CONFIRM_HOLD_MS,
+                                    asyncAction: async (e) => {
+                                        if (typeof registry?.setLastUsedVariant === 'function') {
+                                            registry.setLastUsedVariant(act.entityType || 'bulk', act.setId, v.variantId || v.id);
+                                        }
+                                        if (v.asyncAction) await v.asyncAction(e);
+                                        else if (v.onClick) await v.onClick(e);
+                                    },
+                                    onClick: null
+                                });
+                            });
+                        });
+                    } else {
+                        items.push(act);
+                    }
+                });
                 items.push({ divider: true });
             }
             items.push({

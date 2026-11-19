@@ -4,8 +4,10 @@ import { LitElement, html } from 'lit';
 import { createStore } from 'zustand/vanilla';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { physics } from 'sutram-chassis';
-const { getEventPath, getEventTarget } = physics;
+const { getEventPath, getEventTarget, COLUMN_UNIT_PX, WIDE_CARD_MIN_PX } = physics;
 export { getEventPath, getEventTarget };
+export const SUTRAM_COLUMN_UNIT_PX = COLUMN_UNIT_PX || 360;
+export const SUTRAM_WIDE_CARD_MIN_PX = WIDE_CARD_MIN_PX || (SUTRAM_COLUMN_UNIT_PX * 2);
 import { shallowEqual, coalescedAsync, slugify, debounce } from './utils.js';
 function _cloneInitialValue(val) {
     if (val instanceof Set) return new Set(val);
@@ -672,6 +674,8 @@ export const ExtensionRegistry = {
     uiHooks: {},
     shortcuts: {},
     _entityActions: new Map(),
+    _variantSets: new Map(),
+    _entityFamilyMap: new Map(),
     _actionMiddlewares: [],
     _filterPredicate: null,
     tabOrder: [],
@@ -679,6 +683,101 @@ export const ExtensionRegistry = {
 
     registerActionMiddleware: function(middlewareFn) {
         this._actionMiddlewares.push(middlewareFn);
+    },
+
+    registerEntityFamilies: function(familyMapping = {}) {
+        if (!familyMapping || typeof familyMapping !== 'object') return;
+        Object.entries(familyMapping).forEach(([key, val]) => {
+            if (Array.isArray(val)) {
+                val.forEach(et => this._entityFamilyMap.set(String(et), String(key)));
+            } else if (typeof val === 'string') {
+                this._entityFamilyMap.set(String(key), String(val));
+            }
+        });
+    },
+
+    resolveEntityFamily: function(entityType) {
+        if (!entityType) return 'records';
+        const norm = String(entityType).trim();
+        if (this._entityFamilyMap.has(norm)) {
+            return this._entityFamilyMap.get(norm);
+        }
+        const parts = norm.split(':');
+        for (let i = parts.length - 1; i >= 0; i--) {
+            if (this._entityFamilyMap.has(parts[i])) {
+                return this._entityFamilyMap.get(parts[i]);
+            }
+        }
+        return 'records';
+    },
+
+    registerVariantSet: function(setDef = {}) {
+        if (!setDef || !setDef.id) {
+            console.warn('[ExtensionRegistry] registerVariantSet requires an id.');
+            return null;
+        }
+        if (setDef.set || setDef.kind === 'group') {
+            console.warn(`[ExtensionRegistry] Refusing nested variant set registration '${setDef.id}': a variant set cannot be placed inside another set or group.`);
+            return null;
+        }
+        if (setDef.families && typeof setDef.families === 'object') {
+            this.registerEntityFamilies(setDef.families);
+        }
+        const existing = this._variantSets.get(setDef.id);
+        const sections = Array.isArray(setDef.sections)
+            ? [...setDef.sections]
+            : (existing?.sections || []);
+        const normalized = {
+            id: String(setDef.id),
+            label: setDef.label || existing?.label || String(setDef.id),
+            icon: setDef.icon || existing?.icon || 'send',
+            intent: setDef.intent || existing?.intent || 'primary',
+            group: setDef.group || existing?.group || 'tools',
+            surfaced: setDef.surfaced !== undefined ? setDef.surfaced : existing?.surfaced,
+            order: setDef.order !== undefined ? setDef.order : (existing?.order ?? 10),
+            sections,
+            defaults: { ...(existing?.defaults || {}), ...(setDef.defaults || {}) }
+        };
+        this._variantSets.set(normalized.id, normalized);
+        return normalized;
+    },
+
+    getVariantSet: function(setId) {
+        return this._variantSets.get(setId) || null;
+    },
+
+    getLastUsedVariant: function(entityType, setId) {
+        if (!entityType || !setId) return null;
+        const store = StoreRegistry.get('VariantDefaults');
+        const map = store?.getState?.()?.lastUsed || {};
+        return map[`${entityType}:${setId}`] || null;
+    },
+
+    setLastUsedVariant: function(entityType, setId, variantId) {
+        if (!entityType || !setId || !variantId) return;
+        const store = StoreRegistry.get('VariantDefaults');
+        if (store && typeof store.getState === 'function') {
+            store.getState().setLastUsed(entityType, setId, variantId);
+        }
+    },
+
+    resolveDefaultVariant: function(entityType, setId, availableVariants = []) {
+        if (!Array.isArray(availableVariants) || availableVariants.length === 0) return null;
+        const lastUsedId = this.getLastUsedVariant(entityType, setId);
+        if (lastUsedId) {
+            const matchedLast = availableVariants.find(v => v.id === lastUsedId || v.variantId === lastUsedId);
+            if (matchedLast) return matchedLast;
+        }
+        const setDef = this._variantSets.get(setId);
+        if (setDef && setDef.defaults) {
+            const family = this.resolveEntityFamily(entityType);
+            const prefList = setDef.defaults[family] || setDef.defaults[entityType] || setDef.defaults['*'] || [];
+            for (const prefId of prefList) {
+                const matchedPref = availableVariants.find(v => v.id === prefId || v.variantId === prefId || v.rawId === prefId);
+                if (matchedPref) return matchedPref;
+            }
+        }
+        return availableVariants[0];
     },
 
     executeEntityAction: async function(action, data, e) {
@@ -865,8 +964,15 @@ export const ExtensionRegistry = {
         Object.keys(this.uiHooks).forEach(zone => {
             this.uiHooks[zone] = this.uiHooks[zone].filter(cb => cb._extName !== extName);
         });
+        if (Array.isArray(config.variantSets)) {
+            config.variantSets.forEach(vs => this.registerVariantSet(vs));
+        }
         if (config.entityActions) {
             config.entityActions.forEach(act => {
+                if (act.set && (act.variants || act.kind === 'variant-set' || act.kind === 'group' || Array.isArray(act.items))) {
+                    console.warn(`[ExtensionRegistry] Refusing nested set/group '${act.id}' inside set '${act.set}': variant sets hold plain actions only.`);
+                    return;
+                }
                 act.extName = extName;
                 if (act.emitEvent && !act.onClick && !act.asyncAction) {
                     act.onClick = (data, e) => {
@@ -930,6 +1036,110 @@ export const ExtensionRegistry = {
         if (!this.uiHooks[zone]) this.uiHooks[zone] = [];
         this.uiHooks[zone].push(callback);
     },
+    _sortActionEntries: function(entries = []) {
+        return [...entries].sort((a, b) => {
+            const aDanger = a.intent === 'danger';
+            const bDanger = b.intent === 'danger';
+            const aSurfaced = (!aDanger && a.surfaced !== undefined && a.surfaced !== null) ? Number(a.surfaced) : Infinity;
+            const bSurfaced = (!bDanger && b.surfaced !== undefined && b.surfaced !== null) ? Number(b.surfaced) : Infinity;
+            if (aSurfaced !== bSurfaced) return aSurfaced - bSurfaced;
+            if (aDanger !== bDanger) return aDanger ? 1 : -1;
+            return (a.order ?? 99) - (b.order ?? 99);
+        });
+    },
+
+    _collapseVariantSets: function(flatActions, entityType, data = null, isBulk = false) {
+        const result = [];
+        const setBuckets = new Map();
+
+        flatActions.forEach(act => {
+            const normalizedAct = {
+                ...act,
+                group: act.group || 'tools'
+            };
+            if (!normalizedAct.set) {
+                result.push(normalizedAct);
+                return;
+            }
+            const setId = String(normalizedAct.set);
+            if (!setBuckets.has(setId)) {
+                setBuckets.set(setId, []);
+            }
+            setBuckets.get(setId).push(normalizedAct);
+        });
+
+        setBuckets.forEach((variants, setId) => {
+            if (variants.length === 0) return;
+            const setDef = this._variantSets.get(setId) || {
+                id: setId,
+                label: setId.charAt(0).toUpperCase() + setId.slice(1),
+                icon: variants[0]?.icon || 'send',
+                intent: variants[0]?.intent || 'primary',
+                group: variants[0]?.group || 'tools',
+                surfaced: variants[0]?.surfaced,
+                order: variants[0]?.order ?? 10,
+                sections: [],
+                defaults: {}
+            };
+
+            const declaredSections = Array.isArray(setDef.sections) ? [...setDef.sections] : [];
+            const presentSections = new Set(variants.map(v => v.section || 'Actions'));
+            const activeDeclared = declaredSections.filter(sec => presentSections.has(sec));
+            const extraSections = [];
+            variants.forEach(v => {
+                const sec = v.section || 'Actions';
+                if (!activeDeclared.includes(sec) && !extraSections.includes(sec)) {
+                    extraSections.push(sec);
+                }
+            });
+            const orderedSections = [...activeDeclared, ...extraSections];
+
+            const orderedVariants = [];
+            orderedSections.forEach(sec => {
+                variants
+                    .filter(v => (v.section || 'Actions') === sec)
+                    .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
+                    .forEach(v => orderedVariants.push({ ...v, section: sec }));
+            });
+
+            if (orderedVariants.length > 8) {
+                console.warn(`[ExtensionRegistry] Variant set '${setId}' has ${orderedVariants.length} available variants (> 8) for '${entityType}'.`);
+            }
+
+            const defaultVariant = this.resolveDefaultVariant(entityType, setId, orderedVariants);
+            const longestLabelLength = orderedVariants.reduce((maxLen, v) => {
+                const lbl = typeof v.label === 'function' ? v.label(data) : (v.label || '');
+                return Math.max(maxLen, String(lbl).length);
+            }, 0);
+
+            const minSurfaced = variants.reduce((minS, v) => {
+                if (v.surfaced !== undefined && v.surfaced !== null) {
+                    return Math.min(minS, Number(v.surfaced));
+                }
+                return minS;
+            }, setDef.surfaced !== undefined && setDef.surfaced !== null ? Number(setDef.surfaced) : Infinity);
+
+            result.push({
+                id: isBulk ? `bulk-set-${setId}` : `set-${setId}`,
+                setId,
+                kind: 'variant-set',
+                entityType,
+                label: setDef.label,
+                icon: setDef.icon || defaultVariant?.icon || 'send',
+                intent: setDef.intent || defaultVariant?.intent || 'primary',
+                group: setDef.group || 'tools',
+                surfaced: Number.isFinite(minSurfaced) ? minSurfaced : undefined,
+                order: setDef.order ?? defaultVariant?.order ?? 10,
+                sections: orderedSections,
+                variants: orderedVariants,
+                defaultVariant,
+                maxLabelChars: longestLabelLength
+            });
+        });
+
+        return this._sortActionEntries(result);
+    },
+
     getEntityActions: function(compoundType, data) {
         if (!compoundType) return [];
         const types = compoundType.split(':');
@@ -939,6 +1149,7 @@ export const ExtensionRegistry = {
         types.forEach(type => {
             if (this._entityActions.has(type)) {
                 this._entityActions.get(type).forEach(act => {
+                    if (this._filterPredicate && act.extName && !this._filterPredicate(act.extName)) return;
                     if (!act.bulkOnly && !seen.has(act.id)) {
                         seen.add(act.id);
                         combined.push(act);
@@ -946,22 +1157,22 @@ export const ExtensionRegistry = {
                 });
             }
         });
-        return combined
+        const filtered = combined
             .filter(act => {
                 // 1. Enforce Whitelist (showOnly)
                 if (data?.showOnly && Array.isArray(data.showOnly)) {
-                    if (!data.showOnly.includes(act.id)) return false;
+                    if (!data.showOnly.includes(act.id) && (!act.set || !data.showOnly.includes(act.set))) return false;
                 }
 
                 // 2. Enforce Blacklist (suppress)
                 if (data?.suppress && Array.isArray(data.suppress)) {
-                    if (data.suppress.includes(act.id)) return false;
+                    if (data.suppress.includes(act.id) || (act.set && data.suppress.includes(act.set))) return false;
                 }
 
                 // 3. Evaluate the component's native domain logic
                 return !act.match || act.match(data);
-            })
-            .sort((a, b) => (a.order || 99) - (b.order || 99));
+            });
+        return this._collapseVariantSets(filtered, compoundType, data, false);
     },
     getAggregatableActions: function(selectedItems, options = {}) {
         if (!selectedItems) return [];
@@ -1019,21 +1230,28 @@ export const ExtensionRegistry = {
             if (allMatch) {
                 const count = items.length;
                 const baseLabel = typeof leadAction.label === 'function' ? leadAction.label(items[0]?.data) : leadAction.label;
+                const isVariantMember = Boolean(leadAction.set);
                 const dynamicLabel = typeof leadAction.bulkLabel === 'function' 
                     ? leadAction.bulkLabel(items) 
-                    : (leadAction.bulkLabel || `${baseLabel} (${count})`);
+                    : (leadAction.bulkLabel || (isVariantMember ? baseLabel : `${baseLabel} (${count})`));
 
                 const isVfsBound = groupActions.some(a => a.vfsBound);
                 const hasSyncClick = typeof leadAction.bulkOnClick === 'function';
 
                 aggregated.push({
                     id: `bulk-${dedupeKey}`,
+                    rawId: dedupeKey,
+                    variantId: leadAction.id,
                     label: dynamicLabel,
+                    successLabel: leadAction.successLabel || '',
+                    set: leadAction.set || undefined,
+                    section: leadAction.section || undefined,
+                    surfaced: leadAction.surfaced,
                     icon: typeof leadAction.icon === 'function' ? leadAction.icon(items[0]?.data) : (leadAction.icon || ''),
                     intent: typeof leadAction.intent === 'function' ? leadAction.intent(items[0]?.data) : (leadAction.intent || 'primary'),
                     variant: leadAction.variant || 'tinted',
                     emphasis: !!leadAction.emphasis,
-                    group: leadAction.group || 'file',
+                    group: leadAction.group || 'tools',
                     order: leadAction.order || 50,
                     vfsBound: isVfsBound,
                     onClick: hasSyncClick ? (e) => leadAction.bulkOnClick(items, e) : null,
@@ -1066,7 +1284,8 @@ export const ExtensionRegistry = {
             }
         });
 
-        return aggregated.sort((a, b) => (a.order || 99) - (b.order || 99));
+        const bulkEntityType = items.length === 1 ? (items[0]?.entityType || 'bulk') : 'bulk';
+        return this._collapseVariantSets(aggregated, bulkEntityType, items, true);
     },
     executeUIHook: function(zone, data) {
         if (this.uiHooks[zone]) {
@@ -1300,6 +1519,16 @@ setStatus: (msg, timeout = 3000, isError = false) => {
         export const EnvironmentStore = createSutramStore('Environment', {
             isOffline: false
         }, { scope: 'global' });
+        export const VariantDefaultStore = createSutramStore('VariantDefaults', (set, get) => ({
+            lastUsed: {},
+            setLastUsed: (entityType, setId, variantId) => {
+                if (!entityType || !setId || !variantId) return;
+                const prev = get()?.lastUsed || {};
+                const key = `${entityType}:${setId}`;
+                if (prev[key] === variantId) return;
+                set({ lastUsed: { ...prev, [key]: variantId } });
+            }
+        }), { localSync: ['lastUsed'], scope: 'global' });
 const _layoutBus = (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel('sutram_layout_bus') : null;
 
 export function canUseMultiWindowPopout() {
@@ -1520,7 +1749,7 @@ export const LayoutStore = createSutramStore('Layout', {
     setUserCapacity: (cap) => {
         const cleanCap = Math.min(3, Math.max(1, Number(cap) || 3));
         const maxViewportCap = (typeof window !== 'undefined' && window.innerWidth)
-            ? Math.min(3, Math.max(1, Math.floor(window.innerWidth / 360)))
+            ? Math.min(3, Math.max(1, Math.floor(window.innerWidth / SUTRAM_COLUMN_UNIT_PX)))
             : 3;
         LayoutStore.setState({
             userCapacity: cleanCap,
@@ -1851,7 +2080,7 @@ export const LayoutStore = createSutramStore('Layout', {
     localSync: ['columns', 'focusHistory', 'capacity', 'userCapacity', 'mobileViewportIndex', 'layoutRatios'],
     urlParser: (_hash, hydratedState) => {
         if (typeof window === 'undefined' || !window.innerWidth) return null;
-        const maxCap = Math.min(3, Math.max(1, Math.floor(window.innerWidth / 360)));
+        const maxCap = Math.min(3, Math.max(1, Math.floor(window.innerWidth / SUTRAM_COLUMN_UNIT_PX)));
         const st = hydratedState || window.Sutram?.stores?.Layout?.getState?.();
         const desiredCap = st?.userCapacity || st?.capacity || 3;
         const clampedCap = Math.min(desiredCap, maxCap);

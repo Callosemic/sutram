@@ -51,7 +51,7 @@ Host applications do not define raw structural CSS or hex colors. Visual styling
 Atomic, stateless presentation controls delivered by `yenVUI`:
 | Primitive Tag | Description | Structural Guardrail |
 | :--- | :--- | :--- |
-| **`<yenvui-card>`** | Polymorphic catalog card with edge-triggered touch drawer | Emits `yenvui-card-select-toggled`; supports compact, flush, and stale modes. |
+| **`<yenvui-card>`** | Polymorphic catalog card with self-measured 720px inline/drawer action tiers | Emits `yenvui-card-select-toggled` and `yenvui-card-tier-changed`; supports compact, flush, and stale modes. |
 | **`<yenvui-card-group>`** | Container with horizontal gesture locking and accordion physics | Supports stacked layouts and iOS Safari edge-swipe navigation protection. |
 | **`<yenvui-modal>`** | Accessible top-layer workspace overlay | Native HTML5 `<dialog>` operating in `#top-layer` with `:host { display: contents; }`; supports `transparent` backdrop mode. |
 | **`<yenvui-async-btn>`** | Action button with integrated state machine physics | Renders `idle` \| `loading` \| `success` \| `error` states; emits `yv-click`. |
@@ -89,8 +89,9 @@ State-aware wrappers, IoC brokers and form controls delivered by `sutram`:
 | Primitive Tag | Description | Operational Purpose |
 | :--- | :--- | :--- |
 | **`<sutram-app-shell>`** | Top-level declarative tab layout shell | Queries `ExtensionRegistry` layout slots to construct primary and sub-tab hierarchies. |
-| **`<sutram-entity-actions>`** | Standalone IoC action broker | Resolves and renders dynamic entity actions registered by extensions via `ExtensionRegistry`; supports `scrollable` mode. |
-| **`<sutram-card>`** | IoC-bound card container | Binds `yenVUI` card selection state to `SelectionStore` and injects `<sutram-entity-actions>`. |
+| **`<sutram-entity-actions>`** | Fit-then-overflow IoC action broker | Measures container width to render fitting surfaced actions and `<sutram-variant-btn>` split buttons inline while overflowing remaining actions into a sectioned `more-horizontal` dropdown. |
+| **`<sutram-variant-btn>`** | Variant-set split button primitive | Pairs a width-reserved primary `<sutram-async-btn>` with a sectioned variant `<sutram-dropdown>` and persists device-local last-used variant defaults per `(entityType, setId)`. |
+| **`<sutram-card>`** | IoC-bound card container | Binds `yenVUI` card selection state to `SelectionStore`, mounts `<sutram-entity-actions>` across 720px inline/drawer tiers, and closes narrow drawers after 900ms action confirmation holds. |
 | **`<sutram-card-group>`** | IoC card group wrapper | Wraps `<yenvui-card-group>` for extension slot projection. |
 | **`<sutram-modal>`** | IoC modal dialog wrapper | Binds `<yenvui-modal>` closing events to `SutramElement` dispatch. |
 | **`<sutram-async-btn>`** | Async button wrapper | Accepts `onClick` async handlers and manages feedback state machine execution. |
@@ -100,7 +101,7 @@ State-aware wrappers, IoC brokers and form controls delivered by `sutram`:
 | **`<sutram-selector-modal>`** | Fuzzy-searchable item picker modal | Fuzzy-filters object arrays for prompt/template pickers. |
 | **`<sutram-folder-browser>`** | Workspace directory tree browser | Interactive path navigation breadcrumbs. |
 | **`<sutram-categorized-list>`** | Categorized card list renderer | Groups items by category key and renders categorized `yenVUI` card groups. |
-| **`<sutram-selection-tray>`** | Multi-item batch action tray | Reads `SelectionStore` and executes registered extension `batchActions`. |
+| **`<sutram-selection-tray>`** | Multi-item batch action tray | Reads `SelectionStore` and renders aggregated bulk `entityActions` through `<sutram-entity-actions>`. |
 | **`<sutram-status-bar>`** | System status bar wrapper | Listens for global `sutram-status-update` and `sutram-sync-status` events. |
 | **`<sutram-toast-container>`** | Toast notification wrapper | Subscribes to `ToastStore` and renders active alerts. |
 | **`<sutram-editor>`** | Editor wrapper | Wraps `<yenvui-editor>`, bridges `editor-link-clicked` events, and exposes `insertAtCursor(text)`. |

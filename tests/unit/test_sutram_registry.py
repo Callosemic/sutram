@@ -1169,6 +1169,268 @@ console.log('BACKEND_ADAPTER_TESTS_PASSED');
         res = self._run_node_script(test_mjs)
         self.assertIn("BACKEND_ADAPTER_TESTS_PASSED", res.stdout)
 
+    def test_sprint_u1_card_actions_variant_sets_and_fit_overflow_in_node(self):
+        """Tests Sprint U1: fit-then-overflow at three container widths, variant-set default resolution, nesting refusal, and confirmation timing."""
+        test_mjs = r"""
+import assert from 'node:assert/strict';
+
+const {
+    ExtensionRegistry,
+    SelectionStore,
+    VariantDefaultStore,
+    SUTRAM_COLUMN_UNIT_PX,
+    SUTRAM_WIDE_CARD_MIN_PX
+} = await import('sutram/sutram_sdk.js');
+const {
+    computeFitActionCount,
+    ACTION_CONFIRM_HOLD_MS,
+    SutramVariantBtn,
+    SutramEntityActions,
+    SutramSubtabMenu
+} = await import('sutram/primitives.js');
+const { YenvuiDropdown } = await import('yenvui/dropdown.js');
+
+// 0. Column unit and wide-card tier threshold constants
+assert.equal(SUTRAM_COLUMN_UNIT_PX, 360);
+assert.equal(SUTRAM_WIDE_CARD_MIN_PX, 720);
+assert.equal(ACTION_CONFIRM_HOLD_MS, 900);
+
+// 1. Fit-then-overflow across three container widths (and property invariant across arbitrary widths)
+const buttonWidths = [120, 95, 110]; // total = 120 + 6 + 95 + 6 + 110 = 337px
+assert.equal(computeFitActionCount(360, buttonWidths, 38, 6, false), 3, 'At 360px, all 3 buttons fit without overflow trigger');
+assert.equal(computeFitActionCount(360, buttonWidths, 38, 6, true), 2, 'At 360px with menu-only items, 38+6px is reserved once so 2 buttons (221 <= 316) fit');
+assert.equal(computeFitActionCount(280, buttonWidths, 38, 6, false), 2, 'At 280px, 2 buttons (120+6+95=221 <= 280-44=236) fit plus the 3-dot trigger');
+assert.equal(computeFitActionCount(180, buttonWidths, 38, 6, false), 1, 'At 180px, 1 button (120 <= 180-44=136) fits plus the 3-dot trigger');
+
+for (const hasExtra of [false, true]) {
+    for (let containerW = 60; containerW <= 500; containerW += 17) {
+        const fit = computeFitActionCount(containerW, buttonWidths, 38, 6, hasExtra);
+        const needsMore = hasExtra || fit < buttonWidths.length;
+        const usedButtonsW = buttonWidths.slice(0, fit).reduce((s, w, i) => s + w + (i > 0 ? 6 : 0), 0);
+        const totalUsedW = usedButtonsW + (needsMore ? (fit > 0 ? 6 + 38 : 38) : 0);
+        if (fit > 0) {
+            assert.ok(totalUsedW <= containerW, `Fitted buttons + trigger (${totalUsedW}) must never exceed container (${containerW})`);
+        }
+        if (fit < buttonWidths.length) {
+            const nextW = usedButtonsW + (fit > 0 ? 6 : 0) + buttonWidths[fit] + 6 + 38;
+            assert.ok(nextW > containerW, `Next button (${nextW}) must strictly exceed container (${containerW})`);
+        }
+    }
+}
+
+// 2. Variant set registration, first-use family preference order, last-used persistence, and unavailable fallback
+ExtensionRegistry.registerVariantSet({
+    id: 'send',
+    label: 'Send',
+    icon: 'send',
+    group: 'share',
+    surfaced: 1,
+    sections: ['Raw', 'Expanded'],
+    families: {
+        files: ['file', 'file:draft', 'file:template'],
+        structured: ['record', 'file:record', 'skill'],
+        packs: ['file:bundle', 'file:patch', 'bundle', 'patch'],
+        folders: ['folder', 'repo', 'workspace-repo']
+    },
+    defaults: {
+        files: ['file-copy', 'file-share', 'file-download'],
+        structured: ['file-copy', 'file-share', 'file-download'],
+        packs: ['file-copy', 'file-share', 'file-download'],
+        folders: ['file-download']
+    }
+});
+
+let canShareDevice = true;
+ExtensionRegistry.registerExtension('u1_send_test', {
+    name: 'U1 Send Test',
+    entityActions: [
+        {
+            targetEntities: ['file', 'bundle', 'folder'],
+            id: 'file-copy',
+            label: 'Copy Raw',
+            successLabel: 'Copied',
+            set: 'send',
+            section: 'Raw',
+            group: 'share',
+            surfaced: 1,
+            order: 10,
+            bulkable: true,
+            match: (d) => !d?.isMultiPart && !d?.isFolder,
+            asyncAction: async () => 'copied-raw'
+        },
+        {
+            targetEntities: ['file', 'bundle', 'folder'],
+            id: 'file-share',
+            label: 'Share Raw',
+            successLabel: 'Shared',
+            set: 'send',
+            section: 'Raw',
+            group: 'share',
+            surfaced: 1,
+            order: 20,
+            bulkable: true,
+            match: (d) => canShareDevice && !d?.isFolder,
+            asyncAction: async () => 'shared-raw'
+        },
+        {
+            targetEntities: ['file', 'bundle', 'folder'],
+            id: 'file-download',
+            label: 'Download Raw',
+            successLabel: 'Downloaded',
+            set: 'send',
+            section: 'Raw',
+            group: 'share',
+            surfaced: 1,
+            order: 30,
+            bulkable: true,
+            match: () => true,
+            asyncAction: async () => 'downloaded-raw'
+        },
+        {
+            targetEntities: ['file'],
+            id: 'file-share-expanded',
+            label: 'Share Expanded',
+            successLabel: 'Shared',
+            set: 'send',
+            section: 'Expanded',
+            group: 'share',
+            surfaced: 1,
+            order: 40,
+            match: (d) => Boolean(canShareDevice && d?.hasMacros),
+            asyncAction: async () => 'shared-expanded'
+        },
+        {
+            targetEntities: ['file'],
+            id: 'publish-doc',
+            label: 'Publish Document',
+            set: 'send',
+            section: 'Publish',
+            group: 'share',
+            order: 50,
+            match: (d) => Boolean(d?.filepath?.endsWith('.md')),
+            asyncAction: async () => 'published'
+        },
+        {
+            targetEntities: ['file'],
+            id: 'file-delete',
+            label: 'Delete',
+            intent: 'danger',
+            surfaced: 0, // Even if given a low surfaced rank, danger actions must never surface first
+            order: 99,
+            onClick: () => {}
+        },
+        {
+            targetEntities: ['file'],
+            id: 'un-grouped-action',
+            label: 'Inspect',
+            order: 60,
+            bulkable: true,
+            onClick: () => {}
+        }
+    ]
+});
+
+// 2a. First-use preference order for 'file:template' (files family -> Copy Raw)
+const templateActions = ExtensionRegistry.getEntityActions('file:template', { filepath: 'app://templates/a.md', hasMacros: true });
+const sendEntry = templateActions.find(a => a.kind === 'variant-set' && a.setId === 'send');
+assert.ok(sendEntry, 'Send variant set must collapse into a single entry');
+assert.equal(sendEntry.defaultVariant.id, 'file-copy', 'First-use default for file:template must be file-copy (Copy Raw)');
+assert.deepEqual(sendEntry.sections, ['Raw', 'Expanded', 'Publish'], 'Publish section must be appended after declared Raw and Expanded sections');
+assert.equal(sendEntry.maxLabelChars, 'Publish Document'.length, 'maxLabelChars must equal the longest available variant label');
+
+// 2b. Missing group defaults to 'tools' on both single and bulk paths
+const ungroupedSingle = templateActions.find(a => a.id === 'un-grouped-action');
+assert.equal(ungroupedSingle.group, 'tools', 'Single action with no group must default to tools');
+const ungroupedBulk = ExtensionRegistry.getAggregatableActions([{ entityType: 'file', data: { filepath: 'app://a/b.py' } }]);
+const ungroupedBulkAct = ungroupedBulk.find(a => a.id === 'bulk-un-grouped-action');
+assert.equal(ungroupedBulkAct.group, 'tools', 'Bulk action with no group must default to tools');
+
+// 2c. Multi-part bundle (Copy Raw unavailable -> falls through to Share Raw, or Download Raw when Share unavailable)
+const multiPartPackActions = ExtensionRegistry.getEntityActions('file:bundle', { filepath: 'app://bundles/a.txt', isMultiPart: true });
+const packSend = multiPartPackActions.find(a => a.setId === 'send');
+assert.equal(packSend.defaultVariant.id, 'file-share', 'Multi-part pack must fall through to Share Raw when Copy Raw is unavailable');
+
+canShareDevice = false;
+const multiPartNoShareActions = ExtensionRegistry.getEntityActions('file:bundle', { filepath: 'app://bundles/a.txt', isMultiPart: true });
+const packSendNoShare = multiPartNoShareActions.find(a => a.setId === 'send');
+assert.equal(packSendNoShare.defaultVariant.id, 'file-download', 'Multi-part pack without share sheet must fall through to Download Raw');
+canShareDevice = true;
+
+// 2d. Last-used variant resolution and fallback when last-used is unavailable for the current item
+ExtensionRegistry.setLastUsedVariant('file:template', 'send', 'file-share-expanded');
+const templateWithMacros = ExtensionRegistry.getEntityActions('file:template', { filepath: 'app://templates/a.md', hasMacros: true });
+assert.equal(templateWithMacros.find(a => a.setId === 'send').defaultVariant.id, 'file-share-expanded', 'Last-used variant must win when available');
+
+const templateWithoutMacros = ExtensionRegistry.getEntityActions('file:template', { filepath: 'app://templates/plain.md', hasMacros: false });
+assert.equal(
+    templateWithoutMacros.find(a => a.setId === 'send').defaultVariant.id,
+    'file-copy',
+    'When last-used variant (file-share-expanded) is unavailable on an item without macros, resolution must fall back to family preference order (file-copy)'
+);
+
+// 2e. SutramSubtabMenu flattens collapsed bulk variant sets into section headings and actionable items
+window.ExtensionRegistry = ExtensionRegistry;
+SelectionStore.getState().clearSelection();
+SelectionStore.getState().toggleSelection('app://a/b.py', 'file', { filepath: 'app://a/b.py' });
+const subMenu = new SutramSubtabMenu();
+subMenu.slotConfig = { bulkActionGroup: 'share', bulkEntityTypes: ['file'] };
+subMenu._selectedItems = SelectionStore.getState().selectedItems;
+subMenu._rebuildMenu();
+assert.equal(subMenu._menuItems.some(i => i.kind === 'variant-set'), false, 'Subtab menu must flatten variant-set entries');
+assert.equal(subMenu._menuItems.some(i => i.sectionHeading === 'Send'), true, 'Subtab menu must include section heading for flattened variant set');
+assert.equal(subMenu._menuItems.some(i => i.variantId === 'file-copy' && typeof i.asyncAction === 'function'), true, 'Flattened variant item must be directly executable');
+SelectionStore.getState().clearSelection();
+
+// 3. One-level nesting refusal
+const warnings = [];
+const origWarn = console.warn;
+console.warn = (...args) => warnings.push(args.join(' '));
+try {
+    const refusedSet = ExtensionRegistry.registerVariantSet({ id: 'nested-set', set: 'send' });
+    assert.equal(refusedSet, null, 'registerVariantSet inside another set must be refused');
+    ExtensionRegistry.registerExtension('bad_nested_ext', {
+        name: 'Bad Nested',
+        entityActions: [
+            { id: 'bad-group-in-set', targetEntity: 'file', set: 'send', kind: 'group', items: [] }
+        ]
+    });
+} finally {
+    console.warn = origWarn;
+}
+assert.equal(warnings.some(w => w.includes('Refusing nested')), true, 'Refusing nested set/group must log a console warning');
+
+// 4. Two-phase success-state confirmation timing on YenvuiDropdown ('start' -> ~900ms hold -> 'settled' & close)
+const dd = new YenvuiDropdown();
+dd.open = true;
+dd.confirmHoldMs = 60; // fast test hold
+let actionRan = false;
+const confirmedPhases = [];
+dd.addEventListener('yenvui-action-confirmed', (e) => {
+    confirmedPhases.push(e.detail?.phase);
+});
+const testItem = {
+    id: 'copy-test',
+    label: 'Copy Raw',
+    successLabel: 'Copied',
+    confirmHoldMs: 60,
+    asyncAction: async () => { actionRan = true; }
+};
+const execPromise = dd._executeItem(testItem, {});
+await new Promise(r => setTimeout(r, 20));
+assert.equal(actionRan, true);
+assert.equal(dd.open, true, 'Dropdown must stay open while showing confirmation label');
+assert.equal(dd._confirmedItemId, 'copy-test');
+assert.equal(dd._confirmedLabel, 'Copied');
+assert.deepEqual(confirmedPhases, ['start'], 'Phase start must fire immediately when confirmation begins');
+await execPromise;
+assert.equal(dd.open, false, 'Dropdown must close after confirmation hold completes');
+assert.deepEqual(confirmedPhases, ['start', 'settled'], 'Phase settled must fire when confirmation hold completes');
+
+console.log('SPRINT_U1_TESTS_PASSED');
+"""
+        res = self._run_node_script(test_mjs)
+        self.assertIn("SPRINT_U1_TESTS_PASSED", res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

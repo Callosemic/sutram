@@ -1,11 +1,31 @@
 import { LitElement, html, css } from 'lit';
 import { YenvuiGestureController, getEventPath, startKineticThrow } from './physics.js';
 export class YenvuiBase extends LitElement {
+    constructor() {
+        super();
+        this._managedTimeouts = new Set();
+    }
     connectedCallback() {
         super.connectedCallback();
     }
+    registerTimeout(callback, delayMs) {
+        const id = setTimeout(() => {
+            this._managedTimeouts.delete(id);
+            if (this.isConnected !== false) {
+                callback();
+            }
+        }, delayMs);
+        this._managedTimeouts.add(id);
+        return id;
+    }
+    clearManagedTimeouts() {
+        if (!this._managedTimeouts) return;
+        this._managedTimeouts.forEach(t => clearTimeout(t));
+        this._managedTimeouts.clear();
+    }
     disconnectedCallback() {
         super.disconnectedCallback();
+        this.clearManagedTimeouts();
         if (this._managedListeners) {
             this._managedListeners.forEach(m => m.target.removeEventListener(m.type, m.listener));
             this._managedListeners = [];

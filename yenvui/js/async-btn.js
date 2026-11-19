@@ -81,6 +81,7 @@ export class YenvuiAsyncBtn extends YenvuiBase {
         onClick: { type: Object },
         disabled: { type: Boolean },
         active: { type: Boolean },
+        confirmHoldMs: { type: Number },
         jobRoute: { type: String },
         jobPayload: { type: Object },
         onJobComplete: { type: Object },
@@ -106,6 +107,7 @@ export class YenvuiAsyncBtn extends YenvuiBase {
         this.btntype = 'button';
         this.disabled = false;
         this.active = false;
+        this.confirmHoldMs = 900;
         this.jobRoute = '';
         this.jobPayload = null;
         this.onJobComplete = null;
@@ -132,14 +134,31 @@ export class YenvuiAsyncBtn extends YenvuiBase {
             try {
                 this.status = 'loading';
                 await this.onClick(e);
-                this.status = 'success';
-                setTimeout(() => { this.status = 'idle'; }, 2000);
+                this._completeWithConfirmation();
             } catch (err) {
                 this.status = 'error';
                 console.error(err);
-                setTimeout(() => { this.status = 'idle'; }, 2000);
+                this.registerTimeout(() => { this.status = 'idle'; }, 2000);
             }
         }
+    }
+
+    _completeWithConfirmation() {
+        this.status = 'success';
+        const holdMs = Number(this.confirmHoldMs) > 0 ? Number(this.confirmHoldMs) : 900;
+        this.dispatchEvent(new CustomEvent('yenvui-action-confirmed', {
+            bubbles: true,
+            composed: true,
+            detail: { status: 'success', phase: 'start', label: this.successLabel || 'Done', holdMs }
+        }));
+        this.registerTimeout(() => {
+            this.dispatchEvent(new CustomEvent('yenvui-action-confirmed', {
+                bubbles: true,
+                composed: true,
+                detail: { status: 'success', phase: 'settled', label: this.successLabel || 'Done', holdMs }
+            }));
+        }, holdMs);
+        this.registerTimeout(() => { this.status = 'idle'; }, Math.max(holdMs, 1200));
     }
     render() {
         let text = this.label;

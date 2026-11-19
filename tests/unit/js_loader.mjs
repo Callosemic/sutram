@@ -53,8 +53,9 @@ if (typeof globalThis.window === 'undefined') {
         close() {}
         unref() {}
     };
-    globalThis.HTMLElement = globalThis.HTMLElement || class HTMLElement {
+    globalThis.HTMLElement = globalThis.HTMLElement || class HTMLElement extends EventTarget {
         constructor() {
+            super();
             this.dataset = {};
             this.style = { setProperty() {}, removeProperty() {} };
             this.classList = { add() {}, remove() {}, toggle() {}, contains() { return false; } };
@@ -63,9 +64,6 @@ if (typeof globalThis.window === 'undefined') {
         connectedCallback() {}
         disconnectedCallback() {}
         requestUpdate() {}
-        addEventListener() {}
-        removeEventListener() {}
-        dispatchEvent(ev) { return et.dispatchEvent(ev); }
         setAttribute(k, v) {
             const name = String(k).toLowerCase();
             const attrs = attributesOf(this);
@@ -162,7 +160,6 @@ const VIRTUAL_MODULES = {
         '  updated() {}',
         '  firstUpdated() {}',
         '  requestUpdate() {}',
-        '  dispatchEvent() {}',
         '}',
         'export const html = () => "";',
         'export const css = () => "";',

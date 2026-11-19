@@ -49,6 +49,10 @@ Any replacement library must export the following Custom Elements.
 *   **`<sutram-field-card>`**: Modular settings field card container with scope badges.
     *   *Properties:* `.label` (String), `.description` (String), `.scope` (`'workspace'`|`'repo'`|`'daemon'`|`'none'`), `?secure` (Boolean).
     *   *Slots:* `header-actions`, default.
+*   **`<sutram-entity-actions>`**: Fit-then-overflow entity action row and menu-bar broker supporting variant-set split buttons and sectioned overflow dropdowns.
+    *   *Properties:* `.entityType` (String), `.entityData` (Object), `.actionsList` (Array), `.variant` (`'row'`|`'menu-bar'`|`'footer'`), `?compact` (Boolean).
+*   **`<sutram-variant-btn>`**: Split button primitive for collapsed variant sets with device-local last-used default resolution and width reservation (`--variant-min-width`).
+    *   *Properties:* `.setEntry` (Object), `.entityType` (String), `.entityData` (Object), `?compact` (Boolean), `.executeAction` (Async Function).
 *   **`<sutram-subtab-menu>`**: Spatial column sub-tab header action and bulk selection menu.
     *   *Properties:* `.slotConfig` (Object with `bulkActionGroup`, `bulkEntityTypes`, `menuActions`, `menuStores`).
 *   **`<sutram-floating-hud>`**: Corner-pinned collapsible status and telemetry HUD drawer.
@@ -77,10 +81,10 @@ Any replacement library must export the following Custom Elements.
     *   *Properties:* `.titleText`, `.anchorCol` (`'left'`|`'center'`|`'right'`), `.span` (1|2|3), `.z`, `.icon`, `.intent`.
     *   *Events:* `@yenvui-window-close`, `@yenvui-window-dock`, `@yenvui-window-focus`, `@yenvui-window-drag-start`.
     *   *Slots:* default.
-*   **`<yenvui-card>`**: Polymorphic catalog container.
-    *   *Properties:* `.filename`, `.titleText`, `.descriptionText`, `.detailText`, `.detailPrefix`, `.detailSuffix`, `.statusText`, `.icon`, `.intent`, `?selected`, `?disableSelection`, `?compact`, `?flush`, `?stale`, `?has-actions`, `.actionsOpen` (Boolean getter/setter), `.hasActions` (Boolean getter/setter).
-    *   *Host Markers:* `[data-yv-card]`.
-    *   *Events:* `@yenvui-card-select-toggled`, `@yenvui-card-clicked`, `@yenvui-card-actions-opened`, `@yenvui-overlay-opened`.
+*   **`<yenvui-card>`**: Polymorphic catalog container with self-measured width tiers (`>= 720px` inline actions vs `< 720px` drawer).
+    *   *Properties:* `.filename`, `.titleText`, `.descriptionText`, `.detailText`, `.detailPrefix`, `.detailSuffix`, `.statusText`, `.icon`, `.intent`, `?selected`, `?disableSelection`, `?compact`, `?flush`, `?stale`, `?has-actions`, `?wide-card`, `.actionsOpen` (Boolean getter/setter), `.hasActions` (Boolean getter/setter).
+    *   *Host Markers:* `[data-yv-card]`, `[wide-card]`.
+    *   *Events:* `@yenvui-card-select-toggled`, `@yenvui-card-clicked`, `@yenvui-card-actions-opened`, `@yenvui-card-tier-changed`, `@yenvui-overlay-opened`.
     *   *Slots:* `header-actions`, `detail`, `inline-actions`, `actions`, default.
 *   **`<yenvui-collapsible>`**: Collapsible content section with semantic header styling.
     *   *Properties:* `.titleText`, `?open`, `.intent` (`primary`|`success`|`highlight`|`warning`|`danger`|`neutral`), `?compact`, `?flush`.
@@ -98,9 +102,9 @@ Any replacement library must export the following Custom Elements.
 *   **`<yenvui-board>` & `<yenvui-column>`**: Multi-column container-query grids.
     *   *Column Properties:* `.titleText`, `.intent` (`'primary'`|`'success'`|`'warning'`|`'danger'`|`'highlight'`|`'neutral'`).
 ### Interactive Controls
-*   **`<yenvui-btn>` & `<yenvui-async-btn>`**: Action buttons (`<yenvui-async-btn>` includes visual state feedback).
-    *   *Properties:* `.label`, `.loadingLabel`, `.successLabel`, `.errorLabel`, `.intent`, `.variant`, `.size`, `?emphasis`, `?grow`, `?fullWidth`, `.status` (`idle`|`loading`|`success`|`error`), `?disabled`, `?active`, `.jobRoute`, `.jobPayload`, `.onJobComplete`, `.onJobProgress`, `.onJobError`.
-    *   *Events:* `@yv-click`.
+*   **`<yenvui-btn>` & `<yenvui-async-btn>`**: Action buttons (`<yenvui-async-btn>` includes visual state feedback and 900ms confirmation holds).
+    *   *Properties:* `.label`, `.icon`, `.loadingLabel`, `.successLabel`, `.errorLabel`, `.intent`, `.variant`, `?compact`, `?emphasis`, `?grow`, `?fullWidth`, `.status` (`idle`|`loading`|`success`|`error`), `?disabled`, `?active`, `.confirmHoldMs` (Number, default `900`), `.jobRoute`, `.jobPayload`, `.onJobComplete`, `.onJobProgress`, `.onJobError`.
+    *   *Events:* `@yv-click`, `@yenvui-action-confirmed`.
 *   **`<yenvui-editor>`**: CodeMirror 6 text editor.
     *   *Properties:* `.value`, `?readOnly`, `.language`, `?writingMode`, `?enableMarkdownLinks`, `.customExtensions`, `.languageResolver` (Async Function: `lang => null | string | { url, kind: "lezer" | "stream" | "builtin", export, options? }`).
     *   *Static Properties:* `YenvuiEditor.languageResolver` (Global fallback resolver callback returning a module URL string or a language descriptor object; unknown languages fall back to plain text `[]`).
@@ -125,7 +129,7 @@ Any replacement library must export the following Custom Elements.
     *   *Properties:* `.diffText`, `.searchStr`, `.replaceStr`, `.searchLines`, `.replaceLines`, `.leftTitle`, `.rightTitle`, `.mode` (`auto`|`split-side`|`split-stacked`|`interleaved`), `.activeLineIndex`.
     *   *Events:* `@yenvui-diff-line-selected`, `@yenvui-diff-mode-changed`.
 *   **Physics & Gesture Utilities (`physics.js`)**:
-    *   *Constants:* `PHYSICS` (`EDGE_START_BEZEL_PX`, `EDGE_MOVE_BEZEL_PX`, `AXIS_LOCK_THRESHOLD_PX`, `TAP_SLOP_PX`, `MIN_THROW_VELOCITY`, `THROW_DECAY`, `POPOVER_ESTIMATED_WIDTH_PX`).
+    *   *Constants:* `COLUMN_UNIT_PX` (`360`), `WIDE_CARD_MIN_PX` (`720`), `PHYSICS` (`COLUMN_UNIT_PX`, `WIDE_CARD_MIN_PX`, `EDGE_START_BEZEL_PX`, `EDGE_MOVE_BEZEL_PX`, `AXIS_LOCK_THRESHOLD_PX`, `TAP_SLOP_PX`, `MIN_THROW_VELOCITY`, `THROW_DECAY`, `POPOVER_ESTIMATED_WIDTH_PX`).
     *   *Functions:* `startKineticThrow(scrollEl, samples, options)`, `acquireBodyScrollLock()`, `releaseBodyScrollLock()`, `getDeepElementFromPoint(x, y, selector)`, `anchorTopLayerPopover(triggerEl, popoverEl, options)`, `syncTopLayerPopover(triggerEl, popoverEl, isOpen, options)`.
 ### Inputs & Filtering
 *   **`<yenvui-input>`**: Single-line text input presentation primitive.
@@ -159,9 +163,9 @@ Any replacement library must export the following Custom Elements.
 *   **`SutramCacheWarmer`**: Low-priority background asset pre-fetcher and warming engine.
     *   *Properties:* `.size` (Number, returns current queue count).
     *   *Methods:* `enqueue(scopeId, urls, fetcher)`, `removeByPrefix(scopeId, urlPrefix)`, `clear()`, `drain(delayMs)`.
-*   **`<yenvui-dropdown>`**: Floating action menu utilizing native `#top-layer` Popover API.
-    *   *Properties:* `.items` (Array of `{id, label, icon, onClick, asyncAction, divider}`), `?open`, `.align` (`'auto'`|`'left'`|`'right'`), `.direction` (`'auto'`|`'up'`|`'down'`).
-    *   *Events:* `@yenvui-action-error` (dispatched on unhandled action exception).
+*   **`<yenvui-dropdown>`**: Floating action menu utilizing native `#top-layer` Popover API with section headings and 900ms confirmation holds.
+    *   *Properties:* `.items` (Array of `{id, label, icon, successLabel, confirmHoldMs, onClick, asyncAction, divider, sectionHeading}`), `?open`, `.align` (`'auto'`|`'left'`|`'right'`), `.direction` (`'auto'`|`'up'`|`'down'`).
+    *   *Events:* `@yenvui-action-confirmed`, `@yenvui-action-error` (dispatched on unhandled action exception).
     *   *Slots:* `trigger`.
 *   **`<yenvui-filter-dropdown>`**: Column-anchored filter panel utilizing native `#top-layer` Popover API.
     *   *Properties:* `.filterText`, `?open`, `?hasFilters`.

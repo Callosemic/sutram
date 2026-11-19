@@ -1,6 +1,6 @@
 // sutram/js/app_shell.js (Compiled Vendor Artifact)
 import { html, css } from 'lit';
-import { SutramElement, ExtensionRegistry, LayoutStore, StoreRegistry } from './sutram_sdk.js';
+import { SutramElement, ExtensionRegistry, LayoutStore, StoreRegistry, SUTRAM_COLUMN_UNIT_PX } from './sutram_sdk.js';
 import { sharedStyles } from './shared_styles.js';
 import { debounce } from './utils.js';
 import { SutramProjectionCompiler, SutramProjectionPool } from './projection_engine.js';
@@ -561,7 +561,7 @@ export class SutramAppShell extends SutramElement {
             });
             const syncViewportCapacity = () => {
                 const width = window.innerWidth;
-                const maxCapacity = Math.min(3, Math.max(1, Math.floor(width / 360)));
+                const maxCapacity = Math.min(3, Math.max(1, Math.floor(width / SUTRAM_COLUMN_UNIT_PX)));
                 const storeState = LayoutStore.getState();
                 if (storeState) {
                     const currentCap = storeState.capacity || 3;

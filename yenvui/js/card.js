@@ -1,6 +1,6 @@
 import { html, css } from 'lit';
 import { YenvuiBase } from './yenvui-base.js';
-import { YenvuiGestureController, getEventPath } from './physics.js';
+import { YenvuiGestureController, getEventPath, WIDE_CARD_MIN_PX } from './physics.js';
 
 export class YenvuiCard extends YenvuiBase {
     static properties = {
@@ -17,6 +17,7 @@ export class YenvuiCard extends YenvuiBase {
         disableSelection: { type: Boolean },
         _overlayActive: { type: Boolean, reflect: true },
         _hasActions: { type: Boolean, reflect: true, attribute: 'has-actions' },
+        _wideCard: { type: Boolean, reflect: true, attribute: 'wide-card' },
         _hasBodySlot: { type: Boolean, state: true },
         compact: { type: Boolean, reflect: true },
         flush: { type: Boolean, reflect: true },
@@ -235,8 +236,11 @@ export class YenvuiCard extends YenvuiBase {
             opacity: var(--peek-rail-opacity, 1);
             transition: opacity 0.3s ease, background 0.15s ease, color 0.15s ease;
         }
-        :host([has-actions]) .action-grip-rail {
+        :host([has-actions]:not([wide-card])) .action-grip-rail {
             display: flex;
+        }
+        :host([wide-card]) .action-grip-rail {
+            display: none !important;
         }
         .action-grip-rail i { transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
         :host([_overlayactive]) .action-grip-rail i { transform: rotate(180deg); }
@@ -271,26 +275,42 @@ export class YenvuiCard extends YenvuiBase {
             border-top-right-radius: var(--card-border-top-right-radius, var(--card-border-radius, 8px));
             border-bottom-right-radius: var(--card-border-bottom-right-radius, var(--card-border-radius, 8px));
         }
+        :host([wide-card][has-actions]) .actions-tray {
+            position: static;
+            left: auto;
+            right: auto;
+            top: auto;
+            bottom: auto;
+            background: transparent !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            border: none !important;
+            opacity: 1;
+            pointer-events: auto;
+            transform: none;
+            flex: 0 1 55%;
+            min-width: 180px;
+            max-width: 55%;
+            padding: 6px 12px 6px 0;
+            justify-content: center;
+            align-items: flex-end;
+        }
+        :host([wide-card]) .tray-caption {
+            display: none;
+        }
         .actions-wrapper {
             display: flex;
-            justify-content: flex-start;
+            justify-content: flex-end;
             align-items: center;
             flex-wrap: nowrap;
             gap: 6px;
-            overflow-x: auto;
-            overflow-y: hidden;
-            -webkit-overflow-scrolling: touch;
-            touch-action: pan-x pan-y;
-            scrollbar-width: none;
+            overflow: hidden;
             width: 100%;
             min-width: 0;
             box-sizing: border-box;
         }
-        .actions-wrapper::-webkit-scrollbar {
-            display: none;
-        }
-        .actions-wrapper::before, .actions-wrapper::after {
-            content: ''; margin: auto;
+        :host(:not([wide-card])) .actions-wrapper {
+            justify-content: center;
         }
 
         :host([_overlayactive]) .actions-tray {
@@ -448,6 +468,7 @@ export class YenvuiCard extends YenvuiBase {
         this.stale = false;
         this._overlayActive = false;
         this._hasActions = false;
+        this._wideCard = false;
         this._hasBodySlot = false;
         this.selected = false;
         this._isPanning = false;
@@ -458,43 +479,21 @@ export class YenvuiCard extends YenvuiBase {
             }
         };
         this._focusOutListener = (e) => {
-            if (!this.contains(e.relatedTarget) && this._overlayActive) {
-                this._overlayActive = false;
-            }
+            if (!this._overlayActive) return;
+            const rel = e.relatedTarget;
+            if (!rel) return;
+            if (this.contains(rel) || (this.shadowRoot && this.shadowRoot.contains(rel))) return;
+            this._overlayActive = false;
         };
     }
     _initGestureController() {
         if (this._gestureController) return;
 
         this._gestureController = new YenvuiGestureController(this, {
-            scrollableContainerSelector: 'actions-wrapper',
-            onPanStart: (startX, startY) => {
+            onPanStart: (startX) => {
                 const rect = this.getBoundingClientRect();
                 this._cardWidth = rect.width;
                 this._localStartX = startX - rect.left;
-                const wrapper = this.shadowRoot.querySelector('.actions-wrapper');
-                this._actionsScrollLeft = wrapper ? wrapper.scrollLeft : null;
-                this._initialScrollLeft = this._actionsScrollLeft;
-            },
-            onPanMove: (x, y, axis) => {
-                if (axis !== 'horizontal') return;
-                if (this._overlayActive) {
-                    const deltaX = this._gestureController.startX - x;
-                    const wrapper = this.shadowRoot.querySelector('.actions-wrapper');
-                    if (wrapper && this._initialScrollLeft !== null) {
-                        let newScroll = this._initialScrollLeft + deltaX;
-
-                        if (this._drawerRafId) cancelAnimationFrame(this._drawerRafId);
-                        this._drawerRafId = requestAnimationFrame(() => {
-                            if (newScroll < 0) {
-                                wrapper.style.transform = `translateX(${Math.abs(newScroll) * 0.4}px)`;
-                            } else {
-                                wrapper.style.transform = `translateX(0px)`;
-                                wrapper.scrollLeft = newScroll;
-                            }
-                        });
-                    }
-                }
             },
             onPanEnd: (endX, endY, axis) => {
                 if (axis !== 'horizontal') return;
@@ -502,20 +501,12 @@ export class YenvuiCard extends YenvuiBase {
 
                 if (Math.abs(deltaX) > 10) {
                     this._isPanning = true;
-                    setTimeout(() => this._isPanning = false, 150);
+                    this.registerTimeout(() => { this._isPanning = false; }, 150);
                 }
 
-                if (this._overlayActive) {
-                    const wrapper = this.shadowRoot.querySelector('.actions-wrapper');
-                    if (wrapper) {
-                        wrapper.style.transition = 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)';
-                        wrapper.style.transform = `translateX(0px)`;
-                        setTimeout(() => { wrapper.style.transition = ''; }, 200);
-
-                        const newScroll = this._initialScrollLeft + deltaX;
-                        if (newScroll < -(this._cardWidth * 0.2)) {
-                            this._overlayActive = false;
-                        }
+                if (this._overlayActive && !this._wideCard) {
+                    if (deltaX < -(this._cardWidth * 0.15)) {
+                        this._overlayActive = false;
                     }
                     return;
                 }
@@ -529,7 +520,7 @@ export class YenvuiCard extends YenvuiBase {
 
                     if (isLeftSide && isRightSwipe && !this.disableSelection) {
                         this._toggleSelection();
-                    } else if (isRightSide && isLeftSwipe) {
+                    } else if (!this._wideCard && isRightSide && isLeftSwipe) {
                         const hasActions = this._hasActions || !!this.querySelector('[slot="actions"]');
                         if (hasActions) {
                             this._overlayActive = true;
@@ -554,6 +545,21 @@ export class YenvuiCard extends YenvuiBase {
     set hasActions(val) {
         this._hasActions = !!val;
     }
+    _updateCardWidthTier(widthPx) {
+        const w = Number(widthPx) || this.offsetWidth || this.clientWidth || 0;
+        const isWide = w >= WIDE_CARD_MIN_PX;
+        if (this._wideCard !== isWide) {
+            this._wideCard = isWide;
+            if (isWide && this._overlayActive) {
+                this._overlayActive = false;
+            }
+            this.dispatchEvent(new CustomEvent('yenvui-card-tier-changed', {
+                detail: { wideCard: isWide, width: w },
+                bubbles: true,
+                composed: true
+            }));
+        }
+    }
     connectedCallback() {
         super.connectedCallback();
         this.setAttribute('data-yv-card', '');
@@ -562,11 +568,25 @@ export class YenvuiCard extends YenvuiBase {
         this.registerOutsideClick(() => {
             if (this._overlayActive) this._overlayActive = false;
         });
+        if (typeof ResizeObserver !== 'undefined') {
+            this._cardResizeObserver = new ResizeObserver((entries) => {
+                for (const entry of entries) {
+                    const w = entry.contentRect ? entry.contentRect.width : this.clientWidth;
+                    this._updateCardWidthTier(w);
+                }
+            });
+            this._cardResizeObserver.observe(this);
+        }
+        this._updateCardWidthTier(this.clientWidth);
     }
     disconnectedCallback() {
         super.disconnectedCallback();
         this.removeEventListener('focusout', this._focusOutListener);
         document.removeEventListener('yenvui-overlay-opened', this._overlayListener);
+        if (this._cardResizeObserver) {
+            this._cardResizeObserver.disconnect();
+            this._cardResizeObserver = null;
+        }
         if (this._gestureController && typeof this._gestureController.abort === 'function') {
             this._gestureController.abort();
         }
@@ -696,19 +716,6 @@ export class YenvuiCard extends YenvuiBase {
                 </div>
                 <div class="actions-tray" @click=${{handleEvent: (e) => { 
                     if (this._isPanning) { e.stopPropagation(); e.preventDefault(); return; }
-                    const path = getEventPath(e);
-                    const isDropdownTrigger = path.some(el => el.tagName && el.tagName.endsWith('-DROPDOWN'));
-                    const isMenuItem = path.some(el => el.classList && el.classList.contains('menu-item'));
-
-                    // If we clicked the dropdown trigger itself, abort so the menu can open
-                    if (isDropdownTrigger && !isMenuItem) return;
-                    const isActionable = path.some(el => {
-                        if (!el.tagName) return false;
-                        const tag = el.tagName.toUpperCase();
-                        if (tag === 'BUTTON' || tag.endsWith('-ASYNC-BTN') || tag.endsWith('-BTN')) return true;
-                        if (isMenuItem) return true;
-                        return false;
-                    });
                 }, capture: true}}>
                     ${!isSingleRow ? html`<span class="tray-caption">${this.titleText}</span>` : ''}
                     <div class="actions-wrapper">

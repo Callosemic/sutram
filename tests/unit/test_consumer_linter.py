@@ -124,6 +124,54 @@ class TestConsumerLinterWholeTags(unittest.TestCase):
         self.assertIn("drawerOpen", declared["sutram-sidebar-layout"])
         self.assertIn("filename", declared["sutram-card"])
         self.assertIn("name", declared["sutram-icon"])
+        self.assertIn("setEntry", declared["sutram-variant-btn"])
+        self.assertIn("entityType", declared["sutram-variant-btn"])
+        self.assertIn("entityData", declared["sutram-variant-btn"])
+        self.assertIn("successLabel", declared["sutram-async-btn"])
+        self.assertIn("confirmHoldMs", declared["sutram-async-btn"])
+        self.assertIn("confirmHoldMs", declared["sutram-dropdown"])
+
+    def test_entity_actions_schema_keys_allow_u1_fields_and_flag_typos(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "ext_valid.js").write_text(
+                "window.ExtensionRegistry.registerExtension('demo', {\n"
+                "    entityActions: [{\n"
+                "        targetEntities: ['file'],\n"
+                "        id: 'file-copy',\n"
+                "        label: 'Copy Raw',\n"
+                "        successLabel: 'Copied',\n"
+                "        set: 'send',\n"
+                "        section: 'Raw',\n"
+                "        surfaced: 1,\n"
+                "        order: 10,\n"
+                "        intent: isDanger ? 'danger' : 'primary',\n"
+                "        asyncAction: async () => {}\n"
+                "    }]\n"
+                "});\n",
+                encoding="utf-8",
+            )
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                violations = run_consumer_lint(tmp)
+            self.assertEqual(violations, 0, f"Valid U1 entityActions keys must pass: {buf.getvalue()}")
+
+            Path(tmp, "ext_typo.js").write_text(
+                "window.ExtensionRegistry.registerExtension('demo_bad', {\n"
+                "    entityActions: [{\n"
+                "        targetEntity: 'file',\n"
+                "        id: 'file-copy',\n"
+                "        surface: 1,\n"
+                "        onClick: () => {}\n"
+                "    }]\n"
+                "});\n",
+                encoding="utf-8",
+            )
+            buf_bad = io.StringIO()
+            with contextlib.redirect_stdout(buf_bad):
+                bad_violations = run_consumer_lint(tmp)
+            self.assertGreater(bad_violations, 0)
+            self.assertIn("ENTITY_ACTION_UNKNOWN_KEY", buf_bad.getvalue())
+            self.assertIn("surface", buf_bad.getvalue())
 
 
 if __name__ == "__main__":
