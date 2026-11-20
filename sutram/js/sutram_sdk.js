@@ -4,10 +4,9 @@ import { LitElement, html } from 'lit';
 import { createStore } from 'zustand/vanilla';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { physics } from 'sutram-chassis';
-const { getEventPath, getEventTarget, COLUMN_UNIT_PX, WIDE_CARD_MIN_PX } = physics;
-export { getEventPath, getEventTarget };
-export const SUTRAM_COLUMN_UNIT_PX = COLUMN_UNIT_PX || 360;
-export const SUTRAM_WIDE_CARD_MIN_PX = WIDE_CARD_MIN_PX || (SUTRAM_COLUMN_UNIT_PX * 2);
+const { getEventPath, getEventTarget, COLUMN_UNIT_PX, BAND_QUERY, COLUMN_BANDS, columnBandOf, columnCountFor, findColumnContainer, observeColumnBand } = physics;
+export { getEventPath, getEventTarget, BAND_QUERY, COLUMN_BANDS, columnBandOf, columnCountFor, findColumnContainer, observeColumnBand };
+export const SUTRAM_COLUMN_UNIT_PX = COLUMN_UNIT_PX;
 import { shallowEqual, coalescedAsync, slugify, debounce } from './utils.js';
 function _cloneInitialValue(val) {
     if (val instanceof Set) return new Set(val);
@@ -540,25 +539,7 @@ export const SutramContextMixin = (SuperClass) => class extends SuperClass {
         try { unsubFn(); } catch (_) {}
     }
     resolveAssignedSpatialContainer(selector = '.spatial-col, [data-spatial-boundary]') {
-        let cur = this;
-        const visited = new Set();
-        while (cur && !visited.has(cur)) {
-            visited.add(cur);
-            if (cur !== this && typeof cur.matches === 'function' && cur.matches(selector)) {
-                return cur;
-            }
-            if (cur.assignedSlot) {
-                cur = cur.assignedSlot;
-                continue;
-            }
-            if (cur.parentElement) {
-                cur = cur.parentElement;
-                continue;
-            }
-            const root = typeof cur.getRootNode === 'function' ? cur.getRootNode() : null;
-            cur = (root && root.host) ? root.host : null;
-        }
-        return this.parentElement || null;
+        return findColumnContainer(this, selector) || this.parentElement || null;
     }
     observeAssignedContainer(callback, selector = '.spatial-col, [data-spatial-boundary]') {
         if (typeof callback !== 'function') return () => {};
@@ -1698,15 +1679,22 @@ setStatus: (msg, timeout = 3000, isError = false) => {
                 set({ lastUsed: { ...prev, [key]: variantId } });
             }
         }), { localSync: ['lastUsed'], scope: 'global' });
+// The diff viewer's last chosen mode and wrap, remembered on this device across diffs and sessions.
+export const DiffViewStore = createSutramStore('DiffView', (set) => ({
+    mode: 'auto',
+    wrap: 'auto',
+    setMode: (mode) => set({ mode }),
+    setWrap: (wrap) => set({ wrap })
+}), { localSync: ['mode', 'wrap'], scope: 'global' });
 const _layoutBus = (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel('sutram_layout_bus') : null;
 
 export function canUseMultiWindowPopout() {
     if (typeof window === 'undefined') return false;
     if (new URLSearchParams(window.location.search).get('popout') === 'true') return false;
     if (window.navigator?.standalone === true) return false;
+    // A device question, not a layout one: a phone (touch pointer, room for one column) cannot hold a second window.
     const isCoarsePointer = window.matchMedia?.('(pointer: coarse)').matches;
-    const isCompactScreen = window.innerWidth < 768;
-    if (isCoarsePointer && isCompactScreen) return false;
+    if (isCoarsePointer && columnBandOf(window.innerWidth).capability === 1) return false;
     return true;
 }
 export const LayoutStore = createSutramStore('Layout', {
@@ -1817,6 +1805,13 @@ export const LayoutStore = createSutramStore('Layout', {
             [column]: { ...state.columns[column], pinned: [...state.columns[column].pinned, entity] } 
         }
     })),
+    movePinToFront: (column, entityId) => LayoutStore.setState((state) => {
+        const colState = state.columns[column];
+        const pinned = colState?.pinned || [];
+        const idx = pinned.findIndex(e => e.id === entityId);
+        if (idx <= 0) return {};
+        return { columns: { ...state.columns, [column]: { ...colState, pinned: [pinned[idx], ...pinned.slice(0, idx), ...pinned.slice(idx + 1)] } } };
+    }),
     unpinFromColumn: (column, entityId) => {
         let targetReturnCol = column;
         LayoutStore.setState((state) => {
@@ -1918,7 +1913,7 @@ export const LayoutStore = createSutramStore('Layout', {
     setUserCapacity: (cap) => {
         const cleanCap = Math.min(3, Math.max(1, Number(cap) || 3));
         const maxViewportCap = (typeof window !== 'undefined' && window.innerWidth)
-            ? Math.min(3, Math.max(1, Math.floor(window.innerWidth / SUTRAM_COLUMN_UNIT_PX)))
+            ? columnCountFor(window.innerWidth)
             : 3;
         LayoutStore.setState({
             userCapacity: cleanCap,
@@ -2249,7 +2244,7 @@ export const LayoutStore = createSutramStore('Layout', {
     localSync: ['columns', 'focusHistory', 'capacity', 'userCapacity', 'mobileViewportIndex', 'layoutRatios'],
     urlParser: (_hash, hydratedState) => {
         if (typeof window === 'undefined' || !window.innerWidth) return null;
-        const maxCap = Math.min(3, Math.max(1, Math.floor(window.innerWidth / SUTRAM_COLUMN_UNIT_PX)));
+        const maxCap = columnCountFor(window.innerWidth);
         const st = hydratedState || window.Sutram?.stores?.Layout?.getState?.();
         const desiredCap = st?.userCapacity || st?.capacity || 3;
         const clampedCap = Math.min(desiredCap, maxCap);

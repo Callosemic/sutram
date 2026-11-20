@@ -1,5 +1,6 @@
 import { html, css } from 'lit';
 import { YenvuiBase } from './yenvui-base.js';
+import { BAND_QUERY } from './physics.js';
 
 export class YenvuiCollapsible extends YenvuiBase {
     static properties = {
@@ -133,7 +134,7 @@ export class YenvuiCollapsible extends YenvuiBase {
         :host([flush]) .content {
             padding: 0;
         }
-        @container (max-width: 480px) {
+        @container ${BAND_QUERY.compact} {
             :host { margin-bottom: 0 !important; }
             .header, :host(:first-child) .header, :host(:last-child:not([open])) .header, :host([open]) .header {
                 margin: 0 !important;
@@ -164,7 +165,7 @@ export class YenvuiCollapsible extends YenvuiBase {
         :host([data-theme="e-ink"][open]) .header {
             border-bottom: 2px solid #000000;
         }
-        @container (max-width: 480px) {
+        @container ${BAND_QUERY.compact} {
             :host([data-theme="e-ink"]) .header,
             :host([data-theme="e-ink"]:first-child) .header,
             :host([data-theme="e-ink"]:last-child:not([open])) .header,

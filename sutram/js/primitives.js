@@ -1,7 +1,7 @@
 // sutram/js/primitives.js
 // Pure Agnostic Presentation Primitives
 import { LitElement, html, css } from 'lit';
-import { SutramElement, SutramContextMixin, SelectionStore, ToastStore, EnvironmentStore, VariantDefaultStore, ExtensionRegistry, resolveSelectionEntityType } from './sutram_sdk.js';
+import { BAND_QUERY, columnBandOf, DiffViewStore, SutramElement, SutramContextMixin, SelectionStore, ToastStore, EnvironmentStore, VariantDefaultStore, ExtensionRegistry, resolveSelectionEntityType } from './sutram_sdk.js';
 import * as Chassis from 'sutram-chassis';
 import { sharedStyles } from './shared_styles.js';
 import { buildFileTree, resolveDirectoryState, fuzzyFilterObjects, SutramWorker } from './utils.js';
@@ -169,7 +169,7 @@ export class SutramVirtualList extends LitElement {
         :host([flush]) lit-virtualizer {
             padding: 0;
         }
-        @container (max-width: 480px) {
+        @container ${BAND_QUERY.compact} {
             lit-virtualizer {
                 padding: 0;
             }
@@ -195,7 +195,7 @@ export class SutramVirtualList extends LitElement {
             --card-content-visibility: visible;
             --card-contain-intrinsic-size: none;
         }
-        @container (max-width: 480px) {
+        @container ${BAND_QUERY.compact} {
             lit-virtualizer > * {
                 width: 100% !important;
                 max-width: 100% !important;
@@ -644,7 +644,7 @@ export class SutramSelectionTray extends SutramElement {
             const hostCol = this.resolveAssignedSpatialContainer('.spatial-col, [data-spatial-boundary]');
             colW = hostCol?.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1024);
         }
-        this._compactChip = colW > 0 && colW < 480;
+        this._compactChip = colW > 0 && columnBandOf(colW).compact;
     }
 
     connectedCallback() {
@@ -2634,7 +2634,16 @@ export class SutramReportProjection extends SutramElement {
 }
 customElements.define('sutram-report-projection', SutramReportProjection);
 // 17. Synchronized Dual-Box & Interleaved Diff Viewer
-export class SutramDiffViewer extends SutramContextMixin(YenvuiDiffViewer) {}
+export class SutramDiffViewer extends SutramContextMixin(YenvuiDiffViewer) {
+    connectedCallback() {
+        super.connectedCallback();
+        const apply = (st) => { this.mode = st.mode || 'auto'; this.wrap = st.wrap || 'auto'; };
+        apply(DiffViewStore.getState());
+        this.subscribe(DiffViewStore, st => ({ mode: st.mode, wrap: st.wrap }), apply);
+        this.registerGlobalListener('yenvui-diff-mode-changed', this, (e) => DiffViewStore.getState().setMode(e.detail?.mode || 'auto'));
+        this.registerGlobalListener('yenvui-diff-wrap-changed', this, (e) => DiffViewStore.getState().setWrap(e.detail?.wrap || 'auto'));
+    }
+}
 customElements.define('sutram-diff-viewer', SutramDiffViewer);
 
 // 18. Declarative Sub-Tab Action & Bulk Selection Menu

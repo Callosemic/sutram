@@ -36,7 +36,7 @@ export class SutramToggle extends bridgeInputEvents(Toggle) {}
 _safeDefine('sutram-toggle', SutramToggle);
 
 import { html, css } from 'lit';
-import { SutramElement } from './sutram_sdk.js';
+import { SutramElement, BAND_QUERY } from './sutram_sdk.js';
 import { sharedStyles } from './shared_styles.js';
 
 export class SutramCombobox extends SutramElement {
@@ -351,7 +351,7 @@ export class SutramTargetBinding extends SutramElement {
             min-width: 0;
             width: 100%;
         }
-        @media (max-width: 520px) {
+        @container ${BAND_QUERY.narrow} {
             .binding-grid {
                 grid-template-columns: 1fr;
             }

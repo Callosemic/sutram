@@ -20,6 +20,8 @@ def check_yenvui_rules():
     min_width_pattern = re.compile(r'min-width:\s*0')
     observer_pattern = re.compile(r'new\s+ResizeObserver')
     disconnect_pattern = re.compile(r'disconnectedCallback\s*\(\s*\)[\s\S]*?\.disconnect\(\)')
+    # A helper that is not a component (observeColumnBand) hands its caller a stop function that disconnects.
+    stop_fn_disconnect_pattern = re.compile(r'return\s*\(\)\s*=>\s*\{[\s\S]{0,400}?\.disconnect\(\)')
     inner_html_pattern = re.compile(r'\.innerHTML\s*=')
     body_overflow_pattern = re.compile(r'document\.body\.style\.overflow\s*=')
     upward_kernel_leak_pattern = re.compile(r'\bsutram\b|sutram[-:]|\bExtensionRegistry\b', re.IGNORECASE)
@@ -68,7 +70,7 @@ def check_yenvui_rules():
                     "Body flex/grid layout container lacks 'min-width: 0' blowout protection."
                 )
 
-        if observer_pattern.search(content) and not disconnect_pattern.search(content):
+        if observer_pattern.search(content) and not disconnect_pattern.search(content) and not stop_fn_disconnect_pattern.search(content):
             report_violation(
                 "RESIZE_OBSERVER_CLEANUP",
                 filepath,

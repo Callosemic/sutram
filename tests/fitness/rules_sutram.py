@@ -16,6 +16,14 @@ def check_sutram_rules():
     impure_render_pattern = re.compile(r"render\s*\(\s*\)\s*[{]\s*this\._rebuildMenu\s*\(")
     sutram_inline_style_pattern = re.compile(r"<sutram-[a-z0-9-]+\b[^>]*\bstyle\s*=")
     legacy_shell_selector_pattern = re.compile(r"\b(?:top-utility-row|mobile-dots-wrapper|desktop-dots-wrapper)\b")
+    # Column bands (docs/models/column_bands.md in insetu): widths live only in yenvui/js/physics.js.
+    raw_band_width_pattern = re.compile(
+        r'@(?:container|media)\b[^{]*?\d+(?:\.\d+)?(?:px|rem|em)\b'
+        r'|matchMedia\([^)]*width'
+        r'|\b(?:innerWidth|clientWidth|offsetWidth|width|colW|refWidth|w)\s*[<>]=?\s*\d{3,}\b'
+        r'|\b\d{3,}\s*[<>]=?\s*(?:innerWidth|clientWidth|offsetWidth|width|colW|refWidth|w)\b'
+        r'|Math\.floor\([^)]*COLUMN_UNIT_PX'
+    )
     declared_properties = load_declared_properties(PROJECT_ROOT)
 
     for filepath in collect_unique_files([SUTRAM_DIR / "js", YENVUI_DIR / "js"], [".js"]):
@@ -73,6 +81,13 @@ def check_sutram_rules():
                     filepath,
                     idx,
                     "Retired two-row shell selector ('top-utility-row', 'mobile-dots-wrapper', or 'desktop-dots-wrapper') detected."
+                )
+            if filepath.name != "physics.js" and raw_band_width_pattern.search(line):
+                report_violation(
+                    "RAW_BAND_WIDTH_BAN",
+                    filepath,
+                    idx,
+                    "Raw width breakpoint detected. Adapt to the column band instead (BAND_QUERY in CSS, columnBandOf / observeColumnBand in JS); widths live only in yenvui/js/physics.js."
                 )
             if "sutram" in filepath.parts and relative_yenvui_import_pattern.search(line):
                 report_violation(

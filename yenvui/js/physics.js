@@ -1,15 +1,110 @@
 // sutram/yenvui/js/physics.js
+import { unsafeCSS } from 'lit';
 
 /**
 * Centralized event path resolution helper. Handles shadow DOM piercing,
 * composedPath fallbacks, and synthetic events safely.
 */
+// Column bands: the only widths any component may adapt to (see the column-band model and ADR-0036):
+// the column unit decides how much layout fits; the compact threshold only saves horizontal room.
 export const COLUMN_UNIT_PX = 360;
-export const WIDE_CARD_MIN_PX = COLUMN_UNIT_PX * 2;
+export const COMPACT_MAX_PX = 384;
+export const COLUMN_CONTAINER_NAME = 'yv-band';
+export const SPATIAL_BOUNDARY_SELECTOR = '.spatial-col, [data-spatial-boundary]';
+// Band containers: the spatial boundaries plus panes that divide a column (a layout's sidebar). Popovers still clamp to the boundary.
+export const BAND_CONTAINER_SELECTOR = `${SPATIAL_BOUNDARY_SELECTOR}, [data-band-container]`;
+export const COLUMN_BANDS = Object.freeze([
+    Object.freeze({ name: 'narrow', minPx: 0, maxPx: COLUMN_UNIT_PX * 2, capability: 1 }),
+    Object.freeze({ name: 'medium', minPx: COLUMN_UNIT_PX * 2, maxPx: COLUMN_UNIT_PX * 3, capability: 2 }),
+    Object.freeze({ name: 'wide', minPx: COLUMN_UNIT_PX * 3, maxPx: Infinity, capability: 3 })
+]);
+const _q = (cond) => unsafeCSS(`${COLUMN_CONTAINER_NAME} ${cond}`);
+/** Container-query conditions for the bands: `@container ${BAND_QUERY.narrow} { ... }`. Each includes its minimum, not its maximum. */
+export const BAND_QUERY = Object.freeze({
+    compact: _q(`(width < ${COMPACT_MAX_PX}px)`),
+    narrow: _q(`(width < ${COLUMN_BANDS[1].minPx}px)`),
+    mediumUp: _q(`(width >= ${COLUMN_BANDS[1].minPx}px)`),
+    belowWide: _q(`(width < ${COLUMN_BANDS[2].minPx}px)`),
+    wide: _q(`(width >= ${COLUMN_BANDS[2].minPx}px)`)
+});
+/** The band of a column (or window) of this width: { band, capability, compact }. */
+export function columnBandOf(widthPx) {
+    const w = Math.max(0, Number(widthPx) || 0);
+    const entry = COLUMN_BANDS.find(b => w >= b.minPx && w < b.maxPx) || COLUMN_BANDS[0];
+    return { band: entry.name, capability: entry.capability, compact: entry.name === 'narrow' && w < COMPACT_MAX_PX };
+}
+/**
+ * How many columns the shell shows at this window width: the count switches halfway between capabilities
+ * (1.5 and 2.5 units). The count depends only on the width, so it can only move in the direction of a resize.
+ */
+export function columnCountFor(widthPx, maxCount = 3) {
+    const w = Math.max(0, Number(widthPx) || 0);
+    const cap = Math.max(1, Math.min(3, Number(maxCount) || 3));
+    return Math.max(1, Math.min(cap, Math.floor(w / COLUMN_UNIT_PX + 0.5)));
+}
+/** The column, window or shell an element sits in, walking out through slots and shadow roots. */
+export function findColumnContainer(el, selector = BAND_CONTAINER_SELECTOR) {
+    let cur = el;
+    const visited = new Set();
+    while (cur && !visited.has(cur)) {
+        visited.add(cur);
+        if (cur !== el && typeof cur.matches === 'function' && cur.matches(selector)) return cur;
+        if (cur.assignedSlot) { cur = cur.assignedSlot; continue; }
+        if (cur.parentElement) { cur = cur.parentElement; continue; }
+        const root = typeof cur.getRootNode === 'function' ? cur.getRootNode() : null;
+        cur = (root && root.host) ? root.host : null;
+    }
+    return null;
+}
+/** The band of the container an element sits in; outside any column, the window's width. */
+export function columnBandForElement(el) {
+    const container = findColumnContainer(el);
+    const width = container ? container.clientWidth : (typeof window !== 'undefined' ? window.innerWidth : 0);
+    return { ...columnBandOf(width), width, container };
+}
+/** Calls back with the element's column band whenever its container resizes or it moves to another one. Returns a stop function. */
+export function observeColumnBand(el, callback) {
+    if (typeof callback !== 'function') return () => {};
+    let observed = null;
+    let lastKey = null;
+    let stopped = false;
+    let rafId = null;
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => notify()) : null;
+    const notify = () => {
+        if (stopped) return;
+        const info = columnBandForElement(el);
+        if (ro && info.container !== observed) {
+            if (observed) { try { ro.unobserve(observed); } catch (_) {} }
+            observed = info.container;
+            if (observed) { try { ro.observe(observed); } catch (_) {} }
+        }
+        const key = `${info.band}|${info.compact}|${info.width}`;
+        if (key === lastKey) return;
+        lastKey = key;
+        callback(info);
+    };
+    if (typeof window !== 'undefined') window.addEventListener('resize', notify);
+    notify();
+    if (typeof requestAnimationFrame !== 'undefined') {
+        rafId = requestAnimationFrame(() => {
+            rafId = null;
+            notify();
+        });
+    }
+    return () => {
+        stopped = true;
+        if (rafId !== null && typeof cancelAnimationFrame !== 'undefined') {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+        }
+        if (ro) { try { ro.disconnect(); } catch (_) {} }
+        if (typeof window !== 'undefined') window.removeEventListener('resize', notify);
+    };
+}
 
 export const PHYSICS = Object.freeze({
     COLUMN_UNIT_PX,
-    WIDE_CARD_MIN_PX,
+    COMPACT_MAX_PX,
     EDGE_START_BEZEL_PX: 20,
     EDGE_MOVE_BEZEL_PX: 28,
     AXIS_LOCK_THRESHOLD_PX: 5,
@@ -125,7 +220,7 @@ export function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) {
 
     if (typeof popoverEl.toggleAttribute === 'function') {
         const refWidth = Number(colRect?.width) || (typeof window !== 'undefined' ? window.innerWidth : 1024);
-        popoverEl.toggleAttribute('data-compact-slugs', refWidth > 0 && refWidth < 520);
+        popoverEl.toggleAttribute('data-compact-slugs', refWidth > 0 && columnBandOf(refWidth).compact);
     }
 
     if (mode === 'column-drawer') {

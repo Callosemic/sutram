@@ -1,6 +1,6 @@
 import { html, css } from 'lit';
 import { YenvuiBase } from './yenvui-base.js';
-import { YenvuiGestureController, getEventPath, WIDE_CARD_MIN_PX } from './physics.js';
+import { YenvuiGestureController, getEventPath, observeColumnBand, BAND_QUERY } from './physics.js';
 
 export class YenvuiCard extends YenvuiBase {
     static properties = {
@@ -62,8 +62,8 @@ export class YenvuiCard extends YenvuiBase {
             box-shadow: var(--card-box-shadow, 0 1px 3px rgba(0,0,0,0.05));
             transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
         }
-        /* Switch to edge-to-edge flush mode when the container column becomes narrow */
-        @container (max-width: 480px) {
+        /* Compact columns go edge to edge */
+        @container ${BAND_QUERY.compact} {
             .card-wrapper {
                 border-left-width: 0 !important;
                 border-right-width: 0 !important;
@@ -218,7 +218,7 @@ export class YenvuiCard extends YenvuiBase {
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        @container (max-width: 480px) {
+        @container ${BAND_QUERY.narrow} {
             .card-detail-main { display: none; }
         }
         .action-grip-rail {
@@ -545,16 +545,16 @@ export class YenvuiCard extends YenvuiBase {
     set hasActions(val) {
         this._hasActions = !!val;
     }
-    _updateCardWidthTier(widthPx) {
-        const w = Number(widthPx) || this.offsetWidth || this.clientWidth || 0;
-        const isWide = w >= WIDE_CARD_MIN_PX;
+    /** Width tier from the card's column band (medium and up shows actions inline), never the card's own box. */
+    _updateCardWidthTier(bandInfo) {
+        const isWide = (bandInfo?.capability || 1) >= 2;
         if (this._wideCard !== isWide) {
             this._wideCard = isWide;
             if (isWide && this._overlayActive) {
                 this._overlayActive = false;
             }
             this.dispatchEvent(new CustomEvent('yenvui-card-tier-changed', {
-                detail: { wideCard: isWide, width: w },
+                detail: { wideCard: isWide, width: bandInfo?.width ?? null },
                 bubbles: true,
                 composed: true
             }));
@@ -568,24 +568,15 @@ export class YenvuiCard extends YenvuiBase {
         this.registerOutsideClick(() => {
             if (this._overlayActive) this._overlayActive = false;
         });
-        if (typeof ResizeObserver !== 'undefined') {
-            this._cardResizeObserver = new ResizeObserver((entries) => {
-                for (const entry of entries) {
-                    const w = entry.contentRect ? entry.contentRect.width : this.clientWidth;
-                    this._updateCardWidthTier(w);
-                }
-            });
-            this._cardResizeObserver.observe(this);
-        }
-        this._updateCardWidthTier(this.clientWidth);
+        this._stopBandObserver = observeColumnBand(this, (info) => this._updateCardWidthTier(info));
     }
     disconnectedCallback() {
         super.disconnectedCallback();
         this.removeEventListener('focusout', this._focusOutListener);
         document.removeEventListener('yenvui-overlay-opened', this._overlayListener);
-        if (this._cardResizeObserver) {
-            this._cardResizeObserver.disconnect();
-            this._cardResizeObserver = null;
+        if (this._stopBandObserver) {
+            this._stopBandObserver();
+            this._stopBandObserver = null;
         }
         if (this._gestureController && typeof this._gestureController.abort === 'function') {
             this._gestureController.abort();

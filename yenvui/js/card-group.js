@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'lit';
-import { YenvuiGestureController, getDeepElementFromPoint, getEventPath } from './physics.js';
+import { YenvuiGestureController, getDeepElementFromPoint, getEventPath, BAND_QUERY } from './physics.js';
 
 export class YenvuiCardGroup extends LitElement {
     static properties = {
@@ -70,7 +70,7 @@ export class YenvuiCardGroup extends LitElement {
             background: color-mix(in srgb, var(--intent-primary) 15%, var(--input-bg));
             color: var(--intent-primary);
         }
-        @container (max-width: 480px) {
+        @container ${BAND_QUERY.compact} {
             .more-handle,
             .collapse-handle {
                 width: 100% !important;

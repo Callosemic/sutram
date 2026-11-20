@@ -1,5 +1,6 @@
 import { html, css } from 'lit';
 import { YenvuiBase } from './yenvui-base.js';
+import { BAND_QUERY } from './physics.js';
 
 export class YenvuiBoard extends YenvuiBase {
     static styles = css`
@@ -10,12 +11,12 @@ export class YenvuiBoard extends YenvuiBase {
             gap: 15px; 
             width: 100%; 
         }
-        @container (max-width: 1100px) {
+        @container ${BAND_QUERY.belowWide} {
             :host { 
                 grid-template-columns: repeat(2, 1fr); 
             }
         }
-        @container (max-width: 700px) {
+        @container ${BAND_QUERY.narrow} {
             :host { 
                 grid-template-columns: 1fr; 
                 gap: 25px; 
@@ -58,7 +59,7 @@ export class YenvuiColumn extends YenvuiBase {
             margin-bottom: 10px; 
             color: var(--col-accent); 
         }
-        @container (max-width: 700px) {
+        @container ${BAND_QUERY.narrow} {
             :host { 
                 background: transparent; 
                 padding: 0; 

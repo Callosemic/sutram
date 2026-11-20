@@ -1,6 +1,6 @@
 // sutram/js/app_shell.js (Compiled Vendor Artifact)
 import { html, css } from 'lit';
-import { SutramElement, ExtensionRegistry, LayoutStore, StoreRegistry, SUTRAM_COLUMN_UNIT_PX } from './sutram_sdk.js';
+import { SutramElement, ExtensionRegistry, LayoutStore, StoreRegistry, columnCountFor } from './sutram_sdk.js';
 import { computeFitActionCount } from './primitives.js';
 import { sharedStyles } from './shared_styles.js';
 import { debounce } from './utils.js';
@@ -72,6 +72,7 @@ export class SutramAppShell extends SutramElement {
             overflow: hidden;
             background: var(--bg);
             overscroll-behavior: none;
+            container: yv-band / inline-size; /* outside any column, the shell's width is the band */
         }
         .shell-container {
             flex: 1;
@@ -146,19 +147,27 @@ export class SutramAppShell extends SutramElement {
             display: flex !important;
             flex-direction: column !important;
             overflow: hidden !important;
-            border-right: 1px solid var(--border);
-            container-type: inline-size;
+            container: yv-band / inline-size; /* the column band container: no border, so its width is its share */
             overscroll-behavior-x: none;
             width: var(--col-width, 33.333%) !important;
             left: var(--col-left, 0%) !important;
             transition: width 0.32s cubic-bezier(0.2, 0.9, 0.2, 1), left 0.32s cubic-bezier(0.2, 0.9, 0.2, 1);
         }
 
-        :host([data-viewport="mobile"]) .spatial-col, [data-viewport="mobile"] .spatial-col {
-            border-right: none;
+        .spatial-col::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 1px;
+            background: var(--border);
+            pointer-events: none;
+            z-index: 20;
         }
-        .spatial-col:last-child {
-            border-right: none !important;
+        :host([data-viewport="mobile"]) .spatial-col::after, [data-viewport="mobile"] .spatial-col::after,
+        .spatial-col:last-child::after {
+            display: none;
         }
         .spatial-col.is-focused {
             z-index: 10;
@@ -190,51 +199,32 @@ export class SutramAppShell extends SutramElement {
             align-items: stretch;
             overflow: hidden;
         }
-        .active-tab-dropdown {
+        .tab-menu-dropdown {
             display: inline-flex;
             align-items: stretch;
             height: 100%;
-            min-width: 44px;
-            max-width: 100%;
-            flex: 0 1 auto;
-            overflow: hidden;
+            flex: 0 0 auto;
         }
-        .active-tab-trigger {
+        .tab-menu-trigger {
             touch-action: none;
             user-select: none;
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            justify-content: center;
             height: 100%;
             min-height: 44px;
-            min-width: 44px;
-            max-width: 100%;
-            padding: 0 12px;
+            width: 44px;
+            padding: 0;
             margin: 0;
             border: none;
-            border-bottom: 2px solid var(--active-sub-intent, var(--intent-primary));
             border-radius: 0;
-            background: color-mix(in srgb, var(--active-sub-intent, var(--intent-primary)) 18%, transparent);
-            color: color-mix(in srgb, var(--active-sub-intent, var(--intent-primary)) 28%, var(--text));
-            font-size: 0.9rem;
-            font-weight: 700;
-            cursor: pointer;
-            box-sizing: border-box;
-            overflow: hidden;
-            transition: background 0.15s ease, color 0.15s ease;
-        }
-        .active-tab-trigger:hover {
-            background: color-mix(in srgb, var(--active-sub-intent, var(--intent-primary)) 28%, var(--bg-hover));
-        }
-        :host-context([data-theme="e-ink"]) .active-tab-trigger {
             background: transparent;
-            color: var(--text);
+            color: var(--text-muted);
+            cursor: pointer;
         }
-        .active-tab-label {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            min-width: 0;
+        .tab-menu-trigger:hover {
+            color: var(--text);
+            background: var(--bg-hover);
         }
         .inline-tab-btn {
             touch-action: none;
@@ -264,7 +254,27 @@ export class SutramAppShell extends SutramElement {
             color: var(--text);
             background: var(--bg-hover);
         }
-        .active-tab-trigger sutram-icon,
+        /* The active tab keeps its place and its weight (bold would widen it and re-fit the row); only the highlight marks it, never a tint on its text or icon. */
+        .inline-tab-btn.active {
+            color: var(--text);
+            border-bottom-color: var(--active-sub-intent, var(--intent-primary));
+            background: color-mix(in srgb, var(--active-sub-intent, var(--intent-primary)) 18%, transparent);
+            flex-shrink: 1;
+            min-width: 44px;
+            overflow: hidden;
+        }
+        .inline-tab-btn.active:hover {
+            background: color-mix(in srgb, var(--active-sub-intent, var(--intent-primary)) 28%, var(--bg-hover));
+        }
+        :host-context([data-theme="e-ink"]) .inline-tab-btn.active {
+            background: transparent;
+        }
+        .inline-tab-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0;
+        }
         .inline-tab-btn sutram-icon {
             flex-shrink: 0;
         }
@@ -328,7 +338,7 @@ export class SutramAppShell extends SutramElement {
         }
         this._dragState.active = true;
         if (this.shadowRoot) {
-            this.shadowRoot.querySelectorAll('.active-tab-dropdown').forEach(dd => {
+            this.shadowRoot.querySelectorAll('.tab-menu-dropdown').forEach(dd => {
                 if (dd.open) dd.open = false;
             });
         }
@@ -553,6 +563,18 @@ export class SutramAppShell extends SutramElement {
             this.requestUpdate();
         }
     }
+    /** Persist "the active tab moves to the front" outside render, once per tab. */
+    _queueMoveTabToFront(colId, subId) {
+        const key = `${colId}:${subId}`;
+        if (this._pendingFrontMove === key) return;
+        this._pendingFrontMove = key;
+        queueMicrotask(() => {
+            this._pendingFrontMove = null;
+            const layout = window.Sutram?.stores?.Layout?.getState();
+            const pin = layout?.columns?.[colId]?.pinned?.find(p => pinMatchesSlot(p, subId));
+            if (pin) layout.movePinToFront?.(colId, pin.id);
+        });
+    }
     _isProjectionDirty(subId) {
         const registry = window.ExtensionRegistry || ExtensionRegistry;
         return Boolean(subId && registry?.executeUIHook && registry.executeUIHook('sutram:is-projection-dirty', subId));
@@ -614,7 +636,7 @@ export class SutramAppShell extends SutramElement {
             });
             const syncViewportCapacity = () => {
                 const width = window.innerWidth;
-                const maxCapacity = Math.min(3, Math.max(1, Math.floor(width / SUTRAM_COLUMN_UNIT_PX)));
+                const maxCapacity = columnCountFor(width);
                 const storeState = LayoutStore.getState();
                 if (storeState) {
                     const currentCap = storeState.capacity || 3;
@@ -995,7 +1017,7 @@ export class SutramAppShell extends SutramElement {
                         this._isPanningTrack = true;
                         if (track) track.style.transition = 'none';
                         if (this.shadowRoot) {
-                            this.shadowRoot.querySelectorAll('.active-tab-dropdown').forEach(dd => {
+                            this.shadowRoot.querySelectorAll('.tab-menu-dropdown').forEach(dd => {
                                 if (dd.open) dd.open = false;
                             });
                         }
@@ -1254,20 +1276,15 @@ export class SutramAppShell extends SutramElement {
                         }
                         const isLastVisibleCol = idx === lastVisibleColIdx;
                         const activeIntent = activeSubInCol?.intent || 'primary';
-                        const activeIcon = activeSubInCol?.icon || 'plus';
                         const activeDisplayLabel = activeSubInCol ? this._formatTabLabel(activeSubInCol) : 'Open tab';
                         const tabDropdownItems = this._buildColumnTabDropdownItems(col, colSubSlots, activeSubInCol, primarySlots, subSlots);
 
-                        const otherTabs = activeSubInCol
-                            ? colSubSlots.filter(s => !pinMatchesSlot(s, activeSubInCol.id))
-                            : [];
+                        // Tabs keep their order; only the highlight moves. The active tab is always shown:
+                        // if it became active while hidden (from the tab menu, a link, a file opened), it moves to the front.
                         const tabsAreaWidth = this._colTabsWidths?.[col.id] || 0;
-                        const activeDropdownEstWidth = activeSubInCol
-                            ? Math.min(200, Math.max(88, activeDisplayLabel.length * 7.5 + 54))
-                            : 112;
-                        const availForInlineTabs = Math.max(0, tabsAreaWidth - activeDropdownEstWidth - 6);
-                        const inlineEstimatedWidths = otherTabs.map(t => Math.max(44, this._formatTabLabel(t).length * 7.5 + 42));
-                        const clampKey = `${tabsAreaWidth}:${activeDisplayLabel}:${otherTabs.map(t => `${t.id}:${this._formatTabLabel(t)}`).join(',')}`;
+                        const availForInlineTabs = Math.max(0, tabsAreaWidth - 44 - 6);
+                        const inlineEstimatedWidths = colSubSlots.map(t => Math.max(44, this._formatTabLabel(t).length * 7.5 + 42));
+                        const clampKey = `${tabsAreaWidth}:${colSubSlots.map(t => `${t.id}:${this._formatTabLabel(t)}`).join(',')}`;
                         if (this._lastInlineClampKeys[col.id] !== clampKey) {
                             this._lastInlineClampKeys[col.id] = clampKey;
                             this._inlineTabClampCounts[col.id] = null;
@@ -1276,11 +1293,15 @@ export class SutramAppShell extends SutramElement {
                             ? computeFitActionCount(availForInlineTabs, inlineEstimatedWidths, 0, 0, false)
                             : 0;
                         const clampVal = this._inlineTabClampCounts?.[col.id];
-                        const fitInlineCount = (clampVal !== null && clampVal !== undefined)
+                        const fitInlineCount = Math.max(activeSubInCol ? 1 : 0, (clampVal !== null && clampVal !== undefined)
                             ? Math.min(estimatedInlineFit, clampVal)
-                            : estimatedInlineFit;
+                            : estimatedInlineFit);
                         this._lastRenderedInlineCounts[col.id] = fitInlineCount;
-                        const visibleInlineTabs = otherTabs.slice(0, fitInlineCount);
+                        let visibleInlineTabs = colSubSlots.slice(0, fitInlineCount);
+                        if (activeSubInCol && !visibleInlineTabs.some(s => pinMatchesSlot(s, activeSubInCol.id))) {
+                            visibleInlineTabs = [activeSubInCol, ...colSubSlots.filter(s => !pinMatchesSlot(s, activeSubInCol.id))].slice(0, fitInlineCount);
+                            this._queueMoveTabToFront(activeSubInCol.actualSourceCol || col.id, activeSubInCol.id);
+                        }
 
                         const extraViewNodes = [];
                         if (activeSubInCol && activeSubInCol.headerActionComponent) {
@@ -1346,7 +1367,7 @@ export class SutramAppShell extends SutramElement {
                                 <!-- 2. Active Tab Dropdown + 3. Fitted Inline Open Tabs -->
                                 <div class="col-tabs-area" data-col-tabs="${col.id}">
                                     <sutram-dropdown
-                                        class="active-tab-dropdown"
+                                        class="tab-menu-dropdown"
                                         align="left"
                                         searchable
                                         ?chipRows=${true}
@@ -1355,23 +1376,16 @@ export class SutramAppShell extends SutramElement {
                                         <button
                                             slot="trigger"
                                             type="button"
-                                            class="active-tab-trigger"
-                                            title=${activeDisplayLabel}
-                                            @pointerdown=${(e) => {
-                                                const parentDd = e.currentTarget?.closest?.('sutram-dropdown');
-                                                if (activeSubInCol && !parentDd?.open) {
-                                                    this._handlePointerDown(e, activeSubInCol, activeSubInCol.actualSourceCol || col.id, 'subtab');
-                                                }
-                                            }}
+                                            class="tab-menu-trigger"
+                                            title="All tabs (${activeDisplayLabel})"
+                                            aria-label="All tabs"
                                             @click=${() => {
                                                 const targetFocusCol = activeSubInCol ? (activeSubInCol.actualSourceCol || col.id) : col.id;
                                                 if (window.Sutram?.stores?.Layout) {
                                                     window.Sutram.stores.Layout.getState().setFocusedColumn(targetFocusCol);
                                                 }
                                             }}>
-                                            <sutram-icon name="${activeIcon}" size="sm" intent="${activeIntent}"></sutram-icon>
-                                            <span class="active-tab-label">${activeDisplayLabel}</span>
-                                            <sutram-icon name="chevron-down" size="xs"></sutram-icon>
+                                            <sutram-icon name="${colSubSlots.length ? 'chevron-down' : 'plus'}" size="sm"></sutram-icon>
                                         </button>
                                     </sutram-dropdown>
 
@@ -1379,10 +1393,12 @@ export class SutramAppShell extends SutramElement {
                                         const subIntent = sub.intent || 'primary';
                                         const subIcon = sub.icon || 'component';
                                         const subLabel = this._formatTabLabel(sub);
+                                        const isActiveTab = Boolean(activeSubInCol && pinMatchesSlot(sub, activeSubInCol.id));
                                         return html`
                                             <button
                                                 type="button"
-                                                class="inline-tab-btn"
+                                                class="inline-tab-btn ${isActiveTab ? 'active' : ''}"
+                                                aria-current=${isActiveTab ? 'page' : 'false'}
                                                 title=${subLabel}
                                                 @pointerdown=${(e) => {
                                                     const now = Date.now();
@@ -1414,7 +1430,7 @@ export class SutramAppShell extends SutramElement {
                                                     this._handleSubTabClick(sub.id);
                                                 }}>
                                                 <sutram-icon name="${subIcon}" size="sm" intent="${subIntent}"></sutram-icon>
-                                                <span>${subLabel}</span>
+                                                <span class="inline-tab-label">${subLabel}</span>
                                             </button>
                                         `;
                                     })}

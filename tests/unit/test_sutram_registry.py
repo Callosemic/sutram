@@ -1179,7 +1179,9 @@ const {
     SelectionStore,
     VariantDefaultStore,
     SUTRAM_COLUMN_UNIT_PX,
-    SUTRAM_WIDE_CARD_MIN_PX
+    columnBandOf,
+    columnCountFor,
+    findColumnContainer
 } = await import('sutram/sutram_sdk.js');
 const {
     computeFitActionCount,
@@ -1190,10 +1192,107 @@ const {
 } = await import('sutram/primitives.js');
 const { YenvuiDropdown } = await import('yenvui/dropdown.js');
 
-// 0. Column unit and wide-card tier threshold constants
+// 0. Column bands: narrow below 720, medium 720 to 1080, wide from 1080; compact is narrow below 384; each band includes its minimum
 assert.equal(SUTRAM_COLUMN_UNIT_PX, 360);
-assert.equal(SUTRAM_WIDE_CARD_MIN_PX, 720);
 assert.equal(ACTION_CONFIRM_HOLD_MS, 900);
+const bandCases = [[320, 'narrow', true], [360, 'narrow', true], [375, 'narrow', true], [383.9, 'narrow', true], [384, 'narrow', false],
+    [412, 'narrow', false], [719, 'narrow', false], [720, 'medium', false], [1079, 'medium', false], [1080, 'wide', false], [2400, 'wide', false]];
+for (const [w, band, compact] of bandCases) {
+    assert.equal(columnBandOf(w).band, band, `${w}px column is ${band}`);
+    assert.equal(columnBandOf(w).compact, compact, `${w}px column compact=${compact}`);
+}
+assert.deepEqual([1, 2, 3].map(c => columnBandOf(c * 360 - 1).capability), [1, 1, 2]);
+// Column count switches halfway between capabilities (540, 900), and only moves with the resize
+assert.deepEqual([375, 539, 540, 899, 900, 1440, 3000].map(w => columnCountFor(w)), [1, 1, 2, 2, 3, 3, 3]);
+assert.equal(columnCountFor(1440, 2), 2, 'The Grid setting caps the count');
+let prevCount = columnCountFor(1500);
+for (let w = 1500; w >= 300; w -= 7) { const c = columnCountFor(w); assert.ok(c <= prevCount, `shrinking to ${w}px must never add a column`); prevCount = c; }
+for (let w = 300; w <= 1500; w += 7) { const c = columnCountFor(w); assert.ok(c >= prevCount, `growing to ${w}px must never remove a column`); prevCount = c; }
+// A card reads its column through slots and shadow roots, not its own box
+const fakeCol = { matches: (sel) => sel.includes('.spatial-col'), clientWidth: 720 };
+const fakeHost = { matches: () => false, parentElement: fakeCol };
+const fakeShadowChild = { matches: () => false, parentElement: null, getRootNode: () => ({ host: fakeHost }) };
+assert.equal(findColumnContainer(fakeShadowChild), fakeCol);
+// A pane dividing a column (a layout's sidebar) is the band container for what it holds
+const fakePane = { matches: (sel) => sel.includes('[data-band-container]'), clientWidth: 300, parentElement: fakeCol };
+const fakeSidebarCard = { matches: () => false, parentElement: fakePane };
+assert.equal(findColumnContainer(fakeSidebarCard), fakePane);
+assert.equal(columnBandOf(fakePane.clientWidth).band, 'narrow', 'Cards in a 300px sidebar keep the drawer even in a wide column');
+// Tabs keep their order; a tab that becomes active while hidden moves to the front (LayoutStore.movePinToFront)
+{
+    const { LayoutStore: TabLayout } = await import('sutram/sutram_sdk.js');
+    const saved = TabLayout.getState().columns;
+    TabLayout.setState({ columns: { ...saved, left: { pinned: [{ id: 'a' }, { id: 'b' }, { id: 'c' }], active: 'c', history: [] } } });
+    TabLayout.getState().movePinToFront('left', 'c');
+    assert.deepEqual(TabLayout.getState().columns.left.pinned.map(p => p.id), ['c', 'a', 'b']);
+    TabLayout.getState().movePinToFront('left', 'c');
+    assert.deepEqual(TabLayout.getState().columns.left.pinned.map(p => p.id), ['c', 'a', 'b'], 'Already in front: no change');
+    TabLayout.setState({ columns: saved });
+}
+// A card's tier is its column's band: inline actions from medium (a 720 px column), the drawer in narrow
+const { YenvuiCard } = await import('yenvui/card.js');
+const tierCard = new YenvuiCard();
+let tierEvents = 0;
+tierCard.dispatchEvent = () => { tierEvents++; return true; };
+tierCard._updateCardWidthTier(columnBandOf(720));
+assert.equal(tierCard._wideCard, true, 'A card in a 720px (medium) column shows its actions inline');
+tierCard._updateCardWidthTier(columnBandOf(719));
+assert.equal(tierCard._wideCard, false, 'A card in a narrow column keeps the drawer');
+assert.equal(tierEvents, 2);
+// Diff viewer: wrap in a narrow column by default; side by side (chosen, or Auto from medium) never wraps; an explicit choice wins
+const { YenvuiDiffViewer } = await import('yenvui/diff-viewer.js');
+const dv = new YenvuiDiffViewer();
+const wrapCase = (mode, wrap, width) => { dv.mode = mode; dv.wrap = wrap; dv._columnBand = columnBandOf(width); return dv._isWrapped(); };
+assert.equal(wrapCase('auto', 'auto', 500), true);
+assert.equal(wrapCase('auto', 'auto', 720), false, 'Auto in a medium column is side by side, which never wraps');
+assert.equal(wrapCase('interleaved', 'auto', 720), false);
+assert.equal(wrapCase('interleaved', 'on', 1200), true);
+assert.equal(wrapCase('split-stacked', 'off', 500), false);
+assert.equal(wrapCase('split-side', 'on', 500), false);
+let wrapEvent = null;
+dv.dispatchEvent = (ev) => { wrapEvent = ev; return true; };
+dv.mode = 'interleaved'; dv.wrap = 'auto'; dv._columnBand = columnBandOf(500);
+dv._toggleWrap();
+assert.equal(dv.wrap, 'off');
+assert.equal(wrapEvent.type, 'yenvui-diff-wrap-changed');
+assert.equal(wrapEvent.detail.wrap, 'off');
+// sutram-diff-viewer opens the way the last diff was left (DiffViewStore, device-local)
+const { DiffViewStore } = await import('sutram/sutram_sdk.js');
+DiffViewStore.getState().setMode('interleaved');
+DiffViewStore.getState().setWrap('on');
+const { SutramDiffViewer } = await import('sutram/primitives.js');
+const sdv = new SutramDiffViewer();
+sdv.connectedCallback();
+assert.equal(sdv.mode, 'interleaved');
+assert.equal(sdv.wrap, 'on');
+sdv.dispatchEvent(new CustomEvent('yenvui-diff-mode-changed', { detail: { mode: 'split-stacked' } }));
+assert.equal(DiffViewStore.getState().mode, 'split-stacked', 'Choosing a mode is remembered for the next diff');
+sdv.disconnectedCallback();
+
+// Popover compact-slugs adapts strictly to the 384px compact threshold (360px -> true, 420px -> false)
+{
+    const { anchorTopLayerPopover: anchorPopover } = await import('yenvui/physics.js');
+    const slugAttrs = new Map();
+    const popEl = {
+        style: {},
+        offsetWidth: 260,
+        offsetHeight: 140,
+        toggleAttribute(name, force) { slugAttrs.set(name, Boolean(force)); }
+    };
+    const colBox = {
+        classList: { contains: (c) => c === 'spatial-col' },
+        getBoundingClientRect: () => ({ left: 0, top: 0, right: 360, bottom: 800, width: 360, height: 800 })
+    };
+    const trigEl = {
+        parentElement: colBox,
+        getBoundingClientRect: () => ({ left: 44, top: 4, right: 88, bottom: 48, width: 44, height: 44 })
+    };
+    anchorPopover(trigEl, popEl, { mode: 'menu', align: 'left' });
+    assert.equal(slugAttrs.get('data-compact-slugs'), true, '360px column must enable data-compact-slugs');
+    colBox.getBoundingClientRect = () => ({ left: 0, top: 0, right: 420, bottom: 800, width: 420, height: 800 });
+    anchorPopover(trigEl, popEl, { mode: 'menu', align: 'left' });
+    assert.equal(slugAttrs.get('data-compact-slugs'), false, '420px narrow-but-non-compact column must not enable data-compact-slugs');
+}
 
 // 1. Fit-then-overflow across three container widths (and property invariant across arbitrary widths)
 const buttonWidths = [120, 95, 110]; // total = 120 + 6 + 95 + 6 + 110 = 337px

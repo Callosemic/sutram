@@ -1,6 +1,7 @@
 // sutram/yenvui/js/diff-viewer.js
 import { html, css } from 'lit';
 import { YenvuiBase } from './yenvui-base.js';
+import { BAND_QUERY, observeColumnBand } from './physics.js';
 import { parseDiffPayload } from './diff-utils.js';
 
 export class YenvuiDiffViewer extends YenvuiBase {
@@ -13,6 +14,8 @@ export class YenvuiDiffViewer extends YenvuiBase {
         leftTitle: { type: String },
         rightTitle: { type: String },
         mode: { type: String, reflect: true }, // 'auto' | 'split-side' | 'split-stacked' | 'interleaved'
+        wrap: { type: String }, // 'auto' (wrap in a narrow column) | 'on' | 'off'; side by side never wraps
+        _columnBand: { type: Object, state: true },
         activeLineIndex: { type: Number },
         _parsedData: { type: Object, state: true }
     };
@@ -54,6 +57,11 @@ export class YenvuiDiffViewer extends YenvuiBase {
             min-width: 0;
         }
 
+        .toolbar-controls {
+            display: inline-flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
         .mode-toggle-group {
             display: inline-flex;
             border: 1px solid var(--border);
@@ -80,7 +88,7 @@ export class YenvuiDiffViewer extends YenvuiBase {
             display: inline;
         }
 
-        @container (max-width: 520px) {
+        @container ${BAND_QUERY.compact} {
             .mode-text {
                 display: none;
             }
@@ -89,6 +97,10 @@ export class YenvuiDiffViewer extends YenvuiBase {
             }
         }
 
+        .mode-btn:disabled {
+            opacity: 0.4;
+            cursor: default;
+        }
         .mode-btn:last-child {
             border-right: none;
         }
@@ -125,7 +137,7 @@ export class YenvuiDiffViewer extends YenvuiBase {
             background: var(--bg);
         }
 
-        @container (min-width: 768px) {
+        @container ${BAND_QUERY.mediumUp} {
             :host([mode="auto"]) .diff-split-container {
                 flex-direction: row !important;
             }
@@ -185,6 +197,10 @@ export class YenvuiDiffViewer extends YenvuiBase {
             min-width: max(100%, calc(var(--diff-min-char-width, 0ch) + 64px));
             width: max-content;
         }
+        :host([wrapped]) .diff-box { white-space: pre-wrap; overflow-x: hidden; }
+        :host([wrapped]) .diff-track { min-width: 0; width: 100%; }
+        :host([wrapped]) .diff-line { height: auto; min-height: 1.45rem; align-items: flex-start; }
+        :host([wrapped]) .line-text { min-width: 0; overflow-wrap: anywhere; }
 
         .diff-line {
             display: flex;
@@ -363,6 +379,9 @@ export class YenvuiDiffViewer extends YenvuiBase {
         this.leftTitle = 'SEARCH (Expected / Original)';
         this.rightTitle = 'REPLACE (Actual / Modified)';
         this.mode = 'auto';
+        this.wrap = 'auto';
+        this._columnBand = null;
+        this._scrolledToChangeKey = null;
         this.activeLineIndex = null;
         this._parsedData = { split: { searchLines: [], replaceLines: [] }, interleaved: [], maxChars: 0 };
         this._activeScrollSource = null;
@@ -381,8 +400,14 @@ export class YenvuiDiffViewer extends YenvuiBase {
         this._momentumRafId = null;
     }
 
+    connectedCallback() {
+        super.connectedCallback();
+        this._stopBandObserver = observeColumnBand(this, (info) => { this._columnBand = info; });
+    }
+
     disconnectedCallback() {
         super.disconnectedCallback();
+        if (this._stopBandObserver) { this._stopBandObserver(); this._stopBandObserver = null; }
         if (this._scrollReleaseTimer) clearTimeout(this._scrollReleaseTimer);
         if (this._momentumRafId) cancelAnimationFrame(this._momentumRafId);
     }
@@ -601,6 +626,41 @@ export class YenvuiDiffViewer extends YenvuiBase {
             composed: true
         }));
     }
+    /** Side by side: chosen, or Auto in a medium or wide column. Its two panes scroll in step, so it never wraps. */
+    _isSideBySide() {
+        return this.mode === 'split-side' || (this.mode === 'auto' && (this._columnBand?.capability || 1) >= 2);
+    }
+    _isWrapped() {
+        if (this._isSideBySide()) return false;
+        if (this.wrap === 'on') return true;
+        if (this.wrap === 'off') return false;
+        return (this._columnBand?.band || 'narrow') === 'narrow';
+    }
+    _toggleWrap() {
+        this.wrap = this._isWrapped() ? 'off' : 'on';
+        this.dispatchEvent(new CustomEvent('yenvui-diff-wrap-changed', {
+            detail: { wrap: this.wrap },
+            bubbles: true,
+            composed: true
+        }));
+    }
+    updated(changedProperties) {
+        super.updated?.(changedProperties);
+        this.toggleAttribute('wrapped', this._isWrapped());
+        this._scrollUnifiedToFirstChange();
+    }
+    /** Unified view opens on its first change, once per diff. */
+    _scrollUnifiedToFirstChange() {
+        if (this.mode !== 'interleaved') return;
+        const lines = this._parsedData?.interleaved || [];
+        const key = `${lines.length}:${this.diffText?.length || 0}:${this.searchStr?.length || 0}:${this.replaceStr?.length || 0}`;
+        if (this._scrolledToChangeKey === key) return;
+        const box = this.shadowRoot?.getElementById('box-interleaved');
+        const first = box?.querySelector('.diff-line.added, .diff-line.removed');
+        if (!box || !first) return;
+        this._scrolledToChangeKey = key;
+        box.scrollTop = Math.max(0, first.offsetTop - Math.round(box.clientHeight / 3));
+    }
     _setMode(newMode) {
         this.mode = newMode;
         this.dispatchEvent(new CustomEvent('yenvui-diff-mode-changed', {
@@ -632,6 +692,7 @@ export class YenvuiDiffViewer extends YenvuiBase {
                 <span class="toolbar-label">
                     ${isInterleaved ? `${this.leftTitle} /${this.rightTitle} (Interleaved)` : `${this.leftTitle} ⟷${this.rightTitle}`}
                 </span>
+                <div class="toolbar-controls">
                 <div class="mode-toggle-group">
                     <button class="mode-btn ${this.mode === 'auto' ? 'active' : ''}" @click=${() => this._setMode('auto')} title="Responsive Container Split">
                         <yenvui-icon name="sparkles" size="xs"></yenvui-icon><span class="mode-text">Auto</span>
@@ -645,6 +706,12 @@ export class YenvuiDiffViewer extends YenvuiBase {
                     <button class="mode-btn ${this.mode === 'interleaved' ? 'active' : ''}" @click=${() => this._setMode('interleaved')} title="Interleaved Unified Lines">
                         <yenvui-icon name="align-justify" size="xs"></yenvui-icon><span class="mode-text">Unified</span>
                     </button>
+                </div>
+                <div class="mode-toggle-group">
+                    <button class="mode-btn ${this._isWrapped() ? 'active' : ''}" ?disabled=${this._isSideBySide()} @click=${() => this._toggleWrap()} title="Wrap long lines (not side by side)">
+                        <yenvui-icon name="wrap-text" size="xs"></yenvui-icon><span class="mode-text">Wrap</span>
+                    </button>
+                </div>
                 </div>
             </div>
 

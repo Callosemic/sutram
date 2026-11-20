@@ -1,5 +1,6 @@
 import { html, css } from 'lit';
 import { YenvuiBase } from './yenvui-base.js';
+import { BAND_QUERY } from './physics.js';
 
 export class YenvuiView extends YenvuiBase {
     static properties = {
@@ -181,7 +182,7 @@ export class YenvuiView extends YenvuiBase {
             height: 100% !important;
             width: 100% !important;
         }
-        @container (max-width: 480px) {
+        @container ${BAND_QUERY.compact} {
             :host(:not([flush])) .view-body {
                 padding: 0;
             }
@@ -700,6 +701,7 @@ export class YenvuiSidebarLayout extends YenvuiBase {
             display: none;
         }
         .sidebar-rail {
+            container: yv-band / inline-size; /* a pane dividing a column is a band container: its cards follow its width */
             width: var(--yv-sidebar-width, 300px);
             border-right: 1px solid var(--border);
             background: var(--input-bg);
@@ -716,7 +718,7 @@ export class YenvuiSidebarLayout extends YenvuiBase {
         :host([collapsed]) .sidebar-rail {
             display: none;
         }
-        @container (max-width: 45rem) {
+        @container ${BAND_QUERY.narrow} {
             .sidebar-rail,
             :host([collapsed]) .sidebar-rail {
                 display: flex;
@@ -867,7 +869,7 @@ export class YenvuiSidebarLayout extends YenvuiBase {
                     composed: true
                 }));
             }}></div>
-            <aside class="sidebar-rail">
+            <aside class="sidebar-rail" data-band-container>
                 <div class="sidebar-slot-wrap">
                     <slot name="sidebar" @slotchange=${(e) => {
                         this._hasSidebarSlot = e.target.assignedNodes({ flatten: true }).length > 0;

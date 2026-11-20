@@ -51,6 +51,7 @@ sutram/
 │   │   ├── 0033_pluggable_backend_adapter_and_authenticated_offline_transport.md # ADR-0033: Pluggable Backend Adapter Contract, Akasa Reference Adapter, and Adapter-Routed Offline Transport
 │   │   ├── 0034_fit_then_overflow_entity_actions_card_width_tiers_and_variant_sets.md # ADR-0034: Fit-Then-Overflow Entity Action Rows, Self-Measured 720px Card Width Tiers, Variant-Set Split Buttons, and 900ms Confirmation Holds
 │   │   ├── 0035_single_row_column_headers_position_bar_slot_observation_and_click_suppression.md # Draft ADR-0035 documenting single-row spatial column headers, the 4px top position bar, post-render overflow clamping, slot-piercing contain...
+│   │   ├── 0036_column_bands.md    # ADR-0036.
 │   │   └── archived/               # Deeply embedded baseline architectural records preserved for historical reference
 │   │       ├── 0001_sutram_ioc_microkernel_architecture.md # ADR-0001: IoC microkernel and slot layout architecture
 │   │       ├── 0002_sutram_bootloader_and_resilience_patterns.md # ADR-0002: Stage 1 bootloader and error boundary standards
@@ -64,7 +65,7 @@ sutram/
 │       ├── app_shell.js            # Declarative web component app shell and tab layout router
 │       │   ├── function getSpatialMetrics(capacity, activeViewport, layout...) # Computes proportional column widths, track offsets, and window bounds across 1-3 column capacities.
 │       │   ├── function pinMatchesSlot(pin, slotOrId) # Evaluates whether a pinned projection entry matches a layout slot definition or target identifier.
-│       │   └── class SutramAppShell # Top-level 3-column spatial viewport shell coordinating single-row column headers, chip-row tab launchers, whole-header column panning, intent position bar, projection pooling, and windowed surfaces.
+│       │   └── class SutramAppShell # [stale?] Top-level 3-column spatial viewport shell coordinating single-row column headers, chip-row tab launchers, whole-header column panning, intent position bar, projection pooling, and windowed surfaces.
 │       ├── chassis_adapter.js      # Composite DAG tree and corner-pinned floating telemetry HUD primitives
 │       │   ├── class SutramDagTree # Universal wavefront and hierarchy DAG tree visualization primitive.
 │       │   └── class SutramFloatingHud # Corner-pinned collapsible status and telemetry HUD drawer.
@@ -86,7 +87,7 @@ sutram/
 │       │   ├── class SutramTextarea # Multiline auto-sizing textarea bridged to Sutram event bus
 │       │   ├── class SutramToggle  # Boolean toggle switch bridged to Sutram event bus
 │       │   ├── class SutramCombobox # Searchable and filterable text combobox with dropdown options
-│       │   ├── class SutramTargetBinding # Compound endpoint and model selector pairing select and combobox with model candidate validity retention
+│       │   ├── class SutramTargetBinding # [stale?] Compound endpoint and model selector pairing select and combobox with model candidate validity retention
 │       │   └── class SutramComposer # Slash-command message composer with token chip extraction and native textarea synchronization
 │       ├── merge.js                # The three-way text merge moves into its own module.
 │       │   └── function threeWayMergeText(baseText, localText, remoteText) # Deterministic three-way text merge of two edits of baseText: the local one and the remote one.
@@ -106,7 +107,7 @@ sutram/
 │       ├── primitives.js           # Presentation primitives (buttons, modals, toast, selection, status)
 │       │   ├── function validateChassisContract(chassisProvider) # Verifies that a mounted presentation chassis exports all 28 required UI primitive classes.
 │       │   ├── class SutramUIAdapter # Registers pass-through <sutram-*> custom element wrappers over the active chassis provider.
-│       │   ├── class SutramVirtualList # Virtualized scroll list wrapper around lit-virtualizer with double-virtualization de-escalation.
+│       │   ├── class SutramVirtualList # [stale?] Virtualized scroll list wrapper around lit-virtualizer with double-virtualization de-escalation.
 │       │   ├── function renderAdaptiveLabel({ icon = '', label = '', badge =...) # Renders a responsive icon + label or icon + badge pair based on available container width.
 │       │   ├── class SutramIcon    # 0.5 Semantic Icon & Layout Bricks
 │       │   ├── class SutramView    # Primary viewport container bridging zen-mode exit events to the Sutram event bus.
@@ -119,7 +120,7 @@ sutram/
 │       │   ├── class SutramAsyncBtn # State-aware asynchronous action button with offline read-only degradation, jobRoute execution, and 900ms confirmation holds.
 │       │   ├── class SutramStatusBar # 2.
 │       │   ├── class SutramToastContainer # 3.
-│       │   ├── class SutramSelectionTray # Multi-item selection staging tray with empty host collapse, slot-piercing adaptive chip width, fit-then-overflow bulk entity actions, and keepSelection-aware auto-clear.
+│       │   ├── class SutramSelectionTray # [stale?] Multi-item selection staging tray with empty host collapse, slot-piercing adaptive chip width, fit-then-overflow bulk entity actions, and keepSelection-aware auto-clear.
 │       │   ├── class SutramCategorizedList # Categorized list container grouping items into SutramCategorySection and SutramCardGroup blocks.
 │       │   ├── class SutramFolderBrowser # Interactive directory tree browser with breadcrumb navigation and off-main-thread tree building.
 │       │   ├── class SutramModal   # 7.
@@ -152,7 +153,7 @@ sutram/
 │       │   ├── class SutramEditor  # CodeMirror 6 editor wrapper bridging change, selection, scroll, and link-clicked events with word-count plugin support.
 │       │   ├── class SutramSelectorModal # Fuzzy-searchable modal item picker powered by SutramWorkerBroker.
 │       │   ├── class SutramReportProjection # Multi-tab spatial report and log output viewer with text_blob entity actions.
-│       │   ├── class SutramDiffViewer # 17.
+│       │   ├── class SutramDiffViewer # [stale?] 17.
 │       │   └── class SutramSubtabMenu # Column left-pinned view sub-tab header menu rendering a 4-part column-jump and refresh quick bar alongside group-scoped bulk actions, flattened variant sets, extraContentNodes view controls, and view menu actions.
 │       ├── projection_engine.js    # Declarative layout projection compiler (SutramProjectionCompiler)
 │       │   ├── class SutramProjectionCompiler # [comment required]
@@ -164,10 +165,10 @@ sutram/
 │       ├── sutram_sdk.js           # IoC Micro-Kernel, SutramElement base class, SutramContextMixin, and ExtensionRegistry
 │       │   ├── function createSutramStore(name, initialStateOrFn, persiste...) # [comment required]
 │       │   ├── function bindStoreInput(store, statePath, currentValue,...) # [comment required]
-│       │   ├── function SutramContextMixin(SuperClass) # Mixin equipping Web Components with automatic Zustand subscriptions, dynamic unsubscribe, slotted container resize observation, intervals, and global listener teardown.
+│       │   ├── function SutramContextMixin(SuperClass) # [stale?] Mixin equipping Web Components with automatic Zustand subscriptions, dynamic unsubscribe, slotted container resize observation, intervals, and global listener teardown.
 │       │   ├── class SutramElement # Base LitElement class with SutramContextMixin lifecycle management and render error boundaries.
 │       │   ├── function resolveSelectionEntityType(items = []) # Resolves a homogeneous entityType string for uniform multi-item selections or 'bulk' for mixed selections.
-│       │   └── function canUseMultiWindowPopout() # Evaluates whether the current viewport and display mode support multi-window popouts.
+│       │   └── function canUseMultiWindowPopout() # [stale?] Evaluates whether the current viewport and display mode support multi-window popouts.
 │       ├── sw-core.js              # Abstracted Service Worker core runtime for offline caching and navigation fallbacks
 │       ├── utils.js                # Pure algorithmic utility helpers (fuzzy filter, debounce, coalescedAsync, slugify, time formatting, nativeShareFiles)
 │       │   ├── function shallowEqual(a, b) # [comment required]
@@ -297,11 +298,16 @@ sutram/
         ├── modal.js                # Native HTML5 top-layer dialog modal overlay with backdrop handling
         │   └── class YenvuiModal   # [comment required]
         ├── physics.js              # Universal gesture physics controller and Shadow DOM point resolution
+        │   ├── function columnBandOf(widthPx) # The band of a column (or window) of this width: { band, capability, compact }.
+        │   ├── function columnCountFor(widthPx, maxCount = 3) # How many columns the shell shows at this window width: the count switches halfway between capabilities (1.5 and 2.5 units).
+        │   ├── function findColumnContainer(el, selector = BAND_CONTAINER_SE...) # The column, window or shell an element sits in, walking out through slots and shadow roots.
+        │   ├── function columnBandForElement(el) # The band of the container an element sits in; outside any column, the window's width.
+        │   ├── function observeColumnBand(el, callback) # [stale?] Calls back with the element's column band whenever its container resizes or it moves to another one.
         │   ├── function acquireBodyScrollLock() # [comment required]
         │   ├── function releaseBodyScrollLock() # [comment required]
         │   ├── function getEventPath(e) # [comment required]
         │   ├── function getEventTarget(e, selector = null) # Traverses the event path to find the first element matching a given CSS selector.
-        │   ├── function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) # Computes and applies true viewport coordinates and [data-compact-slugs] column-width adaptation for a #top-layer popover element.
+        │   ├── function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) # [stale?] Computes and applies true viewport coordinates and [data-compact-slugs] column-width adaptation for a #top-layer popover element.
         │   ├── function syncTopLayerPopover(triggerEl, popoverEl, isOpen, op...) # Promotes or dismisses a popover element in the browser's #top-layer and synchronizes its anchor coordinates.
         │   ├── function startKineticThrow(scrollEl, samples, { axis = 'y',...) # 60fps Inertial Momentum Throw Engine Applies exponential decay (0.94 friction) to a scroll container's scrollLeft/scrollTop based on recent...
         │   ├── class YenvuiViewportGuard # Singleton Root Viewport Physics Guard (Tier 0 Chassis) Centralizes iOS Safari edge-swipe history navigation prevention across the entire doc...

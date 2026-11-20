@@ -25,6 +25,7 @@ A compliant chassis must consume and respect the following CSS custom properties
 ### Layout Markers & Environmental Boundary Contracts
 To prevent upward coupling to host containers, the chassis standardizes on duck-typed layout markers:
 *   `[data-spatial-boundary]`: Applied to enclosing spatial track containers (windows, shells) to delimit column boundaries for top-layer popover anchoring (`mode: 'column-drawer'`).
+*   `[data-band-container]`: Applied to interior panes that subdivide a column (such as `<yenvui-sidebar-layout>`'s `.sidebar-rail`) so nested components observe the pane's column band rather than the outer column's width while popovers continue clamping to `[data-spatial-boundary]`.
 *   `[data-virtual-list]`: Applied to virtualized lists to automatically de-escalate nested card `content-visibility: visible; contain-intrinsic-size: none` and avoid double-virtualization artifacts on iOS WebKit.
 *   `[data-yv-card]`: Stamped on card component hosts to identify selectable targets across shadow DOM hit tests.
 
@@ -82,7 +83,7 @@ Any replacement library must export the following Custom Elements.
     *   *Properties:* `.titleText`, `.anchorCol` (`'left'`|`'center'`|`'right'`), `.span` (1|2|3), `.z`, `.icon`, `.intent`.
     *   *Events:* `@yenvui-window-close`, `@yenvui-window-dock`, `@yenvui-window-focus`, `@yenvui-window-drag-start`.
     *   *Slots:* default.
-*   **`<yenvui-card>`**: Polymorphic catalog container with self-measured width tiers (`>= 720px` inline actions vs `< 720px` drawer).
+*   **`<yenvui-card>`**: Polymorphic catalog container adapting to its enclosing column band (`medium`/`wide`, `>= 720px` inline actions vs `narrow`, `< 720px` drawer).
     *   *Properties:* `.filename`, `.titleText`, `.descriptionText`, `.detailText`, `.detailPrefix`, `.detailSuffix`, `.statusText`, `.icon`, `.intent`, `?selected`, `?disableSelection`, `?compact`, `?flush`, `?stale`, `?has-actions`, `?wide-card`, `.actionsOpen` (Boolean getter/setter), `.hasActions` (Boolean getter/setter).
     *   *Host Markers:* `[data-yv-card]`, `[wide-card]`.
     *   *Events:* `@yenvui-card-select-toggled`, `@yenvui-card-clicked`, `@yenvui-card-actions-opened`, `@yenvui-card-tier-changed`, `@yenvui-overlay-opened`.
@@ -122,17 +123,18 @@ Any replacement library must export the following Custom Elements.
     *   *Properties:* `.count`, `?open`.
     *   *Events:* `@yenvui-clear-selection`.
     *   *Slots:* `batch-actions`.
-*   **`<sutram-selection-tray>`**: State-bound selection staging chip and modal tray with automatic `[empty]` host collapse and slot-piercing responsive chip labels (`>= 480px` full label vs `< 480px` compact badge).
+*   **`<sutram-selection-tray>`**: State-bound selection staging chip and modal tray with automatic `[empty]` host collapse and slot-piercing responsive chip labels (full label at `>= 384px` vs compact icon + count badge in `compact` columns `< 384px`).
     *   *Properties:* `.selectedItems` (Map), `.modalOpen` (Boolean), `.trayTitle` (String), `.itemBadge` (String), `.bulkGroup` (String, default `'share'`), `?empty` (Boolean, reflected).
 *   **`<yenvui-empty-state>`**: Empty placeholder.
     *   *Properties:* `.icon`, `.text`.
 *   **`<yenvui-spinner>`**: Loading indicator.
     *   *Properties:* `.text`.
 *   **`<yenvui-diff-viewer>`**: Kinetic visual diff viewer for paired hunks and unified streams.
-    *   *Properties:* `.diffText`, `.searchStr`, `.replaceStr`, `.searchLines`, `.replaceLines`, `.leftTitle`, `.rightTitle`, `.mode` (`auto`|`split-side`|`split-stacked`|`interleaved`), `.activeLineIndex`.
-    *   *Events:* `@yenvui-diff-line-selected`, `@yenvui-diff-mode-changed`.
+    *   *Properties:* `.diffText`, `.searchStr`, `.replaceStr`, `.searchLines`, `.replaceLines`, `.leftTitle`, `.rightTitle`, `.mode` (`auto`|`split-side`|`split-stacked`|`interleaved`), `.wrap` (`auto`|`on`|`off`; `auto` wraps in a narrow column; side by side never wraps), `.activeLineIndex`. Unified opens on its first change.
+    *   *Events:* `@yenvui-diff-line-selected`, `@yenvui-diff-mode-changed`, `@yenvui-diff-wrap-changed`. `<sutram-diff-viewer>` remembers both in `DiffViewStore` (device-local).
 *   **Physics & Gesture Utilities (`physics.js`)**:
-    *   *Constants:* `COLUMN_UNIT_PX` (`360`), `WIDE_CARD_MIN_PX` (`720`), `PHYSICS` (`COLUMN_UNIT_PX`, `WIDE_CARD_MIN_PX`, `EDGE_START_BEZEL_PX`, `EDGE_MOVE_BEZEL_PX`, `AXIS_LOCK_THRESHOLD_PX`, `TAP_SLOP_PX`, `MIN_THROW_VELOCITY`, `THROW_DECAY`, `POPOVER_ESTIMATED_WIDTH_PX`).
+    *   *Column bands (the only widths a component may adapt to):* `COLUMN_UNIT_PX` (`360`), `COMPACT_MAX_PX` (`384`), `COLUMN_BANDS` (narrow below 720, medium 720 to 1080, wide from 1080; each includes its minimum), `BAND_QUERY` (`compact`, `narrow`, `mediumUp`, `belowWide`, `wide`, for `@container ${BAND_QUERY.narrow} { ... }`), `columnBandOf(width)` → `{ band, capability, compact }`, `columnCountFor(width, maxCount)` (switches at 1.5 and 2.5 units), `findColumnContainer(el)`, `columnBandForElement(el)`, `observeColumnBand(el, callback)` → stop function. Columns, window bodies and the shell are `yv-band` containers, and so is a pane dividing a column (`<yenvui-layout>`'s sidebar, `[data-band-container]`); a column's width is its share (its divider is drawn, not a border).
+    *   *Constants:* `PHYSICS` (`COLUMN_UNIT_PX`, `COMPACT_MAX_PX`, `EDGE_START_BEZEL_PX`, `EDGE_MOVE_BEZEL_PX`, `AXIS_LOCK_THRESHOLD_PX`, `TAP_SLOP_PX`, `MIN_THROW_VELOCITY`, `THROW_DECAY`, `POPOVER_ESTIMATED_WIDTH_PX`).
     *   *Functions:* `startKineticThrow(scrollEl, samples, options)`, `acquireBodyScrollLock()`, `releaseBodyScrollLock()`, `getDeepElementFromPoint(x, y, selector)`, `anchorTopLayerPopover(triggerEl, popoverEl, options)`, `syncTopLayerPopover(triggerEl, popoverEl, isOpen, options)`.
 ### Inputs & Filtering
 *   **`<yenvui-input>`**: Single-line text input presentation primitive.
@@ -166,7 +168,7 @@ Any replacement library must export the following Custom Elements.
 *   **`SutramCacheWarmer`**: Low-priority background asset pre-fetcher and warming engine.
     *   *Properties:* `.size` (Number, returns current queue count).
     *   *Methods:* `enqueue(scopeId, urls, fetcher)`, `removeByPrefix(scopeId, urlPrefix)`, `clear()`, `drain(delayMs)`.
-*   **`<yenvui-dropdown>`**: Floating action menu utilizing native `#top-layer` Popover API with section-preserving fuzzy search, two-column `?chipRows` mode (collapsing section slugs to a `30px` icon rail via `[data-compact-slugs]` when anchored in `< 520px` columns), checkable items, trailing item actions, and 900ms confirmation holds.
+*   **`<yenvui-dropdown>`**: Floating action menu utilizing native `#top-layer` Popover API with section-preserving fuzzy search, two-column `?chipRows` mode (collapsing section slugs to a `30px` icon rail via `[data-compact-slugs]` when anchored in `compact` `< 384px` columns), checkable items, trailing item actions, and 900ms confirmation holds.
     *   *Properties:* `.items` (Array of `{id, label, icon, intent, checkable, checked, badge, badgeIcon, badgeTitle, description, section, sectionHeading, sectionSlug, sectionIcon, sectionIntent, pinnedTop, dividerAfter, successLabel, confirmHoldMs, keepDrawerOpen, keepSelection, onPointerDown, onClick, asyncAction, trailingButton: {icon, title, closeMenu, onClick}, divider}`), `?open`, `?searchable`, `?chipRows`, `.searchPlaceholder`, `.confirmHoldMs` (Number, default `900`), `.filterFn` (Function), `.align` (`'auto'`|`'left'`|`'right'`), `.direction` (`'auto'`|`'up'`|`'down'`).
     *   *Events:* `@yenvui-action-confirmed`, `@yenvui-action-error` (dispatched on unhandled action exception).
     *   *Slots:* `trigger`, `header`, `content`.

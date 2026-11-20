@@ -69,13 +69,16 @@ Custom scroll surfaces and gesture tracks requiring momentum MUST utilize `start
 ### Reentrant Body Scroll Lock Standard
 Components and overlays MUST NOT write directly to `document.body.style.overflow` or `document.body.style.userSelect`. All modal, drawer, and gesture locking MUST use `acquireBodyScrollLock()` and `releaseBodyScrollLock()` from `yenvui/js/physics.js`, which reference-count both `overflow: hidden` and `user-select: none` to prevent lock clobbering during concurrent overlay states.
 
+### Column Band Standard
+Components adapt to narrowness only through the column bands in `yenvui/js/physics.js` (`RAW_BAND_WIDTH_BAN`): `BAND_QUERY` container queries in CSS, `columnBandOf` / `observeColumnBand` in JavaScript, measured on the column, window or shell the component sits in, never on its own box. Layout steps (inline actions or a drawer, a detail line shown or hidden, wrap, side by side or stacked, grid columns) go by band; `compact` only saves horizontal room (edge to edge, less padding, labels giving way to icons). Smooth fitting to a parent (fit-then-overflow, a caption's font size) has no threshold and stays allowed.
+
 ### Horizontal Overscroll Containment Standard
 All horizontally scrollable or swipeable chassis containers MUST declare `touch-action: pan-y;` and `overscroll-behavior-x: none;` to eliminate rubber-banding and maintain touch determinism.
 
 ### Multi-Window Popout Lifecycle & Popup Blocker Defense
 External window projections (ejected editor surfaces or diagnostic panels) MUST conform to the synchronous allocation protocol:
 * **Synchronous WindowProxy Allocation:** `window.open('about:blank', ...)` MUST execute synchronously within the direct user pointer gesture before awaiting any asynchronous pre-save hooks (`sutram:before-popout`). Asynchronous operations must resolve after allocation, redirecting the child window via `childWin.location.replace(targetUrl)`. Calling `window.open` after an `await` boundary is strictly prohibited.
-* **Capability Gating:** Popout triggers and HUD drop zones MUST be gated behind `canUseMultiWindowPopout()`, automatically deactivating on standalone PWAs and compact touch-primary viewports (`pointer: coarse` with viewport width < 768px).
+* **Capability Gating:** Popout triggers and HUD drop zones MUST be gated behind `canUseMultiWindowPopout()`, automatically deactivating on standalone PWAs and touch-primary single-column viewports (`pointer: coarse` with `columnBandOf(window.innerWidth).capability === 1`, `< 720px`).
 * **Double-Click Recall Escape Hatch:** Re-triggering a projection that is already active in a popped-out window twice within 3,500ms MUST close the external window and re-dock the projection locally into the user's active column focus.
 
 ---

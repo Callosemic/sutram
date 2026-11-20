@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { YenvuiBase } from './yenvui-base.js';
+import { BAND_QUERY } from './physics.js';
 
 export class YenvuiScrollView extends YenvuiBase {
     static properties = {
@@ -28,7 +29,7 @@ export class YenvuiScrollView extends YenvuiBase {
         :host([padding="md"]) { --scroll-padding: 12px 16px; }
         :host([padding="wide"]),
         :host([padding="lg"]) { --scroll-padding: 16px 20px; }
-        @container (max-width: 480px) {
+        @container ${BAND_QUERY.compact} {
             :host {
                 --content-padding-x: 0px;
             }
