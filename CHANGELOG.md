@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v2.12.0 (2026-11-20)
+
+### Chores
+
+- Sweep remaining state
+  ([`92f92fc`](https://github.com/Callosemic/sutram/commit/92f92fc412863966e3846012b3e6990bd9fbcf89))
+
+### Features
+
+- **layout**: Column bands for every responsive width, tabs that keep their place, remembered diff
+  wrap
+  ([`3c647d3`](https://github.com/Callosemic/sutram/commit/3c647d3495d0621cd31e8524d1fffc887b7e0677))
+
+
 ## v2.11.0 (2026-11-19)
 
 ### Chores
