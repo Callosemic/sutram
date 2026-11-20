@@ -40,7 +40,7 @@ ALLOWED_ENTITY_ACTION_KEYS = frozenset({
     "targetEntity", "targetEntities", "id", "bulkGroupKey", "label", "bulkLabel",
     "icon", "intent", "variant", "emphasis", "group", "order", "surfaced",
     "successLabel", "set", "section", "bulkable", "bulkOnly", "vfsBound",
-    "keepDrawerOpen", "isActive", "match", "onClick", "asyncAction",
+    "keepDrawerOpen", "keepSelection", "isActive", "match", "onClick", "asyncAction",
     "bulkAction", "bulkOnClick", "emitEvent", "component", "extName",
 })
 

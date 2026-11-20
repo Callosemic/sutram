@@ -1406,6 +1406,8 @@ export const ExtensionRegistry = {
                     set: leadAction.set || undefined,
                     section: leadAction.section || undefined,
                     surfaced: leadAction.surfaced,
+                    keepDrawerOpen: Boolean(leadAction.keepDrawerOpen),
+                    keepSelection: Boolean(leadAction.keepSelection),
                     icon: typeof leadAction.icon === 'function' ? leadAction.icon(items[0]?.data) : (leadAction.icon || ''),
                     intent: typeof leadAction.intent === 'function' ? leadAction.intent(items[0]?.data) : (leadAction.intent || 'primary'),
                     variant: leadAction.variant || 'tinted',
@@ -1588,6 +1590,12 @@ export const ExtensionRegistry = {
             window.dispatchEvent(new CustomEvent('sutram-extension-unloaded', { detail: { extName }, bubbles: true, composed: true }));
         }
     },
+    stopMetronome: function() {
+        if (this._metronomeId) {
+            clearTimeout(this._metronomeId);
+            this._metronomeId = null;
+        }
+    },
     startMetronome: function(getActiveExtensions = null, coreExtensions = []) {
         if (this._metronomeId) clearTimeout(this._metronomeId);
 
@@ -1618,6 +1626,7 @@ export const ExtensionRegistry = {
             // Hibernate to 60s when backgrounded to preserve mobile battery
             const nextTick = document.hidden ? 60000 : 100;
             this._metronomeId = setTimeout(tick, nextTick);
+            this._metronomeId?.unref?.();
         };
 
         if (!this._visibilityListenerAdded) {
@@ -1631,6 +1640,7 @@ export const ExtensionRegistry = {
         }
 
         this._metronomeId = setTimeout(tick, 100);
+        this._metronomeId?.unref?.();
     }
 };
 

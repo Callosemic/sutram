@@ -10,9 +10,11 @@ export class YenvuiDropdown extends YenvuiBase {
         direction: { type: String },
         searchable: { type: Boolean },
         searchPlaceholder: { type: String },
+        chipRows: { type: Boolean, reflect: true },
         confirmHoldMs: { type: Number },
         filterFn: { attribute: false },
         _searchQuery: { type: String, state: true },
+        _hasSlottedHeader: { type: Boolean, state: true },
         _hasSlottedContent: { type: Boolean, state: true },
         _loadingItemId: { type: String, state: true },
         _confirmedItemId: { type: String, state: true },
@@ -32,6 +34,8 @@ export class YenvuiDropdown extends YenvuiBase {
             min-width: 220px;
             max-height: var(--yv-dropdown-max-height, min(82dvh, 640px));
             overflow-y: auto;
+            touch-action: pan-y;
+            user-select: auto;
             box-shadow: var(--overlay-shadow);
             z-index: 99999;
             display: none;
@@ -41,6 +45,148 @@ export class YenvuiDropdown extends YenvuiBase {
         }
         :host([direction="up"]) .dropdown-menu {
             border-radius: 6px 6px 0 0;
+        }
+        :host([chipRows]) .dropdown-menu,
+        :host([chip-rows]) .dropdown-menu {
+            min-width: min(92vw, 320px);
+            max-width: min(94vw, 540px);
+            width: max-content;
+            padding: 10px;
+            gap: 0;
+        }
+        .chip-section {
+            display: grid;
+            grid-template-columns: 92px minmax(0, 1fr);
+            align-items: start;
+            column-gap: 10px;
+            padding: 4px 2px 14px 2px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .chip-section.no-slug {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        .chip-section:last-of-type {
+            padding-bottom: 4px;
+        }
+        .chip-section.has-divider-after {
+            border-bottom: 1px solid var(--border, #444);
+            margin-bottom: 8px;
+            padding-bottom: 14px;
+        }
+        .chip-section-slug {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 30px;
+            padding: 0 8px;
+            border-radius: 6px;
+            background: var(--text, #e0e0e0);
+            color: var(--bg-deep, #121212);
+            font-size: 0.75rem;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            user-select: none;
+            box-sizing: border-box;
+        }
+        .chip-section-slug .slug-icon {
+            display: none;
+        }
+        .chip-section-slug .slug-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .dropdown-menu[data-compact-slugs] .chip-section.has-section-icon {
+            grid-template-columns: 30px minmax(0, 1fr);
+            column-gap: 8px;
+        }
+        .dropdown-menu[data-compact-slugs] .chip-section-slug.has-icon {
+            width: 30px;
+            padding: 0;
+        }
+        .dropdown-menu[data-compact-slugs] .chip-section-slug.has-icon .slug-icon {
+            display: inline-flex;
+        }
+        .dropdown-menu[data-compact-slugs] .chip-section-slug.has-icon .slug-label {
+            display: none;
+        }
+        .chip-section-items {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+        }
+        .chip-section-slug.is-active-slug,
+        .chip-section-slug.has-intent {
+            background: var(--slug-intent, var(--intent-primary, #8b5cf6));
+            color: var(--bg-deep, #000000);
+        }
+        .chip-item {
+            touch-action: none;
+            user-select: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            height: 30px;
+            padding: 0 10px;
+            margin: 0;
+            border-radius: 6px;
+            border: 1px solid var(--border, #444);
+            border-bottom: 2px solid var(--border, #444);
+            background: var(--input-bg, #262626);
+            color: var(--text, #e0e0e0);
+            font-size: 0.82rem;
+            font-weight: 600;
+            white-space: nowrap;
+            cursor: pointer;
+            flex-shrink: 0;
+            box-sizing: border-box;
+            transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+        }
+        .chip-item:hover:not(:disabled) {
+            background: color-mix(in srgb, var(--chip-intent, var(--intent-primary, #8b5cf6)) 14%, var(--bg-hover, #333));
+            border-color: var(--chip-intent, var(--intent-primary, #8b5cf6));
+        }
+        .chip-item.is-checked {
+            border-color: color-mix(in srgb, var(--chip-intent, var(--intent-primary, #8b5cf6)) 65%, var(--border, #444));
+            border-bottom: 2px solid var(--chip-intent, var(--intent-primary, #8b5cf6));
+            background: color-mix(in srgb, var(--chip-intent, var(--intent-primary, #8b5cf6)) 24%, var(--input-bg, #262626));
+            color: var(--text, #ffffff);
+        }
+        .chip-item.confirmed {
+            color: var(--intent-success, #10b981);
+            border-color: var(--intent-success, #10b981);
+            background: color-mix(in srgb, var(--intent-success, #10b981) 14%, transparent);
+        }
+        .chip-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-mono, monospace);
+            font-size: 0.74rem;
+            font-weight: 700;
+            color: var(--text-muted, #94a3b8);
+        }
+        .chip-trailing {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            margin-left: 2px;
+            margin-right: -4px;
+            border-radius: 4px;
+            color: var(--text-muted, #94a3b8);
+            cursor: pointer;
+        }
+        .chip-trailing:hover {
+            color: var(--intent-danger, #f43f5e);
+            background: var(--bg, #121212);
         }
         .dropdown-menu > * {
             flex-shrink: 0;
@@ -154,8 +300,10 @@ export class YenvuiDropdown extends YenvuiBase {
         this.direction = 'auto';
         this.searchable = false;
         this.searchPlaceholder = 'Filter actions...';
+        this.chipRows = false;
         this.filterFn = null;
         this._searchQuery = '';
+        this._hasSlottedHeader = false;
         this._hasSlottedContent = false;
         this._loadingItemId = null;
         this._confirmedItemId = null;
@@ -194,10 +342,19 @@ export class YenvuiDropdown extends YenvuiBase {
         if (changedProperties.has('open') && !this.open && this._searchQuery) {
             this._searchQuery = '';
         }
-        if (changedProperties.has('open') || changedProperties.has('items') || changedProperties.has('align') || changedProperties.has('direction') || changedProperties.has('_hasSlottedContent')) {
+        if (
+            changedProperties.has('open') ||
+            changedProperties.has('items') ||
+            changedProperties.has('align') ||
+            changedProperties.has('direction') ||
+            changedProperties.has('chipRows') ||
+            changedProperties.has('_searchQuery') ||
+            changedProperties.has('_hasSlottedHeader') ||
+            changedProperties.has('_hasSlottedContent')
+        ) {
             const menu = this.shadowRoot?.querySelector('.dropdown-menu');
             if (menu) {
-                const hasItems = Boolean(this.open && ((this.items && this.items.length > 0) || this._hasSlottedContent || this.searchable));
+                const hasItems = Boolean(this.open && ((this.items && this.items.length > 0) || this._hasSlottedHeader || this._hasSlottedContent || this.searchable));
                 syncTopLayerPopover(this, menu, hasItems, { mode: 'menu', align: this.align || 'auto', direction: this.direction || 'auto', offset: 0 });
             }
         }
@@ -266,25 +423,27 @@ export class YenvuiDropdown extends YenvuiBase {
             : 900;
 
         const finishWithConfirmation = async () => {
+            const keepOpen = Boolean(item.keepDrawerOpen);
+            const keepSel = Boolean(item.keepSelection);
             if (item.successLabel && holdMs > 0) {
                 this._confirmedItemId = itemKey;
                 this._confirmedLabel = item.successLabel;
                 this.dispatchEvent(new CustomEvent('yenvui-action-confirmed', {
                     bubbles: true,
                     composed: true,
-                    detail: { item, status: 'success', phase: 'start', label: item.successLabel, holdMs, keepDrawerOpen: Boolean(item.keepDrawerOpen) }
+                    detail: { item, action: item, status: 'success', phase: 'start', label: item.successLabel, holdMs, keepDrawerOpen: keepOpen, keepSelection: keepSel }
                 }));
                 await new Promise(r => this.registerTimeout(r, holdMs));
                 this._confirmedItemId = null;
                 this._confirmedLabel = '';
             }
-            if (!item.keepDrawerOpen) {
+            if (!keepOpen) {
                 this.open = false;
             }
             this.dispatchEvent(new CustomEvent('yenvui-action-confirmed', {
                 bubbles: true,
                 composed: true,
-                detail: { item, status: 'success', phase: 'settled', label: item.successLabel || 'Done', holdMs, keepDrawerOpen: Boolean(item.keepDrawerOpen) }
+                detail: { item, action: item, status: 'success', phase: 'settled', label: item.successLabel || 'Done', holdMs, keepDrawerOpen: keepOpen, keepSelection: keepSel }
             }));
         };
 
@@ -319,15 +478,124 @@ export class YenvuiDropdown extends YenvuiBase {
             }
         }
     }
+    _getChipRowSections(visibleItems) {
+        const sections = [];
+        let current = null;
+        (visibleItems || []).forEach(item => {
+            if (!item) return;
+            if (item.divider) {
+                if (current) current.dividerAfter = true;
+                return;
+            }
+            if (item.sectionHeading) {
+                if (current && (current.heading || current.entries.length > 0)) {
+                    sections.push(current);
+                }
+                current = { heading: item, entries: [], dividerAfter: Boolean(item.dividerAfter) };
+            } else {
+                if (!current) {
+                    current = { heading: null, entries: [], dividerAfter: false };
+                }
+                current.entries.push(item);
+            }
+        });
+        if (current && (current.heading || current.entries.length > 0)) {
+            sections.push(current);
+        }
+        return sections;
+    }
+
+    _renderChipItem(item) {
+        const itemKey = item.id || item.label;
+        const isLoading = this._loadingItemId === itemKey;
+        const isConfirmed = this._confirmedItemId === itemKey;
+        const displayIcon = isConfirmed ? 'check' : item.icon;
+        const itemIntent = item.intent || 'primary';
+        const iconIntent = isConfirmed ? 'success' : (item.intent || 'current');
+        const displayLabel = isConfirmed
+            ? (this._confirmedLabel || item.successLabel || 'Done')
+            : (isLoading ? 'Processing...' : (item.label || item.id || 'Action'));
+        return html`
+            <button
+                type="button"
+                class="chip-item ${item.checked ? 'is-checked' : ''} ${isConfirmed ? 'confirmed' : ''}"
+                style="--chip-intent: var(--intent-${itemIntent}, var(--intent-primary));"
+                ?disabled=${Boolean(this._loadingItemId || this._confirmedItemId)}
+                @pointerdown=${(e) => { if (typeof item.onPointerDown === 'function') item.onPointerDown(e); }}
+                @click=${(e) => this._executeItem(item, e)}>
+                ${isLoading
+                    ? html`<div class="menu-spinner"></div>`
+                    : (displayIcon ? (/^[a-zA-Z0-9-]+$/.test(displayIcon) ? html`<yenvui-icon name="${displayIcon}" size="xs" intent="${iconIntent}"></yenvui-icon>` : html`<span>${displayIcon}</span>`) : '')}
+                <span>${displayLabel}</span>
+                ${item.badgeIcon ? html`<span class="chip-badge" title=${item.badgeTitle || ''}><yenvui-icon name=${item.badgeIcon} size="xs"></yenvui-icon></span>` : (item.badge ? html`<span class="chip-badge">${item.badge}</span>` : '')}
+                ${item.trailingButton ? html`
+                    <span
+                        role="button"
+                        tabindex="0"
+                        class="chip-trailing"
+                        title=${item.trailingButton.title || ''}
+                        @pointerdown=${(e) => e.stopPropagation()}
+                        @click=${(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            if (typeof item.trailingButton.onClick === 'function') {
+                                item.trailingButton.onClick(e);
+                            }
+                            if (item.trailingButton.closeMenu !== false) {
+                                this.open = false;
+                            }
+                        }}>
+                        <yenvui-icon name=${item.trailingButton.icon || 'x'} size="xs"></yenvui-icon>
+                    </span>
+                ` : ''}
+            </button>
+        `;
+    }
+
+    _renderChipSection(sec) {
+        const hasExplicitEmptySlug = sec.heading && Object.prototype.hasOwnProperty.call(sec.heading, 'sectionSlug') && !sec.heading.sectionSlug;
+        const slugText = hasExplicitEmptySlug ? '' : (sec.heading?.sectionSlug || sec.heading?.sectionHeading || '');
+        const slugIcon = slugText ? (sec.heading?.sectionIcon || '') : '';
+        const secIntent = sec.heading?.sectionIntent || '';
+        const isActiveSlug = Boolean(sec.heading?.sectionVariant === 'active');
+        return html`
+            <div class="chip-section ${slugText ? '' : 'no-slug'} ${slugIcon ? 'has-section-icon' : ''} ${sec.dividerAfter ? 'has-divider-after' : ''}">
+                ${slugText ? html`
+                    <span
+                        class="chip-section-slug ${isActiveSlug ? 'is-active-slug' : ''} ${secIntent ? 'has-intent' : ''} ${slugIcon ? 'has-icon' : ''}"
+                        style="${secIntent ? `--slug-intent: var(--intent-${secIntent}, var(--intent-primary));` : ''}"
+                        title=${slugText}>
+                        ${slugIcon ? html`<yenvui-icon class="slug-icon" name=${slugIcon} size="sm"></yenvui-icon>` : ''}
+                        <span class="slug-label">${slugText}</span>
+                    </span>
+                ` : ''}
+                <div class="chip-section-items">
+                    ${sec.entries.map(item => this._renderChipItem(item))}
+                </div>
+            </div>
+        `;
+    }
+
     render() {
         const visibleItems = this._getFilteredItems();
+        const allChipSections = this.chipRows ? this._getChipRowSections(this.items || []) : null;
+        const filteredChipSections = this.chipRows ? this._getChipRowSections(visibleItems) : null;
+        const topChipSections = (this.chipRows && allChipSections)
+            ? allChipSections.filter(sec => Boolean(sec.heading?.pinnedTop))
+            : [];
+        const bodyChipSections = (this.chipRows && filteredChipSections)
+            ? filteredChipSections.filter(sec => !sec.heading?.pinnedTop)
+            : [];
         return html`
             <div style="position: relative; display: flex; align-items: stretch; width: 100%; height: 100%;">
                 <div @click=${this._toggle} style="display: flex; align-items: stretch; width: 100%; height: 100%;">
                     <slot name="trigger"></slot>
                 </div>
                 <div class="dropdown-menu" popover="manual" @click=${(e) => e.stopPropagation()}>
-                    <slot name="header"></slot>
+                    <slot name="header" @slotchange=${(e) => {
+                        this._hasSlottedHeader = e.target.assignedNodes({ flatten: true }).length > 0;
+                    }}></slot>
+                    ${topChipSections.map(sec => this._renderChipSection(sec))}
                     ${this.searchable ? html`
                         <div class="dropdown-search-header">
                             <yenvui-search-bar
@@ -337,7 +605,7 @@ export class YenvuiDropdown extends YenvuiBase {
                             </yenvui-search-bar>
                         </div>
                     ` : ''}
-                    ${visibleItems.map(item => {
+                    ${this.chipRows && filteredChipSections ? bodyChipSections.map(sec => this._renderChipSection(sec)) : visibleItems.map(item => {
                         if (!item) return '';
                         if (item.divider) return html`<div class="divider"></div>`;
                         if (item.sectionHeading) {
@@ -369,7 +637,7 @@ export class YenvuiDropdown extends YenvuiBase {
                                         ${item.description ? html`<span class="menu-item-desc">${item.description}</span>` : ''}
                                     </span>
                                 </span>
-                                ${item.badge ? html`<span class="menu-item-badge">${item.badge}</span>` : ''}
+                                ${item.badgeIcon ? html`<span class="menu-item-badge" title=${item.badgeTitle || ''}><yenvui-icon name=${item.badgeIcon} size="xs"></yenvui-icon></span>` : (item.badge ? html`<span class="menu-item-badge">${item.badge}</span>` : '')}
                                 ${item.trailingButton ? html`
                                     <span
                                         role="button"

@@ -1515,14 +1515,36 @@ actionsRow.entityData = { filepath: 'app://a/test.md' }; // Publish Document bec
 actionsRow.render();
 assert.equal(actionsRow._overflowClampCount, null, 'Changing variant-set estimated width must reset _overflowClampCount');
 
-// 5e. SutramSubtabMenu stays rendered in place and disabled when view has no actions
-const emptySubMenu = new SutramSubtabMenu();
-emptySubMenu.slotConfig = { id: 'plain_view', label: 'Plain View' };
-emptySubMenu._rebuildMenu();
-const emptyMenuTpl = emptySubMenu.render();
-const emptyMarkup = emptyMenuTpl?.strings ? emptyMenuTpl.strings.join('') : '';
-assert.ok(emptyMarkup.includes('subtab-menu-trigger'), 'SutramSubtabMenu must stay rendered when empty');
-assert.ok(emptyMarkup.includes('disabled'), 'SutramSubtabMenu trigger must be disabled when empty');
+// 5e. SutramSubtabMenu renders the 4-part quick bar ([ Col 1 ] [ Col 2 ] [ Col 3 ] | {refresh-icon}) in slot="header", jumps columns, and refreshes the active tab
+const quickMenu = new SutramSubtabMenu();
+quickMenu.columnId = 'center';
+quickMenu.slotConfig = { id: 'plain_view', label: 'Plain View', targetParent: 'context' };
+quickMenu._rebuildMenu();
+const quickMenuTpl = quickMenu.render();
+const flattenTemplate = (t) => {
+    if (Array.isArray(t)) return t.map(flattenTemplate).join('');
+    if (!t || !Array.isArray(t.strings)) return '';
+    return t.strings.map((s, i) => s + (i < (t.values || []).length ? flattenTemplate(t.values[i]) : '')).join('');
+};
+const quickMarkup = flattenTemplate(quickMenuTpl);
+assert.ok(quickMarkup.includes('subtab-quick-bar'), 'SutramSubtabMenu must render the 4-part quick bar in slot="header"');
+assert.ok(quickMarkup.includes('quick-col-slot'), 'Quick bar must render the 3 column jump buttons');
+assert.ok(quickMarkup.includes('quick-refresh-btn'), 'Quick bar must render the refresh icon button');
+
+let forceRefreshEventDetail = null;
+const onForceRefreshProbe = (e) => { forceRefreshEventDetail = e.detail; };
+window.addEventListener('sutram:force-refresh', onForceRefreshProbe);
+await quickMenu._handleQuickRefresh();
+window.removeEventListener('sutram:force-refresh', onForceRefreshProbe);
+assert.equal(forceRefreshEventDetail?.parentId, 'context');
+assert.equal(forceRefreshEventDetail?.subId, 'plain_view', 'Clicking the quick-bar refresh button must refresh the active projection');
+assert.equal(quickMenu._refreshState, 'confirmed', 'Refresh button must enter confirmed state after refresh');
+quickMenu.clearManagedTimeouts();
+
+let colJumpDetail = null;
+quickMenu.addEventListener('sutram:column-jump', (ev) => { colJumpDetail = ev.detail; });
+quickMenu._handleQuickColumnJump('right', 2);
+assert.deepEqual(colJumpDetail, { colId: 'right', colIdx: 2 }, 'Quick column jump must emit composed sutram:column-jump event');
 
 // 5f. SutramAppShell single-row top bar and position bar rendering
 const { SutramAppShell } = await import('sutram/app_shell.js');
@@ -1562,10 +1584,13 @@ const dropdownItems = shell._buildColumnTabDropdownItems(
     shell._layoutConfig.filter(s => s.slot === 'slots:sub-navigation')
 );
 assert.equal(dropdownItems[0].sectionHeading, 'Open in this column');
+assert.equal(dropdownItems[0].sectionSlug, '');
+assert.equal(dropdownItems[0].pinnedTop, true);
 assert.equal(dropdownItems[1].checked, true, 'Active tab must be ticked in Open in this column');
 assert.equal(dropdownItems[2].checked, false);
 assert.equal(typeof dropdownItems[1].trailingButton?.onClick, 'function', 'Open tabs must expose close trailing button');
-assert.equal(dropdownItems.some(i => i.sectionHeading === 'Add a tab · Context'), true, 'Launcher categories must appear under Add a tab sections');
+assert.equal(dropdownItems.some(i => i.sectionHeading === 'Add a tab · Context' && i.sectionSlug === 'Context' && i.sectionIcon === 'folder-code'), true, 'Launcher categories must appear with their short sectionSlug and sectionIcon');
+assert.equal(dropdownItems.some(i => i.id === 'add:u3_shell_ext:prompts' && i.badgeIcon === 'chevron-left'), true, 'Tabs open in left column must display chevron-left Lucide badgeIcon');
 
 // 5g. SutramAppShell inline tab post-render overflow clamping & dirty label shrink reset
 let dirtyTabId = 'u3_shell_ext:files';
@@ -1580,6 +1605,7 @@ shell.render();
 shell._lastRenderedInlineCounts = { left: 1, center: 0, right: 0 };
 shell._inlineTabClampCounts = { left: null, center: null, right: null };
 shell.shadowRoot = {
+    querySelector: () => null,
     querySelectorAll: (sel) => sel === '.col-tabs-area'
         ? [{ dataset: { colTabs: 'left' }, clientWidth: 180, scrollWidth: 240 }]
         : []
@@ -1705,6 +1731,11 @@ assert.equal(trailingClicked, 1, 'Trailing button handler must execute');
 assert.equal(rowClicked, 0, 'Trailing button click must not invoke parent row onClick');
 assert.equal(tabDd.open, true, 'Trailing button with closeMenu: false must keep dropdown open');
 
+tabDd.chipRows = true;
+const chipSecs = tabDd._getChipRowSections(tabDd._getFilteredItems());
+assert.equal(chipSecs.length, 3);
+assert.equal(chipSecs[0].entries.length, 1);
+
 tabDd._searchQuery = 'gather';
 const filteredDdItems = tabDd._getFilteredItems();
 assert.deepEqual(
@@ -1712,6 +1743,39 @@ assert.deepEqual(
     ['Add a tab · Context', 'add:gather'],
     'Dropdown search must keep matching section headings and omit non-matching sections'
 );
+
+// anchorTopLayerPopover stamps data-compact-slugs based on spatial-col width (< 520px), not window width, and updated() re-anchors on _searchQuery
+const { anchorTopLayerPopover } = await import('yenvui/physics.js');
+const attrsSet = new Map();
+const mockPopoverMenuEl = {
+    style: {},
+    offsetWidth: 300,
+    offsetHeight: 160,
+    showPopover() {},
+    hidePopover() {},
+    matches: () => true,
+    getAttribute: (name) => (name === 'popover' ? 'manual' : null),
+    setAttribute() {},
+    toggleAttribute(name, force) { attrsSet.set(name, Boolean(force)); }
+};
+const narrowSpatialCol = {
+    classList: { contains: (c) => c === 'spatial-col' },
+    getBoundingClientRect: () => ({ left: 0, top: 0, right: 360, bottom: 800, width: 360, height: 800 })
+};
+const triggerInNarrowCol = {
+    parentElement: narrowSpatialCol,
+    getBoundingClientRect: () => ({ left: 44, top: 4, right: 160, bottom: 48, width: 116, height: 44 })
+};
+anchorTopLayerPopover(triggerInNarrowCol, mockPopoverMenuEl, { mode: 'menu', align: 'left' });
+assert.equal(attrsSet.get('data-compact-slugs'), true, '360px spatial column on wide desktop must enable compact 30px icon slugs');
+
+narrowSpatialCol.getBoundingClientRect = () => ({ left: 0, top: 0, right: 640, bottom: 800, width: 640, height: 800 });
+tabDd.shadowRoot = { querySelector: (sel) => sel === '.dropdown-menu' ? mockPopoverMenuEl : null };
+tabDd.getBoundingClientRect = () => ({ left: 44, top: 4, right: 160, bottom: 48, width: 116, height: 44 });
+tabDd.parentElement = narrowSpatialCol;
+tabDd.searchable = true;
+tabDd.updated(new Map([['_searchQuery', '']]));
+assert.equal(attrsSet.get('data-compact-slugs'), false, '640px spatial column must display full text section slugs, re-evaluated on _searchQuery update');
 
 // 5k. YenvuiGestureController suppresses synthetic click after pan/drag but allows click on stationary tap
 const { YenvuiGestureController } = await import('yenvui/physics.js');
@@ -1747,6 +1811,69 @@ window.addEventListener('click', tapClickMonitor);
 window.dispatchEvent(new Event('click', { bubbles: true, cancelable: true }));
 window.removeEventListener('click', tapClickMonitor);
 assert.equal(postTapClickReachedChild, true, 'Stationary tap on any controller instance must clear prior suppressors and allow normal click propagation');
+
+// 5l. Horizontal swipe starting directly on a tab inside .col-header pans columns without activating vertical HUD drag, and ignores open popovers
+LayoutStore.setState({
+    capacity: 1,
+    userCapacity: 1,
+    mobileViewportIndex: 1,
+    focusedColumn: 'center',
+    layoutRatios: [1, 1, 1],
+    columns: {
+        left: { active: 'u3_shell_ext:prompts', pinned: [{ id: 'u3_shell_ext:prompts', label: 'Prompts' }], history: [] },
+        center: { active: 'u3_shell_ext:files', pinned: [{ id: 'u3_shell_ext:files', label: 'Files' }], history: [] },
+        right: { active: 'u3_shell_ext:prompts', pinned: [{ id: 'u3_shell_ext:prompts', label: 'Prompts' }], history: [] }
+    },
+    windows: []
+});
+shell._spatialState = LayoutStore.getState();
+const mockColHeader = { getBoundingClientRect: () => ({ left: 0, top: 4, width: 360, height: 44, bottom: 48 }) };
+const mockTabBtn = { tagName: 'BUTTON', classList: { contains: () => false } };
+const mockPopoverMenu = { tagName: 'DIV', hasAttribute: (a) => a === 'popover', classList: { contains: (c) => c === 'dropdown-menu' } };
+
+assert.equal(
+    shell._isHeaderBarSurfaceEvent({ currentTarget: mockColHeader, clientY: 22, composedPath: () => [mockTabBtn, mockColHeader] }),
+    true,
+    'Touch on a tab button inside .col-header must be eligible for horizontal column-pan swiping'
+);
+assert.equal(
+    shell._isHeaderBarSurfaceEvent({ currentTarget: mockColHeader, clientY: 160, composedPath: () => [mockTabBtn, mockPopoverMenu, mockColHeader] }),
+    false,
+    'Touch inside an open popover menu hosted under .col-header must never trigger column panning'
+);
+
+// Simulate starting on a tab button (starts both vertical HUD _dragController and horizontal _dotDragController) and swiping left (-120px) to advance from Column 2 (idx 1) to Column 3 (idx 2)
+const downEv = { button: 0, pointerType: 'touch', pointerId: 11, clientX: 220, clientY: 24, composedPath: () => [mockTabBtn, mockColHeader] };
+shell._handlePointerDown(downEv, { id: 'u3_shell_ext:files', label: 'Files' }, 'center', 'subtab');
+shell._handleDotDragStart(downEv);
+shell._dragController._handlePointerMove({ clientX: 190, clientY: 25 }); // horizontal -> vertical HUD controller aborts
+shell._dotDragController._handlePointerMove({ clientX: 190, clientY: 25 }); // horizontal pan engages
+assert.equal(shell._dragController.active, false, 'Vertical tab HUD controller must abort on horizontal swipe');
+assert.equal(shell._isPanningTrack, true, 'Horizontal column-pan controller must engage on horizontal swipe');
+shell._dotDragController._handlePointerMove({ clientX: 90, clientY: 25 });
+shell._dotDragController._handlePointerUp({ clientX: 90, clientY: 25 });
+assert.equal(LayoutStore.getState().mobileViewportIndex, 2, 'Leftward swipe across .col-header must advance viewport from Column 2 (1) to Column 3 (2)');
+assert.equal(LayoutStore.getState().focusedColumn, 'right');
+
+// 5m. The tray clears the selection when a bulk action settles, unless the action declared keepSelection
+const bulkTray = new SutramSelectionTray();
+SelectionStore.getState().clearSelection();
+SelectionStore.getState().toggleSelection('app://a/1.py', 'file', { filepath: 'app://a/1.py' });
+bulkTray.modalOpen = true;
+bulkTray._handleBulkActionSettled({ detail: { phase: 'start' } });
+assert.equal(SelectionStore.getState().selectedItems.size, 1, 'The start phase must not clear the selection');
+bulkTray._handleBulkActionSettled({ detail: { phase: 'settled', keepSelection: true, action: { id: 'vfs-move', keepSelection: true } } });
+assert.equal(SelectionStore.getState().selectedItems.size, 1, 'A settled action with keepSelection must keep the selection');
+assert.equal(bulkTray.modalOpen, true);
+bulkTray._handleBulkActionSettled({ detail: { phase: 'settled', action: { id: 'file-copy' } } });
+assert.equal(SelectionStore.getState().selectedItems.size, 0, 'A settled action without keepSelection must clear the selection');
+assert.equal(bulkTray.modalOpen, false);
+
+// stopMetronome clears the timer handle
+ExtensionRegistry.startMetronome(() => [], []);
+assert.notEqual(ExtensionRegistry._metronomeId, null);
+ExtensionRegistry.stopMetronome();
+assert.equal(ExtensionRegistry._metronomeId, null, 'stopMetronome must clear and null _metronomeId');
 
 console.log('SPRINT_U1_TESTS_PASSED');
 """

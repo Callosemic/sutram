@@ -64,7 +64,7 @@ sutram/
 │       ├── app_shell.js            # Declarative web component app shell and tab layout router
 │       │   ├── function getSpatialMetrics(capacity, activeViewport, layout...) # Computes proportional column widths, track offsets, and window bounds across 1-3 column capacities.
 │       │   ├── function pinMatchesSlot(pin, slotOrId) # Evaluates whether a pinned projection entry matches a layout slot definition or target identifier.
-│       │   └── class SutramAppShell # [stale?] Top-level 3-column spatial viewport shell coordinating single-row column headers, position bar, tab routing, user-clamped capacity, projection pooling, and windowed surfaces.
+│       │   └── class SutramAppShell # Top-level 3-column spatial viewport shell coordinating single-row column headers, chip-row tab launchers, whole-header column panning, intent position bar, projection pooling, and windowed surfaces.
 │       ├── chassis_adapter.js      # Composite DAG tree and corner-pinned floating telemetry HUD primitives
 │       │   ├── class SutramDagTree # Universal wavefront and hierarchy DAG tree visualization primitive.
 │       │   └── class SutramFloatingHud # Corner-pinned collapsible status and telemetry HUD drawer.
@@ -119,7 +119,7 @@ sutram/
 │       │   ├── class SutramAsyncBtn # State-aware asynchronous action button with offline read-only degradation, jobRoute execution, and 900ms confirmation holds.
 │       │   ├── class SutramStatusBar # 2.
 │       │   ├── class SutramToastContainer # 3.
-│       │   ├── class SutramSelectionTray # Multi-item selection staging tray with empty host collapse, slot-piercing adaptive chip width, and rendering fit-then-overflow bulk entity actions.
+│       │   ├── class SutramSelectionTray # Multi-item selection staging tray with empty host collapse, slot-piercing adaptive chip width, fit-then-overflow bulk entity actions, and keepSelection-aware auto-clear.
 │       │   ├── class SutramCategorizedList # Categorized list container grouping items into SutramCategorySection and SutramCardGroup blocks.
 │       │   ├── class SutramFolderBrowser # Interactive directory tree browser with breadcrumb navigation and off-main-thread tree building.
 │       │   ├── class SutramModal   # 7.
@@ -127,9 +127,9 @@ sutram/
 │       │   ├── class SutramFieldCard # Labeled form field card primitive with validation feedback and reset controls.
 │       │   ├── class SutramSettingsForm # Schema-driven settings form renderer supporting hierarchical scopes, repeaters, and action triggers.
 │       │   ├── class SutramGenericSettingsModal # Modal wrapper hosting SutramSettingsForm for extension and system configuration.
-│       │   ├── class SutramVariantBtn # Split button primitive for variant sets with last-used default resolution and width reservation.
+│       │   ├── class SutramVariantBtn # Split button primitive for variant sets with last-used default resolution, keepDrawerOpen/keepSelection forwarding, and width reservation.
 │       │   ├── function computeFitActionCount(containerWidth, buttonWidths = [...) # Calculates how many action buttons fit within a container width before reserving space for the 3-dot overflow trigger.
-│       │   ├── class SutramEntityActions # Fit-then-overflow entity action row and menu-bar broker supporting variant-set split buttons, post-render overflow clamping, and sectioned overflow dropdowns.
+│       │   ├── class SutramEntityActions # Fit-then-overflow entity action row and menu-bar broker supporting variant-set split buttons, post-render overflow clamping, keepSelection forwarding, and sectioned overflow dropdowns.
 │       │   ├── class SutramCard    # State-aware polymorphic card primitive with SelectionStore binding, 720px inline/drawer action tiers, and confirmation-gated drawer closure.
 │       │   ├── class SutramCardGroup # 10.
 │       │   ├── class SutramSearchBar # 11.
@@ -153,7 +153,7 @@ sutram/
 │       │   ├── class SutramSelectorModal # Fuzzy-searchable modal item picker powered by SutramWorkerBroker.
 │       │   ├── class SutramReportProjection # Multi-tab spatial report and log output viewer with text_blob entity actions.
 │       │   ├── class SutramDiffViewer # 17.
-│       │   └── class SutramSubtabMenu # [stale?] Column left-pinned view sub-tab header menu aggregating group-scoped bulk selection actions, flattened variant sets, extraContentNodes view controls, and view menu actions.
+│       │   └── class SutramSubtabMenu # Column left-pinned view sub-tab header menu rendering a 4-part column-jump and refresh quick bar alongside group-scoped bulk actions, flattened variant sets, extraContentNodes view controls, and view menu actions.
 │       ├── projection_engine.js    # Declarative layout projection compiler (SutramProjectionCompiler)
 │       │   ├── class SutramProjectionCompiler # [comment required]
 │       │   └── class SutramProjectionPool # [comment required]
@@ -301,12 +301,12 @@ sutram/
         │   ├── function releaseBodyScrollLock() # [comment required]
         │   ├── function getEventPath(e) # [comment required]
         │   ├── function getEventTarget(e, selector = null) # Traverses the event path to find the first element matching a given CSS selector.
-        │   ├── function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) # Computes and applies true viewport coordinates for a #top-layer popover element.
+        │   ├── function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) # Computes and applies true viewport coordinates and [data-compact-slugs] column-width adaptation for a #top-layer popover element.
         │   ├── function syncTopLayerPopover(triggerEl, popoverEl, isOpen, op...) # Promotes or dismisses a popover element in the browser's #top-layer and synchronizes its anchor coordinates.
         │   ├── function startKineticThrow(scrollEl, samples, { axis = 'y',...) # 60fps Inertial Momentum Throw Engine Applies exponential decay (0.94 friction) to a scroll container's scrollLeft/scrollTop based on recent...
         │   ├── class YenvuiViewportGuard # Singleton Root Viewport Physics Guard (Tier 0 Chassis) Centralizes iOS Safari edge-swipe history navigation prevention across the entire doc...
         │   ├── function getDeepElementFromPoint(x, y, selector = null) # [comment required]
-        │   └── class YenvuiGestureController # Universal Gesture Controller Normalizes PointerEvents for unified desktop/mobile dragging with capture-phase post-drag synthetic click suppression while maintaining an invisible TouchEvent listener...
+        │   └── class YenvuiGestureController # Universal Gesture Controller Normalizes PointerEvents for unified desktop/mobile dragging with early horizontal touch claiming and capture-phase post-drag synthetic click suppression.
         ├── pill.js                 # Toggleable tag/badge primitive supporting standard and text variants
         │   └── class YenvuiPill    # [comment required]
         ├── scroll-view.js          # Container-query responsive scrollable view container with adaptive edge padding

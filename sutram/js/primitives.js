@@ -667,6 +667,12 @@ export class SutramSelectionTray extends SutramElement {
         }
     }
 
+    /** The tray owns clearing: a settled bulk action clears the selection unless it declared keepSelection. */
+    _handleBulkActionSettled(e) {
+        if (e?.detail?.phase !== 'settled' || e.detail.keepSelection || e.detail.action?.keepSelection) return;
+        SelectionStore.getState().clearSelection();
+        this.modalOpen = false;
+    }
     render() {
         const count = this.selectedItems.size;
         if (count === 0 && !this.modalOpen) return html``;
@@ -739,7 +745,9 @@ export class SutramSelectionTray extends SutramElement {
                 </div>
                 <div class="tray-footer">
                     <sutram-async-btn label="Clear" intent="danger" .onClick=${() => { SelectionStore.getState().clearSelection(); this.modalOpen = false; }}></sutram-async-btn>
-                    <div style="flex: 1 1 0%; min-width: 0; display: flex; justify-content: flex-end;">
+                    <div
+                        style="flex: 1 1 0%; min-width: 0; display: flex; justify-content: flex-end;"
+                        @yenvui-action-confirmed=${(e) => this._handleBulkActionSettled(e)}>
                         <sutram-entity-actions
                             .actionsList=${batchActions}
                             .entityType=${bulkEntityType}
@@ -1574,6 +1582,7 @@ export class SutramVariantBtn extends SutramElement {
                     successLabel: v.successLabel || 'Done',
                     confirmHoldMs: ACTION_CONFIRM_HOLD_MS,
                     keepDrawerOpen: Boolean(v.keepDrawerOpen),
+                    keepSelection: Boolean(v.keepSelection),
                     asyncAction: (e) => this._runVariant(v, e)
                 });
             });
@@ -1602,6 +1611,8 @@ export class SutramVariantBtn extends SutramElement {
                         .label=${label}
                         .icon=${icon}
                         .successLabel=${successLabel}
+                        .keepDrawerOpen=${Boolean(activeVariant.keepDrawerOpen)}
+                        .keepSelection=${Boolean(activeVariant.keepSelection)}
                         intent="${intent}"
                         .onClick=${(e) => this._runVariant(activeVariant, e)}>
                     </sutram-async-btn>
@@ -1833,6 +1844,7 @@ export class SutramEntityActions extends SutramElement {
                                 successLabel: v.successLabel || 'Done',
                                 confirmHoldMs: ACTION_CONFIRM_HOLD_MS,
                                 keepDrawerOpen: Boolean(v.keepDrawerOpen),
+                                keepSelection: Boolean(v.keepSelection),
                                 asyncAction: async (e) => {
                                     const registry = window.ExtensionRegistry || ExtensionRegistry;
                                     if (typeof registry?.setLastUsedVariant === 'function') {
@@ -1856,6 +1868,7 @@ export class SutramEntityActions extends SutramElement {
                     successLabel: entry.successLabel || 'Done',
                     confirmHoldMs: ACTION_CONFIRM_HOLD_MS,
                     keepDrawerOpen: Boolean(entry.keepDrawerOpen),
+                    keepSelection: Boolean(entry.keepSelection),
                     asyncAction: (e) => executeAction(entry, e)
                 });
             }
@@ -2026,6 +2039,8 @@ export class SutramEntityActions extends SutramElement {
                         .label=${label}
                         .icon=${rawIcon}
                         .successLabel=${successLabel}
+                        .keepDrawerOpen=${Boolean(entry.keepDrawerOpen)}
+                        .keepSelection=${Boolean(entry.keepSelection)}
                         intent="${intent}"
                         ?active=${isActive}
                         ?grow=${isFooterBar}
@@ -2046,7 +2061,7 @@ export class SutramEntityActions extends SutramElement {
                     this.dispatchEvent(new CustomEvent('yenvui-action-confirmed', {
                         bubbles: true,
                         composed: true,
-                        detail: { action: entry, status: 'success', phase: 'settled', holdMs: 0, keepDrawerOpen: false }
+                        detail: { action: entry, status: 'success', phase: 'settled', holdMs: 0, keepDrawerOpen: false, keepSelection: Boolean(entry.keepSelection) }
                     }));
                 }
             };
@@ -2625,10 +2640,13 @@ customElements.define('sutram-diff-viewer', SutramDiffViewer);
 // 18. Declarative Sub-Tab Action & Bulk Selection Menu
 export class SutramSubtabMenu extends SutramElement {
     static properties = {
+        columnId: { type: String },
         slotConfig: { type: Object },
         extraContentNodes: { type: Array },
         _menuItems: { type: Array, state: true },
-        _selectedCount: { type: Number, state: true }
+        _selectedCount: { type: Number, state: true },
+        _refreshState: { type: String, state: true },
+        _layoutSnap: { type: Object, state: true }
     };
     static styles = [sharedStyles, css`
         :host { display: flex; align-items: stretch; height: 100%; flex-shrink: 0; }
@@ -2659,6 +2677,87 @@ export class SutramSubtabMenu extends SutramElement {
         .subtab-menu-trigger:disabled {
             opacity: 0.35;
             cursor: default;
+        }
+        .subtab-quick-bar {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr auto auto;
+            align-items: center;
+            gap: 4px;
+            padding: 2px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .subtab-quick-bar.has-body {
+            padding-bottom: 6px;
+            margin-bottom: 2px;
+            border-bottom: 1px solid var(--border);
+        }
+        .quick-col-slot {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 36px;
+            min-width: 44px;
+            padding: 0 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-deep);
+            color: var(--text-muted);
+            font-family: var(--font-mono, monospace);
+            font-size: 0.85rem;
+            font-weight: 700;
+            line-height: 1;
+            cursor: pointer;
+            box-sizing: border-box;
+            transition: all 0.15s ease;
+        }
+        .quick-col-slot:hover {
+            background: var(--bg-hover);
+            color: var(--text);
+            border-color: var(--intent-primary);
+        }
+        .quick-col-slot.is-active {
+            background: color-mix(in srgb, var(--intent-primary) 18%, var(--bg-deep));
+            color: var(--intent-primary);
+            border-color: var(--intent-primary);
+        }
+        .quick-col-slot.is-empty {
+            opacity: 0.55;
+        }
+        .quick-bar-divider {
+            width: 1px;
+            height: 22px;
+            background: var(--border);
+            margin: 0 2px;
+        }
+        .quick-refresh-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 36px;
+            min-width: 44px;
+            padding: 0 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-deep);
+            color: var(--text);
+            cursor: pointer;
+            box-sizing: border-box;
+            transition: all 0.15s ease;
+        }
+        .quick-refresh-btn:hover:not(:disabled) {
+            background: var(--bg-hover);
+            border-color: var(--intent-primary);
+            color: var(--intent-primary);
+        }
+        .quick-refresh-btn:disabled {
+            opacity: 0.35;
+            cursor: default;
+        }
+        .quick-refresh-btn.is-confirmed {
+            border-color: var(--intent-success);
+            color: var(--intent-success);
+            background: color-mix(in srgb, var(--intent-success) 16%, var(--bg-deep));
         }
         .extra-view-section {
             display: flex;
@@ -2696,12 +2795,15 @@ export class SutramSubtabMenu extends SutramElement {
 
     constructor() {
         super();
+        this.columnId = '';
         this.slotConfig = null;
         this.extraContentNodes = [];
         this._menuItems = [];
         this._selectedCount = 0;
         this._selectedItems = new Map();
         this._boundMenuStoresKey = '';
+        this._refreshState = 'idle';
+        this._layoutSnap = null;
     }
     connectedCallback() {
         super.connectedCallback();
@@ -2711,6 +2813,20 @@ export class SutramSubtabMenu extends SutramElement {
             (selectedItems) => {
                 this._selectedItems = selectedItems;
                 this._rebuildMenu();
+            }
+        );
+        this.subscribe(
+            'Layout',
+            state => ({
+                focusedColumn: state?.focusedColumn || 'center',
+                mobileViewportIndex: state?.mobileViewportIndex ?? 1,
+                capacity: state?.capacity || 3,
+                leftCount: state?.columns?.left?.pinned?.length || 0,
+                centerCount: state?.columns?.center?.pinned?.length || 0,
+                rightCount: state?.columns?.right?.pinned?.length || 0
+            }),
+            (snap) => {
+                this._layoutSnap = snap;
             }
         );
         this.subscribe(
@@ -2811,6 +2927,7 @@ export class SutramSubtabMenu extends SutramElement {
                             members.forEach(v => {
                                 items.push({
                                     ...v,
+                                    isBulkItem: true,
                                     successLabel: v.successLabel || 'Done',
                                     confirmHoldMs: ACTION_CONFIRM_HOLD_MS,
                                     asyncAction: async (e) => {
@@ -2829,7 +2946,7 @@ export class SutramSubtabMenu extends SutramElement {
                             currentBulkHeading = 'Selection';
                             items.push({ sectionHeading: 'Selection' });
                         }
-                        items.push(act);
+                        items.push({ ...act, isBulkItem: true });
                     }
                 });
                 if (currentBulkHeading !== 'Selection') {
@@ -2885,19 +3002,79 @@ export class SutramSubtabMenu extends SutramElement {
         }
         this._menuItems = items;
     }
+    _handleQuickColumnJump(colId, colIdx, e) {
+        if (e) e.stopPropagation();
+        const jumpEv = new CustomEvent('sutram:column-jump', {
+            detail: { colId, colIdx },
+            bubbles: true,
+            composed: true,
+            cancelable: true
+        });
+        this.dispatchEvent(jumpEv);
+        if (!jumpEv.defaultPrevented && window.Sutram?.stores?.Layout) {
+            const layout = window.Sutram.stores.Layout.getState();
+            const cap = layout.capacity || 1;
+            const ratiosLen = (layout.layoutRatios || [1, 1, 1]).length;
+            layout.setMobileViewport?.(Math.max(0, Math.min(colIdx, ratiosLen - cap)));
+            layout.setFocusedColumn?.(colId);
+        }
+        const dd = this.shadowRoot?.querySelector('sutram-dropdown');
+        if (dd) dd.open = false;
+    }
+
+    async _handleQuickRefresh(e) {
+        if (e) e.stopPropagation();
+        const cfg = this.slotConfig;
+        if (!cfg || !cfg.id || cfg.refreshable === false || this._refreshState === 'loading') return;
+        this._refreshState = 'loading';
+        try {
+            const detail = { parentId: cfg.targetParent || null, subId: cfg.id, promise: null };
+            const refreshEv = new CustomEvent('sutram:force-refresh', { detail, bubbles: true, composed: true });
+            const dispatchedOnSelf = typeof this.dispatchEvent === 'function' ? this.dispatchEvent(refreshEv) : false;
+            if (!dispatchedOnSelf || !this.isConnected) {
+                window.dispatchEvent(refreshEv);
+            }
+            if (detail.promise && typeof detail.promise.then === 'function') {
+                await detail.promise;
+            }
+            this._refreshState = 'confirmed';
+            this.registerTimeout(() => {
+                this._refreshState = 'idle';
+                const dd = this.shadowRoot?.querySelector('sutram-dropdown');
+                if (dd) dd.open = false;
+            }, ACTION_CONFIRM_HOLD_MS);
+        } catch (_) {
+            this._refreshState = 'idle';
+        }
+    }
+
     render() {
         const extraNodes = Array.isArray(this.extraContentNodes) ? this.extraContentNodes.filter(Boolean) : [];
-        const hasAnyItems = Boolean((this._menuItems && this._menuItems.length > 0) || extraNodes.length > 0);
         const count = this._selectedCount || 0;
-        if (!hasAnyItems) {
-            return html`
-                <button type="button" class="subtab-menu-trigger" disabled title="No view actions">
-                    <sutram-icon name="more-vertical" size="sm"></sutram-icon>
-                </button>
-            `;
-        }
+        const cfg = this.slotConfig || null;
+        const canRefresh = Boolean(cfg && cfg.id && cfg.refreshable !== false);
+        const layoutState = window.Sutram?.stores?.Layout?.getState?.() || {};
+        const focusedCol = this._layoutSnap?.focusedColumn || layoutState.focusedColumn || this.columnId || 'center';
+        const activeColId = this.columnId || focusedCol;
+        const colSpecs = [
+            { id: 'left', idx: 0, label: '1', title: 'Column 1 (Left)', count: layoutState.columns?.left?.pinned?.length ?? this._layoutSnap?.leftCount ?? 0 },
+            { id: 'center', idx: 1, label: '2', title: 'Column 2 (Center)', count: layoutState.columns?.center?.pinned?.length ?? this._layoutSnap?.centerCount ?? 0 },
+            { id: 'right', idx: 2, label: '3', title: 'Column 3 (Right)', count: layoutState.columns?.right?.pinned?.length ?? this._layoutSnap?.rightCount ?? 0 }
+        ];
+        const refreshIcon = this._refreshState === 'confirmed'
+            ? 'check'
+            : (this._refreshState === 'loading' ? 'loader' : 'refresh-cw');
+        const refreshIntent = this._refreshState === 'confirmed' ? 'success' : 'current';
+
         return html`
-            <sutram-dropdown align="left" .items=${this._menuItems}>
+            <sutram-dropdown
+                align="left"
+                .items=${this._menuItems}
+                @yenvui-action-confirmed=${(e) => {
+                    if (e.detail?.phase === 'settled' && e.detail?.item?.isBulkItem && !e.detail?.keepSelection) {
+                        SelectionStore.getState().clearSelection();
+                    }
+                }}>
                 <button slot="trigger" type="button" class="subtab-menu-trigger" @pointerdown=${() => this._rebuildMenu()} title="${count > 0 ? `View & Bulk Actions (${count} selected)` : 'View Menu'}">
                     ${count > 0 ? html`
                         <sutram-icon name="more-vertical" size="sm" intent="warning"></sutram-icon>
@@ -2906,6 +3083,30 @@ export class SutramSubtabMenu extends SutramElement {
                         <sutram-icon name="more-vertical" size="sm"></sutram-icon>
                     `}
                 </button>
+                <div slot="header" class="subtab-quick-bar ${(this._menuItems?.length > 0 || extraNodes.length > 0) ? 'has-body' : ''}" @click=${(e) => e.stopPropagation()}>
+                    ${colSpecs.map(c => {
+                        const isCurrent = c.id === activeColId;
+                        const isEmpty = c.count === 0;
+                        return html`
+                            <button
+                                type="button"
+                                class="quick-col-slot ${isCurrent ? 'is-active' : ''} ${isEmpty ? 'is-empty' : ''}"
+                                title="${c.title}${isCurrent ? ' (Active)' : ''}"
+                                @click=${(e) => this._handleQuickColumnJump(c.id, c.idx, e)}>
+                                <span>${isCurrent ? '×' : (isEmpty ? '' : '·')}</span>
+                            </button>
+                        `;
+                    })}
+                    <div class="quick-bar-divider"></div>
+                    <button
+                        type="button"
+                        class="quick-refresh-btn ${this._refreshState === 'confirmed' ? 'is-confirmed' : ''}"
+                        ?disabled=${!canRefresh}
+                        title="${canRefresh ? `Refresh ${cfg.label || 'Tab'}` : 'No active tab to refresh'}"
+                        @click=${(e) => this._handleQuickRefresh(e)}>
+                        <sutram-icon name="${refreshIcon}" size="sm" intent="${refreshIntent}"></sutram-icon>
+                    </button>
+                </div>
                 ${extraNodes.length > 0 ? html`
                     <div
                         slot="content"

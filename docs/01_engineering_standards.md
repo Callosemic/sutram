@@ -67,7 +67,7 @@ All mobile and edge-native chassis shells MUST wrap their top-level application 
 Custom scroll surfaces and gesture tracks requiring momentum MUST utilize `startKineticThrow(scrollEl, samples, options)`. Custom inertia implementations using `setInterval` or manual physics loops are strictly forbidden.
 
 ### Reentrant Body Scroll Lock Standard
-Components and overlays MUST NOT write directly to `document.body.style.overflow`. All modal, drawer, and gesture locking MUST use `acquireBodyScrollLock()` and `releaseBodyScrollLock()` from `yenvui/js/physics.js` to prevent lock clobbering during concurrent overlay states.
+Components and overlays MUST NOT write directly to `document.body.style.overflow` or `document.body.style.userSelect`. All modal, drawer, and gesture locking MUST use `acquireBodyScrollLock()` and `releaseBodyScrollLock()` from `yenvui/js/physics.js`, which reference-count both `overflow: hidden` and `user-select: none` to prevent lock clobbering during concurrent overlay states.
 
 ### Horizontal Overscroll Containment Standard
 All horizontally scrollable or swipeable chassis containers MUST declare `touch-action: pan-y;` and `overscroll-behavior-x: none;` to eliminate rubber-banding and maintain touch determinism.

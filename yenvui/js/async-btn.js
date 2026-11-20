@@ -82,6 +82,8 @@ export class YenvuiAsyncBtn extends YenvuiBase {
         disabled: { type: Boolean },
         active: { type: Boolean },
         confirmHoldMs: { type: Number },
+        keepDrawerOpen: { type: Boolean },
+        keepSelection: { type: Boolean },
         jobRoute: { type: String },
         jobPayload: { type: Object },
         onJobComplete: { type: Object },
@@ -108,6 +110,8 @@ export class YenvuiAsyncBtn extends YenvuiBase {
         this.disabled = false;
         this.active = false;
         this.confirmHoldMs = 900;
+        this.keepDrawerOpen = false;
+        this.keepSelection = false;
         this.jobRoute = '';
         this.jobPayload = null;
         this.onJobComplete = null;
@@ -146,16 +150,18 @@ export class YenvuiAsyncBtn extends YenvuiBase {
     _completeWithConfirmation() {
         this.status = 'success';
         const holdMs = Number(this.confirmHoldMs) > 0 ? Number(this.confirmHoldMs) : 900;
+        const keepOpen = Boolean(this.keepDrawerOpen);
+        const keepSel = Boolean(this.keepSelection);
         this.dispatchEvent(new CustomEvent('yenvui-action-confirmed', {
             bubbles: true,
             composed: true,
-            detail: { status: 'success', phase: 'start', label: this.successLabel || 'Done', holdMs }
+            detail: { status: 'success', phase: 'start', label: this.successLabel || 'Done', holdMs, keepDrawerOpen: keepOpen, keepSelection: keepSel }
         }));
         this.registerTimeout(() => {
             this.dispatchEvent(new CustomEvent('yenvui-action-confirmed', {
                 bubbles: true,
                 composed: true,
-                detail: { status: 'success', phase: 'settled', label: this.successLabel || 'Done', holdMs }
+                detail: { status: 'success', phase: 'settled', label: this.successLabel || 'Done', holdMs, keepDrawerOpen: keepOpen, keepSelection: keepSel }
             }));
         }, holdMs);
         this.registerTimeout(() => { this.status = 'idle'; }, Math.max(holdMs, 1200));

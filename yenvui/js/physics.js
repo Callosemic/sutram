@@ -36,6 +36,8 @@ export function acquireBodyScrollLock() {
     if (_bodyOverflowLockCount === 0) {
         _savedBodyOverflow = document.body.style.overflow || '';
         document.body.style.overflow = 'hidden';
+        document.body.style.userSelect = 'none';
+        document.body.style.webkitUserSelect = 'none';
     }
     _bodyOverflowLockCount++;
 }
@@ -46,6 +48,8 @@ export function releaseBodyScrollLock() {
         _bodyOverflowLockCount--;
         if (_bodyOverflowLockCount === 0) {
             document.body.style.overflow = _savedBodyOverflow;
+            document.body.style.userSelect = '';
+            document.body.style.webkitUserSelect = '';
         }
     }
 }
@@ -100,7 +104,7 @@ export function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) {
 
     while (curr) {
         if (curr.classList) {
-            if (!headerEl && (curr.classList.contains('toolbar-row') || curr.classList.contains('sticky-header') || curr.classList.contains('col-header') || curr.classList.contains('editor-header') || curr.classList.contains('top-utility-row'))) {
+            if (!headerEl && (curr.classList.contains('toolbar-row') || curr.classList.contains('sticky-header') || curr.classList.contains('col-header') || curr.classList.contains('editor-header'))) {
                 headerEl = curr;
             }
             if (curr.classList.contains('spatial-col')) {
@@ -118,6 +122,11 @@ export function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) {
     const colRect = colEl
         ? colEl.getBoundingClientRect()
         : (headerEl ? headerEl.getBoundingClientRect() : { left: 0, right: window.innerWidth, width: window.innerWidth });
+
+    if (typeof popoverEl.toggleAttribute === 'function') {
+        const refWidth = Number(colRect?.width) || (typeof window !== 'undefined' ? window.innerWidth : 1024);
+        popoverEl.toggleAttribute('data-compact-slugs', refWidth > 0 && refWidth < 520);
+    }
 
     if (mode === 'column-drawer') {
         const rowBottom = headerEl ? headerEl.getBoundingClientRect().bottom : triggerRect.bottom;
@@ -143,12 +152,12 @@ export function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) {
     const spaceOnRight = maxRight - triggerRect.left;
     const containerWidth = maxRight - minLeft;
     const isInRightHalf = containerWidth > 0 && (triggerRect.left - minLeft) > (containerWidth * 0.5);
-    const estimatedWidth = options.estimatedWidth || 220;
+    const actualWidth = popoverEl.offsetWidth || options.estimatedWidth || 220;
     const menuHeight = popoverEl.offsetHeight || 220;
     const anchorBottom = headerEl ? Math.max(triggerRect.bottom, headerEl.getBoundingClientRect().bottom) : triggerRect.bottom;
     const spaceBelow = window.innerHeight - anchorBottom;
 
-    const shouldAlignRight = align === 'right' || (align === 'auto' && (spaceOnRight < estimatedWidth + 12 || isInRightHalf));
+    const shouldAlignRight = align === 'right' || (align === 'auto' && (spaceOnRight < actualWidth + 12 || isInRightHalf));
     const shouldDropUp = direction === 'up' || (direction === 'auto' && spaceBelow < menuHeight + 16 && triggerRect.top > spaceBelow);
 
     popoverEl.style.position = 'fixed';
@@ -173,7 +182,8 @@ export function anchorTopLayerPopover(triggerEl, popoverEl, options = {}) {
         popoverEl.style.right = `${Math.round(rightPx)}px`;
         popoverEl.style.left = 'auto';
     } else {
-        const leftPx = Math.max(4, triggerRect.left);
+        const maxLeft = Math.max(4, (window.innerWidth || 1024) - actualWidth - 8);
+        const leftPx = Math.max(4, Math.min(triggerRect.left, maxLeft));
         popoverEl.style.left = `${Math.round(leftPx)}px`;
         popoverEl.style.right = 'auto';
     }
@@ -484,9 +494,6 @@ export class YenvuiGestureController {
         }
         this.active = true;
         this._pointerId = e.pointerId;
-        // Globally disable text selection while a gesture is active
-        document.body.style.userSelect = 'none';
-        document.body.style.webkitUserSelect = 'none';
         acquireBodyScrollLock();
 
         this._boundResizeAbort = () => this.abort();
@@ -563,9 +570,6 @@ export class YenvuiGestureController {
             try { this.host.releasePointerCapture(this._pointerId); } catch(err) {}
             this._pointerId = null;
         }
-        // Restore text selection
-        document.body.style.userSelect = '';
-        document.body.style.webkitUserSelect = '';
         releaseBodyScrollLock();
 
         if (this._boundResizeAbort) {
@@ -621,7 +625,18 @@ export class YenvuiGestureController {
     }
 
     _handleTouchMove(e) {
-        if (!this.active || this.swipeAxis !== 'horizontal') return;
+        if (!this.active) return;
+        // Only a horizontal-only pan (the shell's header row) claims the touch before the axis locks; cards and
+        // other 'both'-axis hosts keep native scrolling of their content until the pan threshold decides.
+        if (!this.swipeAxis && e.touches && e.touches.length === 1 && this._currentLockAxis === 'horizontal') {
+            const dx = Math.abs(e.touches[0].clientX - this.startX);
+            const dy = Math.abs(e.touches[0].clientY - this.startY);
+            if (dx > dy && dx >= 3) {
+                if (e.cancelable) e.preventDefault();
+                return;
+            }
+        }
+        if (this.swipeAxis !== 'horizontal') return;
         
         let shouldPrevent = true;
         if (this.scrollableContainerSelector) {

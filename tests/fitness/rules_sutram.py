@@ -15,6 +15,7 @@ def check_sutram_rules():
     legacy_store_pattern = re.compile(r"create(?:Extension|Sutram)Store\s*\([\s\S]*?,\s*\[\s*['\"]")
     impure_render_pattern = re.compile(r"render\s*\(\s*\)\s*[{]\s*this\._rebuildMenu\s*\(")
     sutram_inline_style_pattern = re.compile(r"<sutram-[a-z0-9-]+\b[^>]*\bstyle\s*=")
+    legacy_shell_selector_pattern = re.compile(r"\b(?:top-utility-row|mobile-dots-wrapper|desktop-dots-wrapper)\b")
     declared_properties = load_declared_properties(PROJECT_ROOT)
 
     for filepath in collect_unique_files([SUTRAM_DIR / "js", YENVUI_DIR / "js"], [".js"]):
@@ -65,6 +66,13 @@ def check_sutram_rules():
                     filepath,
                     idx,
                     "Host domain reference ('window.inSetu', 'insetu-*', 'yomama://') detected. Sutram must remain purely host-agnostic."
+                )
+            if legacy_shell_selector_pattern.search(line):
+                report_violation(
+                    "LEGACY_SHELL_HEADER_SLOT_BAN",
+                    filepath,
+                    idx,
+                    "Retired two-row shell selector ('top-utility-row', 'mobile-dots-wrapper', or 'desktop-dots-wrapper') detected."
                 )
             if "sutram" in filepath.parts and relative_yenvui_import_pattern.search(line):
                 report_violation(

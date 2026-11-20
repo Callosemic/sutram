@@ -61,7 +61,7 @@ Atomic, stateless presentation controls delivered by `yenVUI`:
 | **`<yenvui-editor>`** | CodeMirror 6 text editor wrapper | Built-in languages come from `codemirror-core`; others load through the host's `languageResolver`, which returns a module URL or a descriptor (`{url, kind: "lezer" \| "stream" \| "builtin", export, options}`). Supports interactive Markdown link widgets (`enableMarkdownLinks`) emitting `yenvui-editor-link-clicked`. Each language loads once and is cached; unknown languages fall back to plain text. |
 | **`<yenvui-collapsible>`** | Expandable accordion container with intent styling | Emits `yenvui-collapsible-toggled`. |
 | **`<yenvui-category-section>`** | Categorized list section wrapper with header action slot | Sticky header sectioning. |
-| **`<yenvui-dropdown>`** | Context popover trigger menu | Auto-dismisses on outside clicks. |
+| **`<yenvui-dropdown>`** | Context popover trigger menu | Top-layer `#popover` menu with section-preserving search, `?chipRows` grid layout, and 900ms confirmation holds. |
 | **`<yenvui-filter-dropdown>`** | Sticky header filter overlay panel | Relative popover positioning. |
 | **`<yenvui-pill>`** | Toggle tag badge supporting standard and text variants | Emits `yenvui-pill-toggled`. |
 | **`<yenvui-filter-group>`** | Array of interactive toggle pills | Emits `yenvui-filter-changed`. |
@@ -96,12 +96,12 @@ State-aware wrappers, IoC brokers and form controls delivered by `sutram`:
 | **`<sutram-modal>`** | IoC modal dialog wrapper | Binds `<yenvui-modal>` closing events to `SutramElement` dispatch. |
 | **`<sutram-async-btn>`** | Async button wrapper | Accepts `onClick` async handlers and manages feedback state machine execution. |
 | **`<sutram-field-card>`** | Standardized setting field card | Renders title, scope/security badges, header actions slot, and description caption. |
-| **`<sutram-subtab-menu>`** | Left-pinned column view & bulk action menu | Aggregates scoped bulk selection actions, flattened variant sets, `extraContentNodes` view controls, and `menuActions` while staying rendered and disabled in place when empty. |
+| **`<sutram-subtab-menu>`** | Left-pinned column view & bulk action menu | Renders a 4-part column-jump and active-tab refresh quick bar alongside scoped bulk selection actions, flattened variant sets, `extraContentNodes` view controls, and `menuActions`. |
 | **`<sutram-generic-settings>`** | Dynamic extension settings modal | Generates form controls automatically from extension schema definitions. |
 | **`<sutram-selector-modal>`** | Fuzzy-searchable item picker modal | Fuzzy-filters object arrays for prompt/template pickers. |
 | **`<sutram-folder-browser>`** | Workspace directory tree browser | Interactive path navigation breadcrumbs. |
 | **`<sutram-categorized-list>`** | Categorized card list renderer | Groups items by category key and renders categorized `yenVUI` card groups. |
-| **`<sutram-selection-tray>`** | Multi-item batch action tray | Reads `SelectionStore` and renders aggregated bulk `entityActions` through `<sutram-entity-actions>`. |
+| **`<sutram-selection-tray>`** | Multi-item batch action tray | Collapses when `[empty]`, adapts chip width across slot boundaries, renders aggregated bulk `entityActions`, and clears selection on settled actions unless `keepSelection` is set. |
 | **`<sutram-status-bar>`** | System status bar wrapper | Listens for global `sutram-status-update` and `sutram-sync-status` events. |
 | **`<sutram-toast-container>`** | Toast notification wrapper | Subscribes to `ToastStore` and renders active alerts. |
 | **`<sutram-editor>`** | Editor wrapper | Wraps `<yenvui-editor>`, bridges `editor-link-clicked` events, and exposes `insertAtCursor(text)`. |
