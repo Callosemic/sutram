@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v2.11.0 (2026-11-19)
+
+### Chores
+
+- Sweep remaining state
+  ([`53d6f82`](https://github.com/Callosemic/sutram/commit/53d6f8257503466c9a2c71b348c91e459c86f107))
+
+- Sweep remaining state
+  ([`201ed9a`](https://github.com/Callosemic/sutram/commit/201ed9a44531cce88f53e4bd7483d3bddc7ee148))
+
+### Features
+
+- **shell**: Add chip-row tab switcher, subtab quick bar, whole-header pan, and keepSelection
+  lifecycle
+  ([`7dbd3ff`](https://github.com/Callosemic/sutram/commit/7dbd3ffd8e27a770ac4e5978aa17e25f33ac5c87))
+
+- **shell**: Unify column headers, add viewport position bar, and enforce post-drag click
+  suppression
+  ([`7ad17cb`](https://github.com/Callosemic/sutram/commit/7ad17cbe18cfe7e433d4f9b125b4e5af41aa8a8b))
+
+
 ## v2.10.0 (2026-11-19)
 
 ### Chores
