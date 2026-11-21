@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v2.13.0 (2026-11-20)
+
+### Chores
+
+- Sweep remaining state
+  ([`2ca8864`](https://github.com/Callosemic/sutram/commit/2ca88644b54b3a56c4b50ae6731c0a2431b6617c))
+
+### Features
+
+- **shell**: Auto diffs show Unified below wide, the deck shows its size, and a tab open off screen
+  moves to the column that asks
+  ([`0ea0fc3`](https://github.com/Callosemic/sutram/commit/0ea0fc367d8617882de0948de28adfddb2ef598d))
+
+
 ## v2.12.0 (2026-11-20)
 
 ### Chores
