@@ -905,11 +905,15 @@ export class SutramAppShell extends SutramElement {
                                 }
                             }
                         }
-                        if (existingColClick) {
+                        const targetCol = col.id || child.preferredColumn || 'center';
+                        // Open and on screen: go to it. Open in a column that is off screen: bring it to this column.
+                        if (existingColClick && (existingColClick === targetCol || this._isColumnOnScreen(existingColClick))) {
                             this._handleSubTabClick(existingPin ? existingPin.id : child.id);
                             return;
                         }
-                        const targetCol = col.id || child.preferredColumn || 'center';
+                        if (existingColClick && layoutState) {
+                            layoutState.unpinFromColumn(existingColClick, existingPin ? existingPin.id : child.id);
+                        }
                         if (layoutState) {
                             layoutState.pinToColumn(targetCol, child);
                             layoutState.setActiveProjection(targetCol, child.id);
@@ -938,6 +942,15 @@ export class SutramAppShell extends SutramElement {
         if (window.location.hash !== hash) {
             window.history.replaceState(null, '', hash);
         }
+    }
+    /** Whether a column is inside the visible window of the track (its capacity and viewport). */
+    _isColumnOnScreen(colId) {
+        const idx = { left: 0, center: 1, right: 2 }[colId];
+        if (idx === undefined) return false;
+        const { capacity = 3, mobileViewportIndex = 1 } = this._spatialState || {};
+        const count = (this._spatialState?.layoutRatios || [1, 1, 1]).length;
+        const first = Math.max(0, Math.min(mobileViewportIndex, count - capacity));
+        return idx >= first && idx < first + capacity;
     }
     _handleSubTabClick(subId) {
         let targetCol = null;
@@ -1377,6 +1390,7 @@ export class SutramAppShell extends SutramElement {
                                             slot="trigger"
                                             type="button"
                                             class="tab-menu-trigger"
+                                            data-testid="tab-menu-${col.id}"
                                             title="All tabs (${activeDisplayLabel})"
                                             aria-label="All tabs"
                                             @click=${() => {

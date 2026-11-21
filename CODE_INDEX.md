@@ -120,6 +120,7 @@ sutram/
 │       │   ├── class SutramAsyncBtn # State-aware asynchronous action button with offline read-only degradation, jobRoute execution, and 900ms confirmation holds.
 │       │   ├── class SutramStatusBar # 2.
 │       │   ├── class SutramToastContainer # 3.
+│       │   ├── function formatTokenEstimate(tokens) # A token count for people: 384, 4.3k, 12k.
 │       │   ├── class SutramSelectionTray # [stale?] Multi-item selection staging tray with empty host collapse, slot-piercing adaptive chip width, fit-then-overflow bulk entity actions, and keepSelection-aware auto-clear.
 │       │   ├── class SutramCategorizedList # Categorized list container grouping items into SutramCategorySection and SutramCardGroup blocks.
 │       │   ├── class SutramFolderBrowser # Interactive directory tree browser with breadcrumb navigation and off-main-thread tree building.
@@ -130,7 +131,7 @@ sutram/
 │       │   ├── class SutramGenericSettingsModal # Modal wrapper hosting SutramSettingsForm for extension and system configuration.
 │       │   ├── class SutramVariantBtn # Split button primitive for variant sets with last-used default resolution, keepDrawerOpen/keepSelection forwarding, and width reservation.
 │       │   ├── function computeFitActionCount(containerWidth, buttonWidths = [...) # Calculates how many action buttons fit within a container width before reserving space for the 3-dot overflow trigger.
-│       │   ├── class SutramEntityActions # Fit-then-overflow entity action row and menu-bar broker supporting variant-set split buttons, post-render overflow clamping, keepSelection forwarding, and sectioned overflow dropdowns.
+│       │   ├── class SutramEntityActions # [stale?] Fit-then-overflow entity action row and menu-bar broker supporting variant-set split buttons, post-render overflow clamping, keepSelection forwarding, and sectioned overflow dropdowns.
 │       │   ├── class SutramCard    # State-aware polymorphic card primitive with SelectionStore binding, 720px inline/drawer action tiers, and confirmation-gated drawer closure.
 │       │   ├── class SutramCardGroup # 10.
 │       │   ├── class SutramSearchBar # 11.
@@ -154,7 +155,7 @@ sutram/
 │       │   ├── class SutramSelectorModal # Fuzzy-searchable modal item picker powered by SutramWorkerBroker.
 │       │   ├── class SutramReportProjection # Multi-tab spatial report and log output viewer with text_blob entity actions.
 │       │   ├── class SutramDiffViewer # [stale?] 17.
-│       │   └── class SutramSubtabMenu # Column left-pinned view sub-tab header menu rendering a 4-part column-jump and refresh quick bar alongside group-scoped bulk actions, flattened variant sets, extraContentNodes view controls, and view menu actions.
+│       │   └── class SutramSubtabMenu # [stale?] Column left-pinned view sub-tab header menu rendering a 4-part column-jump and refresh quick bar alongside group-scoped bulk actions, flattened variant sets, extraContentNodes view controls, and view menu actions.
 │       ├── projection_engine.js    # Declarative layout projection compiler (SutramProjectionCompiler)
 │       │   ├── class SutramProjectionCompiler # [comment required]
 │       │   └── class SutramProjectionPool # [comment required]
@@ -243,6 +244,7 @@ sutram/
     │   └── yenvui-primitives.css   # Atomic presentation resets and utility classes
     └── js/                         # Pure ES module frontend runtime kernel and utilities
         ├── async-btn.js            # Agnostic asynchronous action button with status feedback state machine
+        │   ├── function accessibleName(host, label) # A button's name for tooltips and screen readers: its label, else the title set on the element (icon-only buttons).
         │   ├── class YenvuiBtn     # [comment required]
         │   └── class YenvuiAsyncBtn # [comment required]
         ├── board.js                # Multi-column container-query responsive layout grid and column container

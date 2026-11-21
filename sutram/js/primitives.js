@@ -539,12 +539,19 @@ export class SutramToastContainer extends SutramContextMixin(YenvuiToastContaine
 }
 customElements.define('sutram-toast-container', SutramToastContainer);
 // 4. Selection Store & Tray
+/** A token count for people: 384, 4.3k, 12k. */
+function formatTokenEstimate(tokens) {
+    const t = Math.max(0, Math.round(tokens));
+    if (t < 1000) return String(t);
+    return t < 10000 ? `${(t / 1000).toFixed(1)}k` : `${Math.round(t / 1000)}k`;
+}
 export class SutramSelectionTray extends SutramElement {
     static properties = { 
         selectedItems: { type: Object },
         modalOpen: { type: Boolean },
         trayTitle: { type: String },
         itemBadge: { type: String },
+        chipLabel: { type: String },
         bulkGroup: { type: String },
         empty: { type: Boolean, reflect: true },
         _compactChip: { type: Boolean, state: true }
@@ -622,7 +629,8 @@ export class SutramSelectionTray extends SutramElement {
         .tray-item-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
         .tray-item-title { font-weight: bold; color: var(--text); font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 8px; justify-content: space-between; }
         .tray-item-path { font-family: monospace; font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .pack-tag { background: color-mix(in srgb, var(--intent-warning) 20%, transparent); color: var(--intent-warning); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; }
+        .item-order { font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted); min-width: 1.2em; text-align: right; flex-shrink: 0; }
+        .pack-tag { flex-shrink: 0; background: color-mix(in srgb, var(--intent-warning) 20%, transparent); color: var(--intent-warning); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; }
         .tray-footer {
             display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg-deep); border-radius: 0 0 12px 12px; width: 100%; box-sizing: border-box; overflow: hidden;
         }
@@ -633,6 +641,7 @@ export class SutramSelectionTray extends SutramElement {
         this.modalOpen = false;
         this.trayTitle = 'Selection Tray';
         this.itemBadge = 'ITEM';
+        this.chipLabel = '';
         this.bulkGroup = 'share';
         this.empty = true;
         this._compactChip = false;
@@ -690,12 +699,10 @@ export class SutramSelectionTray extends SutramElement {
             }
         });
 
-        let sizeDisplay = '';
-        if (totalSize > 0) {
-            sizeDisplay = `~${Math.round(totalSize / 1024)} kb${hasUnknown ? '+' : ''}`;
-        } else if (hasUnknown) {
-            sizeDisplay = 'Calculated on compile';
-        }
+        // A live estimate: kilobytes and tokens at about four bytes each; '+' while some item's size is still unknown.
+        const sizeDisplay = totalSize > 0
+            ? `~${Math.max(1, Math.round(totalSize / 1024))} kB · ~${formatTokenEstimate(totalSize / 4)} tokens${hasUnknown ? ' +' : ''}`
+            : '';
         let batchActions = [];
         if (registry && typeof registry.getAggregatableActions === 'function') {
             batchActions = registry.getAggregatableActions(itemsArray, { group: this.bulkGroup || 'share' });
@@ -703,10 +710,10 @@ export class SutramSelectionTray extends SutramElement {
 
         return html`
             ${count > 0 ? html`
-                <button class="cart-btn" title="${count} selected" @click=${() => { this.modalOpen = true; this.empty = false; }}>
+                <button class="cart-btn" data-testid="selection-tray-chip" title="${this.chipLabel ? `${this.chipLabel} (${count})` : `${count} selected`}" @click=${() => { this.modalOpen = true; this.empty = false; }}>
                     ${renderAdaptiveLabel({
                         icon: 'layers',
-                        label: `${count} selected`,
+                        label: this.chipLabel ? `${this.chipLabel} (${count})` : `${count} selected`,
                         badge: String(count),
                         showLabel: !this._compactChip,
                         iconSize: 'sm'
@@ -718,24 +725,24 @@ export class SutramSelectionTray extends SutramElement {
             <div class="tray-panel ${this.modalOpen ? 'open' : ''}">
                 <div style="padding: 15px 20px; border-bottom: 1px solid var(--border); background: var(--bg-deep); display: flex; justify-content: space-between; align-items: flex-start; border-radius: 12px 12px 0 0;">
                     <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; padding-right: 15px;">
-                        <span style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase; font-weight: bold;">SELECTION STAGING</span>
-                        <span style="font-weight: bold; font-size: 1.15rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center;">${this.trayTitle || 'Selection Tray'} <span class="cart-badge" style="display: inline-flex; margin-left: 8px;">${count}</span></span>${sizeDisplay ? html`<span style="font-size: 0.8rem; color: var(--intent-highlight); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${sizeDisplay}</span>` : ''}
+                        <span style="font-weight: bold; font-size: 1.15rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center;">${this.trayTitle || 'Selection Tray'} <span class="cart-badge" style="display: inline-flex; margin-left: 8px;">${count}</span></span>${sizeDisplay ? html`<span data-testid="selection-tray-size" style="font-size: 0.8rem; color: var(--intent-highlight); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${sizeDisplay}</span>` : ''}
                     </div>
                     <button type="button" @click=${() => this.modalOpen = false} style="background: var(--input-bg); color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; padding: 4px 8px; font-size: 1.1rem; line-height: 1;">✕</button>
                 </div>
                 <div class="tray-items">
-                    ${itemsArray.map(item => {
+                    ${itemsArray.map((item, position) => {
                         const rawPath = item.data?.filepath || item.data?.folderpath || item.data?.id || '';
                         const cleanPath = String(rawPath).replace(/\/+$/, '');
                         const name = item.data?.titleText || cleanPath.split('/').pop() || 'Unknown Item';
                         const toggleKey = item.key || rawPath;
                         const sizeBytes = item.data?.size_bytes || (registry?.executeUIHook ? registry.executeUIHook('sutram:resolve-item-size', item.data) : null);
-                        const sizeText = sizeBytes ? `${Math.round(sizeBytes / 1024)} kb` : '';
+                        const sizeText = sizeBytes ? `${Math.max(1, Math.round(sizeBytes / 1024))} kB` : '';
+                        const kindLabel = (registry?.executeUIHook ? registry.executeUIHook('sutram:resolve-item-kind', item) : null) || this.itemBadge || 'ITEM';
                         return html`
                         <div class="tray-item">
                             <div class="tray-item-info">
                                 <div class="tray-item-title">
-                                    <div style="display: flex; align-items: center; gap: 8px;"><span class="pack-tag">${this.itemBadge || 'ITEM'}</span> ${name}</div>${sizeText ? html`<span style="color: var(--text-muted); font-weight: normal; font-size: 0.85rem; font-family: monospace;">${sizeText}</span>` : ''}
+                                    <div style="display: flex; align-items: center; gap: 8px; min-width: 0;"><span class="item-order">${position + 1}</span><span class="pack-tag">${kindLabel}</span> <span style="overflow: hidden; text-overflow: ellipsis;">${name}</span></div>${sizeText ? html`<span style="color: var(--text-muted); font-weight: normal; font-size: 0.85rem; font-family: monospace;">${sizeText}</span>` : ''}
                                 </div>
                                 <div class="tray-item-path">${rawPath}</div>
                             </div>
@@ -2015,6 +2022,7 @@ export class SutramEntityActions extends SutramElement {
             if (entry.kind === 'variant-set') {
                 return html`
                     <sutram-variant-btn
+                        data-testid="action-set-${entry.setId || entry.set || entry.id || 'variants'}"
                         ?compact=${!isFooterBar}
                         .setEntry=${entry}
                         .entityType=${this.entityType || entry.entityType}
@@ -2035,6 +2043,7 @@ export class SutramEntityActions extends SutramElement {
             if (entry.asyncAction || entry.successLabel || (registry?.executeEntityAction && entry.vfsBound)) {
                 return html`
                     <sutram-async-btn
+                        data-testid="action-${entry.id || 'unnamed'}"
                         ?compact=${!isFooterBar}
                         .label=${label}
                         .icon=${rawIcon}
@@ -2067,6 +2076,7 @@ export class SutramEntityActions extends SutramElement {
             };
             return html`
                 <sutram-btn
+                    data-testid="action-${entry.id || 'unnamed'}"
                     ?compact=${!isFooterBar}
                     intent=${intent}
                     ?active=${isActive}
@@ -3084,7 +3094,7 @@ export class SutramSubtabMenu extends SutramElement {
                         SelectionStore.getState().clearSelection();
                     }
                 }}>
-                <button slot="trigger" type="button" class="subtab-menu-trigger" @pointerdown=${() => this._rebuildMenu()} title="${count > 0 ? `View & Bulk Actions (${count} selected)` : 'View Menu'}">
+                <button slot="trigger" type="button" class="subtab-menu-trigger" data-testid="view-menu" @pointerdown=${() => this._rebuildMenu()} title="${count > 0 ? `View & Bulk Actions (${count} selected)` : 'View Menu'}">
                     ${count > 0 ? html`
                         <sutram-icon name="more-vertical" size="sm" intent="warning"></sutram-icon>
                         <span class="subtab-badge">${count > 9 ? '9+' : count}</span>
@@ -3101,8 +3111,9 @@ export class SutramSubtabMenu extends SutramElement {
                                 type="button"
                                 class="quick-col-slot ${isCurrent ? 'is-active' : ''} ${isEmpty ? 'is-empty' : ''}"
                                 title="${c.title}${isCurrent ? ' (Active)' : ''}"
+                                data-testid="column-jump-${c.idx + 1}"
                                 @click=${(e) => this._handleQuickColumnJump(c.id, c.idx, e)}>
-                                <span>${isCurrent ? '×' : (isEmpty ? '' : '·')}</span>
+                                <span>${c.label}</span>
                             </button>
                         `;
                     })}

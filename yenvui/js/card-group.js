@@ -226,6 +226,7 @@ export class YenvuiCardGroup extends LitElement {
                     child.style.opacity = '1';
                     child.style.setProperty('--peek-rail-opacity', '0');
                     child.style.setProperty('--peek-content-y', '7px');
+                    child.style.setProperty('--peek-content-opacity', '0'); // a peeking card shows its edge, never half a line of text
                     child.style.pointerEvents = 'auto';
                     child.style.display = '';
                 } else {
@@ -238,6 +239,7 @@ export class YenvuiCardGroup extends LitElement {
                 child.style.opacity = '1';
                 child.style.removeProperty('--peek-rail-opacity');
                 child.style.removeProperty('--peek-content-y');
+                child.style.removeProperty('--peek-content-opacity');
                 child.style.pointerEvents = 'auto';
                 child.style.display = '';
                 child.style.clipPath = 'inset(0px -20px -20px -20px)';

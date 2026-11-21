@@ -1,5 +1,10 @@
 import { html, css } from 'lit';
 import { YenvuiBase } from './yenvui-base.js';
+/** A button's name for tooltips and screen readers: its label, else the title set on the element (icon-only buttons). */
+function accessibleName(host, label) {
+    if (typeof label === 'string' && label) return label;
+    return host.getAttribute('title') || host.getAttribute('aria-label') || '';
+}
 export class YenvuiBtn extends YenvuiBase {
     static properties = {
         label: {},
@@ -49,7 +54,8 @@ export class YenvuiBtn extends YenvuiBase {
         return html`
             <button 
                 type="${this.btntype}"
-                title=${typeof this.label === 'string' && this.label ? this.label : ''}
+                title=${accessibleName(this, this.label)}
+                aria-label=${accessibleName(this, this.label)}
                 class="yv-btn yv-btn--${this.intent || 'primary'} yv-btn--${this.variant || 'tinted'} yv-btn--${effectiveSize} ${this.emphasis ? 'yv-btn--emphasis' : ''} ${this.active ? 'yv-btn--active' : ''}" 
                 ?disabled=${this.disabled}
                 @click=${(e) => {
@@ -201,7 +207,8 @@ export class YenvuiAsyncBtn extends YenvuiBase {
         return html`
             <button 
                 type="${this.btntype}"
-                title=${typeof text === 'string' && text ? text : ''}
+                title=${accessibleName(this, text)}
+                aria-label=${accessibleName(this, text)}
                 class="yv-btn yv-btn--${activeIntent || 'primary'} yv-btn--${this.variant || 'tinted'} yv-btn--${effectiveSize} ${this.emphasis ? 'yv-btn--emphasis' : ''} ${this.active ? 'yv-btn--active' : ''}" 
                 ?disabled=${this.disabled || this.status === 'loading'}
                 @click=${this._handleClick}>

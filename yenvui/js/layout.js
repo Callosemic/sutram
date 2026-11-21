@@ -839,6 +839,7 @@ export class YenvuiSidebarLayout extends YenvuiBase {
             opacity: 1;
         }
         .stage-pane {
+            container: yv-band / inline-size; /* the other pane of a divided column: its cards follow its own width too */
             flex: 1 1 0%;
             display: flex;
             flex-direction: column;
@@ -916,7 +917,7 @@ export class YenvuiSidebarLayout extends YenvuiBase {
                     </nav>
                 ` : ''}
             </aside>
-            <main class="stage-pane">
+            <main class="stage-pane" data-band-container>
                 <slot></slot>
             </main>
         `;

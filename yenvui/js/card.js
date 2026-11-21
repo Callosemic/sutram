@@ -14,7 +14,7 @@ export class YenvuiCard extends YenvuiBase {
         icon: { type: String },
         intent: { type: String },
         selected: { type: Boolean, reflect: true },
-        disableSelection: { type: Boolean },
+        disableSelection: { type: Boolean, reflect: true },
         _overlayActive: { type: Boolean, reflect: true },
         _hasActions: { type: Boolean, reflect: true, attribute: 'has-actions' },
         _wideCard: { type: Boolean, reflect: true, attribute: 'wide-card' },
@@ -135,7 +135,8 @@ export class YenvuiCard extends YenvuiBase {
             min-width: 0;
             padding: 12px;
             transform: translateY(var(--peek-content-y, 0px));
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: var(--peek-content-opacity, 1);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
         }
         .card-header {
             display: flex;
@@ -288,9 +289,9 @@ export class YenvuiCard extends YenvuiBase {
             opacity: 1;
             pointer-events: auto;
             transform: none;
-            flex: 0 1 55%;
+            flex: 0 1 50%; /* the content keeps at least half the row; actions that do not fit go to the three-dot menu */
             min-width: 180px;
-            max-width: 55%;
+            max-width: 50%;
             padding: 6px 12px 6px 0;
             justify-content: center;
             align-items: flex-end;
@@ -450,6 +451,32 @@ export class YenvuiCard extends YenvuiBase {
             .selection-hit-zone:hover + .selection-strip {
                 border-left-width: 6px;
             }
+            /* Ticking hint: a faint check in the strip while the pointer is on an unselected card. Once selected, the
+               selected check below applies even under the pointer (this rule's selector would otherwise outrank it). */
+            :host(:not([disableselection]):not([selected])) .card-wrapper:hover .selection-strip::after {
+                content: '✓';
+                position: absolute;
+                left: 0;
+                top: 50%;
+                transform: translateY(-50%);
+                font-size: 0.7rem;
+                line-height: 1;
+                color: var(--card-intent, var(--intent-primary));
+                opacity: 0.55;
+                pointer-events: none;
+            }
+        }
+        :host([selected]) .selection-strip::after {
+            content: '✓';
+            position: absolute;
+            left: -11px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.7rem;
+            line-height: 1;
+            color: var(--bg, #000);
+            opacity: 0.9;
+            pointer-events: none;
         }
     `;
     constructor() {
@@ -650,7 +677,7 @@ export class YenvuiCard extends YenvuiBase {
                 @mouseleave=${() => { if (window.matchMedia('(hover: hover)').matches && (!this._gestureController || !this._gestureController.active)) this._overlayActive = false; }}
                 @pointerdown=${(e) => { this._initGestureController(); this._gestureController.start(e); }}>
 
-                ${!this.disableSelection ? html`<div class="selection-hit-zone" title="Select Item" @click=${(e) => { e.stopPropagation(); this._toggleSelection(); }}></div>` : ''}
+                ${!this.disableSelection ? html`<div class="selection-hit-zone" title="Select" aria-label="Select" role="checkbox" aria-checked=${this.selected ? 'true' : 'false'} data-testid="card-tick" @click=${(e) => { e.stopPropagation(); this._toggleSelection(); }}></div>` : ''}
                 <div class="selection-strip" @click=${(e) => { if (!this.disableSelection) { e.stopPropagation(); this._toggleSelection(); } }}></div>
                 <div class="content-col" @click=${(e) => {
                     if (this._isPanning) {

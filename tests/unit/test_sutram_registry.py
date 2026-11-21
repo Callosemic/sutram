@@ -1239,13 +1239,20 @@ assert.equal(tierCard._wideCard, true, 'A card in a 720px (medium) column shows 
 tierCard._updateCardWidthTier(columnBandOf(719));
 assert.equal(tierCard._wideCard, false, 'A card in a narrow column keeps the drawer');
 assert.equal(tierEvents, 2);
-// Diff viewer: wrap in a narrow column by default; side by side (chosen, or Auto from medium) never wraps; an explicit choice wins
+// Diff viewer: Auto is Unified below a wide column and side by side in one; wrap by default below wide;
+// side by side (chosen, or Auto in wide) never wraps; an explicit choice wins
 const { YenvuiDiffViewer } = await import('yenvui/diff-viewer.js');
 const dv = new YenvuiDiffViewer();
 const wrapCase = (mode, wrap, width) => { dv.mode = mode; dv.wrap = wrap; dv._columnBand = columnBandOf(width); return dv._isWrapped(); };
+const viewCase = (mode, width) => { dv.mode = mode; dv._columnBand = columnBandOf(width); return dv._isSideBySide() ? 'side' : (dv._isUnified() ? 'unified' : 'stacked'); };
+assert.equal(viewCase('auto', 500), 'unified');
+assert.equal(viewCase('auto', 768), 'unified', 'Auto in a medium column is Unified, not side by side');
+assert.equal(viewCase('auto', 1080), 'side');
+assert.equal(viewCase('split-stacked', 1200), 'stacked');
 assert.equal(wrapCase('auto', 'auto', 500), true);
-assert.equal(wrapCase('auto', 'auto', 720), false, 'Auto in a medium column is side by side, which never wraps');
-assert.equal(wrapCase('interleaved', 'auto', 720), false);
+assert.equal(wrapCase('auto', 'auto', 768), true, 'Auto in a medium column is Unified and wraps');
+assert.equal(wrapCase('auto', 'auto', 1080), false, 'Auto in a wide column is side by side, which never wraps');
+assert.equal(wrapCase('interleaved', 'auto', 1200), false);
 assert.equal(wrapCase('interleaved', 'on', 1200), true);
 assert.equal(wrapCase('split-stacked', 'off', 500), false);
 assert.equal(wrapCase('split-side', 'on', 500), false);
@@ -1690,6 +1697,46 @@ assert.equal(dropdownItems[2].checked, false);
 assert.equal(typeof dropdownItems[1].trailingButton?.onClick, 'function', 'Open tabs must expose close trailing button');
 assert.equal(dropdownItems.some(i => i.sectionHeading === 'Add a tab · Context' && i.sectionSlug === 'Context' && i.sectionIcon === 'folder-code'), true, 'Launcher categories must appear with their short sectionSlug and sectionIcon');
 assert.equal(dropdownItems.some(i => i.id === 'add:u3_shell_ext:prompts' && i.badgeIcon === 'chevron-left'), true, 'Tabs open in left column must display chevron-left Lucide badgeIcon');
+// Which columns are on screen: two columns at viewport 0 show left and center; at viewport 1, center and right.
+shell._spatialState = { ...LayoutStore.getState(), capacity: 2, mobileViewportIndex: 0, layoutRatios: [1, 1, 1] };
+assert.deepEqual(['left', 'center', 'right'].map(c => shell._isColumnOnScreen(c)), [true, true, false]);
+shell._spatialState = { ...shell._spatialState, mobileViewportIndex: 1 };
+assert.deepEqual(['left', 'center', 'right'].map(c => shell._isColumnOnScreen(c)), [false, true, true]);
+shell._spatialState = LayoutStore.getState();
+
+// Launching a tab that is open in an off-screen column relocates it into the clicked column; an on-screen one stays put.
+{
+    const prevLayout = LayoutStore.getState();
+    LayoutStore.setState({
+        capacity: 1,
+        userCapacity: 1,
+        mobileViewportIndex: 1, // only 'center' is on screen
+        focusedColumn: 'center',
+        layoutRatios: [1, 1, 1],
+        columns: {
+            left: { active: 'u3_shell_ext:prompts', pinned: [{ id: 'u3_shell_ext:prompts', label: 'Prompts' }], history: [] },
+            center: { active: 'u3_shell_ext:files', pinned: [{ id: 'u3_shell_ext:files', label: 'Files' }], history: [] },
+            right: { active: null, pinned: [], history: [] }
+        },
+        windows: []
+    });
+    shell._spatialState = LayoutStore.getState();
+    const centerItems = shell._buildColumnTabDropdownItems(
+        { id: 'center', label: 'Center' },
+        [{ id: 'u3_shell_ext:files', rawId: 'files', label: 'Files', actualSourceCol: 'center' }],
+        { id: 'u3_shell_ext:files', rawId: 'files', label: 'Files', actualSourceCol: 'center' },
+        shell._layoutConfig.filter(s => s.slot === 'slots:primary-navigation'),
+        shell._layoutConfig.filter(s => s.slot === 'slots:sub-navigation')
+    );
+    const addPromptsInCenter = centerItems.find(i => i.id === 'add:u3_shell_ext:prompts');
+    assert.ok(addPromptsInCenter, 'Off-screen tab must be listed under Add a tab');
+    addPromptsInCenter.onClick();
+    assert.equal(LayoutStore.getState().columns.left.pinned.some(p => p.id === 'u3_shell_ext:prompts'), false, 'Off-screen tab must be unpinned from left');
+    assert.equal(LayoutStore.getState().columns.center.pinned.some(p => p.id === 'u3_shell_ext:prompts'), true, 'Off-screen tab must move into center');
+    assert.equal(LayoutStore.getState().columns.center.active, 'u3_shell_ext:prompts');
+    LayoutStore.setState(prevLayout);
+    shell._spatialState = LayoutStore.getState();
+}
 
 // 5g. SutramAppShell inline tab post-render overflow clamping & dirty label shrink reset
 let dirtyTabId = 'u3_shell_ext:files';
@@ -1737,11 +1784,46 @@ mockSpatialCol.clientWidth = 360;
 tray._syncChipMode();
 assert.equal(tray._compactChip, true, 'Selection tray in 360px column must switch to compact icon + count badge');
 
-SelectionStore.getState().toggleSelection('app://a/1.py', 'file', { filepath: 'app://a/1.py' });
+SelectionStore.getState().toggleSelection('app://a/1.py', 'file:prompt', { filepath: 'app://a/1.py', size_bytes: 1536 });
 SelectionStore.getState().toggleSelection('app://a/2.py', 'file', { filepath: 'app://a/2.py' });
 assert.equal(tray.empty, false, 'Selection tray must reflect empty=false while items are selected');
+tray.chipLabel = 'Deck';
+tray.selectedItems = SelectionStore.getState().selectedItems;
+tray._compactChip = false;
+ExtensionRegistry.registerExtension('u3_kind_hook_ext', {
+    name: 'U3 Kind Hook Ext',
+    uiHooks: {
+        'sutram:resolve-item-kind': (it) => (it?.entityType === 'file:prompt' ? 'Prompt' : null)
+    }
+});
+// flattenTemplate keeps only nested templates; these checks also need the interpolated text.
+const flattenWithText = (t) => (t === null || t === undefined || t === false) ? ''
+    : (typeof t !== 'object') ? String(t)
+    : Array.isArray(t) ? t.map(flattenWithText).join('')
+    : Array.isArray(t.strings) ? t.strings.map((s, i) => s + (i < (t.values || []).length ? flattenWithText(t.values[i]) : '')).join('')
+    : '';
+const trayMarkup = flattenWithText(tray.render());
+assert.ok(trayMarkup.includes('Deck (2)'), 'Selection tray chip must use chipLabel when set');
+tray.modalOpen = true;
+const trayModalMarkup = flattenWithText(tray.render());
+assert.ok(trayModalMarkup.includes('~2 kB · ~384 tokens +'), 'Selection tray header must display kB, token estimate, and + when any size is unknown');
+assert.ok(trayModalMarkup.includes('Prompt'), 'Selection tray must display resolved item kind tag');
+tray.modalOpen = false;
 SelectionStore.getState().clearSelection();
 tray.disconnectedCallback();
+
+// Icon-only YenvuiBtn and YenvuiAsyncBtn propagate host title/aria-label onto their inner <button>
+const { YenvuiBtn, YenvuiAsyncBtn } = await import('yenvui/async-btn.js');
+const iconBtn = new YenvuiBtn();
+iconBtn.icon = 'refresh-cw';
+iconBtn.getAttribute = (name) => (name === 'title' ? 'Refresh view' : null);
+const iconBtnMarkup = flattenWithText(iconBtn.render());
+assert.ok(iconBtnMarkup.includes('Refresh view'), 'Icon-only YenvuiBtn must preserve host title/aria-label on inner button');
+const iconAsyncBtn = new YenvuiAsyncBtn();
+iconAsyncBtn.icon = 'save';
+iconAsyncBtn.getAttribute = (name) => (name === 'aria-label' ? 'Save item' : null);
+const iconAsyncMarkup = flattenWithText(iconAsyncBtn.render());
+assert.ok(iconAsyncMarkup.includes('Save item'), 'Icon-only YenvuiAsyncBtn must preserve host aria-label on inner button');
 
 // 5i. SutramSubtabMenu store subscription cleanup across slotConfig changes, same-store deduplication, & synchronous lazy store resolution
 const { createSutramStore, SutramElement } = await import('sutram/sutram_sdk.js');

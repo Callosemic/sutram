@@ -18,6 +18,7 @@ As the `sutram` presentation micro-kernel matured, multiple domain-specific abst
    - `sutram:is-projection-dirty`: Queries the active extension to determine whether unsaved changes exist prior to projection eviction.
    - `sutram:resolve-route-hash`: Delegates route hash string formatting to host extensions with a standardized fallback.
    - `sutram:resolve-item-size`: Resolves entity byte footprint dynamically for the selection staging tray.
+   - `sutram:resolve-item-kind` (added 2026-11-20): Resolves the tag the selection staging tray shows for an item (for example Prompt or Context).
 2. **Aggregated Multi-Entity Action Staging**: Introduce `ExtensionRegistry.getAggregatableActions` to analyze heterogeneous item selections, match candidate actions against compound entity types, and execute unified batch actions.
 3. **Selector Equality Memoization**: Implement native `shallowEqual` in `sutram/js/utils.js` and bind it as the default equality function in `SutramContextMixin.subscribe`.
 4. **Popout Projection Shell**: Introduce `variant="popout"` on `<sutram-app-shell>`, isolating the route-targeted projection within a single viewport while preserving top-layer overlays.

@@ -137,7 +137,7 @@ export class YenvuiDiffViewer extends YenvuiBase {
             background: var(--bg);
         }
 
-        @container ${BAND_QUERY.mediumUp} {
+        @container ${BAND_QUERY.wide} {
             :host([mode="auto"]) .diff-split-container {
                 flex-direction: row !important;
             }
@@ -626,15 +626,23 @@ export class YenvuiDiffViewer extends YenvuiBase {
             composed: true
         }));
     }
-    /** Side by side: chosen, or Auto in a medium or wide column. Its two panes scroll in step, so it never wraps. */
+    /** Auto is Unified below a wide column and side by side in one. */
+    _isAutoWide() {
+        return this.mode === 'auto' && (this._columnBand?.band || 'narrow') === 'wide';
+    }
+    /** Side by side: chosen, or Auto in a wide column. Its two panes scroll in step, so it never wraps. */
     _isSideBySide() {
-        return this.mode === 'split-side' || (this.mode === 'auto' && (this._columnBand?.capability || 1) >= 2);
+        return this.mode === 'split-side' || this._isAutoWide();
+    }
+    /** Unified: chosen, or Auto below a wide column. */
+    _isUnified() {
+        return this.mode === 'interleaved' || (this.mode === 'auto' && !this._isAutoWide());
     }
     _isWrapped() {
         if (this._isSideBySide()) return false;
         if (this.wrap === 'on') return true;
         if (this.wrap === 'off') return false;
-        return (this._columnBand?.band || 'narrow') === 'narrow';
+        return (this._columnBand?.band || 'narrow') !== 'wide';
     }
     _toggleWrap() {
         this.wrap = this._isWrapped() ? 'off' : 'on';
@@ -651,7 +659,7 @@ export class YenvuiDiffViewer extends YenvuiBase {
     }
     /** Unified view opens on its first change, once per diff. */
     _scrollUnifiedToFirstChange() {
-        if (this.mode !== 'interleaved') return;
+        if (!this._isUnified()) return;
         const lines = this._parsedData?.interleaved || [];
         const key = `${lines.length}:${this.diffText?.length || 0}:${this.searchStr?.length || 0}:${this.replaceStr?.length || 0}`;
         if (this._scrolledToChangeKey === key) return;
@@ -684,7 +692,7 @@ export class YenvuiDiffViewer extends YenvuiBase {
 
     render() {
         const { split, interleaved, maxChars } = this._parsedData;
-        const isInterleaved = this.mode === 'interleaved';
+        const isInterleaved = this._isUnified();
         const trackStyle = `--diff-min-char-width: ${maxChars || 0}ch;`;
 
         return html`
@@ -694,21 +702,21 @@ export class YenvuiDiffViewer extends YenvuiBase {
                 </span>
                 <div class="toolbar-controls">
                 <div class="mode-toggle-group">
-                    <button class="mode-btn ${this.mode === 'auto' ? 'active' : ''}" @click=${() => this._setMode('auto')} title="Responsive Container Split">
+                    <button class="mode-btn ${this.mode === 'auto' ? 'active' : ''}" @click=${() => this._setMode('auto')} title="Auto: Unified, or side by side in a wide column" data-testid="diff-mode-auto">
                         <yenvui-icon name="sparkles" size="xs"></yenvui-icon><span class="mode-text">Auto</span>
                     </button>
-                    <button class="mode-btn ${this.mode === 'split-side' ? 'active' : ''}" @click=${() => this._setMode('split-side')} title="Side-by-Side Split">
+                    <button class="mode-btn ${this.mode === 'split-side' ? 'active' : ''}" @click=${() => this._setMode('split-side')} title="Side-by-Side Split" data-testid="diff-mode-side">
                         <yenvui-icon name="columns" size="xs"></yenvui-icon><span class="mode-text">Side</span>
                     </button>
-                    <button class="mode-btn ${this.mode === 'split-stacked' ? 'active' : ''}" @click=${() => this._setMode('split-stacked')} title="Top/Bottom Stacked Split">
+                    <button class="mode-btn ${this.mode === 'split-stacked' ? 'active' : ''}" @click=${() => this._setMode('split-stacked')} title="Top/Bottom Stacked Split" data-testid="diff-mode-stacked">
                         <yenvui-icon name="rows" size="xs"></yenvui-icon><span class="mode-text">Stacked</span>
                     </button>
-                    <button class="mode-btn ${this.mode === 'interleaved' ? 'active' : ''}" @click=${() => this._setMode('interleaved')} title="Interleaved Unified Lines">
+                    <button class="mode-btn ${this.mode === 'interleaved' ? 'active' : ''}" @click=${() => this._setMode('interleaved')} title="Interleaved Unified Lines" data-testid="diff-mode-unified">
                         <yenvui-icon name="align-justify" size="xs"></yenvui-icon><span class="mode-text">Unified</span>
                     </button>
                 </div>
                 <div class="mode-toggle-group">
-                    <button class="mode-btn ${this._isWrapped() ? 'active' : ''}" ?disabled=${this._isSideBySide()} @click=${() => this._toggleWrap()} title="Wrap long lines (not side by side)">
+                    <button class="mode-btn ${this._isWrapped() ? 'active' : ''}" ?disabled=${this._isSideBySide()} @click=${() => this._toggleWrap()} title="Wrap long lines (not side by side)" data-testid="diff-wrap">
                         <yenvui-icon name="wrap-text" size="xs"></yenvui-icon><span class="mode-text">Wrap</span>
                     </button>
                 </div>
